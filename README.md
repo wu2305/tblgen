@@ -25,3 +25,7 @@ tblgen decompile my-budget.tbl -o editable.json
 | Windows-amd64 | `x86_64-pc-windows-gnu` | `tblgen-v0.1.0-windows-amd64.exe` |
 
 维护者可运行 `cargo test --locked` 和 `cargo build --release --locked --target <TARGET>`。交叉编译需要相应目标标准库和链接器；发布前在目标系统运行 `schema` 及 `gen → check` 冒烟测试。
+
+## 按标签发布
+
+维护者先更新 Cargo.toml/Cargo.lock 的版本并合入 main，再从该提交推送同版本的 vX.Y.Z 标签。CNB 的 tag_push 事件运行测试，交叉构建三个目标，在 Linux 上运行生成与校验冒烟，将三个二进制及 SHA256SUMS 上传到对应 Release。普通分支推送不会发布；不要移动已发布的标签。

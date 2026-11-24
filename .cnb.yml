@@ -1,0 +1,43 @@
+"$":
+  tag_push:
+    - name: Publish tagged binaries
+      docker:
+        image: messense/cargo-zigbuild@sha256:3abe26afb5537ea225c223c6790c1bf056271ef51ea52d2c4e343c569c8f129a
+      stages:
+        - name: Check release version and test
+          script: |
+            set -eu
+            version=$(cargo pkgid --package tblgen | sed 's/.*[#@]//')
+            test "$CNB_BRANCH" = "v$version" || { echo "Expected tag v$version" >&2; exit 1; }
+            cargo test --locked
+        - name: Build and smoke test
+          script: |
+            set -eu
+            mkdir dist
+            stem="tblgen-$CNB_BRANCH"
+            rustup target add x86_64-unknown-linux-musl x86_64-pc-windows-gnu aarch64-apple-darwin
+            cargo zigbuild --locked --release --target x86_64-unknown-linux-musl
+            cp target/x86_64-unknown-linux-musl/release/tblgen "dist/$stem-linux-amd64"
+            tmp=$(mktemp -d)
+            "dist/$stem-linux-amd64" gen examples/budget.spec.json -o "$tmp/budget.tbl"
+            "dist/$stem-linux-amd64" check "$tmp/budget.tbl"
+            MACOSX_DEPLOYMENT_TARGET=11.0 cargo zigbuild --locked --release --target aarch64-apple-darwin
+            cp target/aarch64-apple-darwin/release/tblgen "dist/$stem-macos-arm64"
+            apt-get update
+            apt-get install -y --no-install-recommends gcc-mingw-w64-x86-64-posix
+            CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER=x86_64-w64-mingw32-gcc-posix cargo build --locked --release --target x86_64-pc-windows-gnu
+            cp target/x86_64-pc-windows-gnu/release/tblgen.exe "dist/$stem-windows-amd64.exe"
+            cd dist
+            sha256sum "$stem-linux-amd64" "$stem-macos-arm64" "$stem-windows-amd64.exe" > SHA256SUMS
+            sha256sum -c SHA256SUMS
+        - name: Create release for this tag
+          type: git:release
+          options:
+            overlying: true
+            description: "macOS arm64, Linux amd64 (musl), Windows amd64. Verify binaries with SHA256SUMS."
+        - name: Upload binaries and checksums
+          image: cnbcool/attachments@sha256:c959fe4db313ee35d801bfbb3d042b394c7dc80ed4b94e3cfca4685619f549e1
+          settings:
+            attachments:
+              - "dist/tblgen-*"
+              - "dist/SHA256SUMS"
