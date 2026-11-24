@@ -1,0 +1,323 @@
+{
+  "format": 1,
+  "version": "4.19.0",
+  "properties": {
+    "datasource": "defdw",
+    "extractDataEnabled": false
+  },
+  "nodes": [
+    {
+      "key": "source",
+      "type": "ModelTable",
+      "alias": "物业预算汇总",
+      "config": {
+        "moduleTablePath": "./物业预算汇总提取.tbl"
+      },
+      "fields": [
+        {
+          "name": "项目",
+          "inputField": "项目",
+          "dbfield": "XM",
+          "dataType": "C",
+          "length": 90,
+          "isDimension": true
+        },
+        {
+          "name": "1月",
+          "inputField": "1月",
+          "dbfield": "_1Y",
+          "dataType": "N",
+          "length": 16,
+          "isDimension": false,
+          "decimal": 6
+        },
+        {
+          "name": "2月",
+          "inputField": "2月",
+          "dbfield": "_2Y",
+          "dataType": "N",
+          "length": 16,
+          "isDimension": false,
+          "decimal": 6
+        },
+        {
+          "name": "3月",
+          "inputField": "3月",
+          "dbfield": "_3Y",
+          "dataType": "N",
+          "length": 16,
+          "isDimension": false,
+          "decimal": 6
+        },
+        {
+          "name": "4月",
+          "inputField": "4月",
+          "dbfield": "_4Y",
+          "dataType": "N",
+          "length": 16,
+          "isDimension": false,
+          "decimal": 6
+        },
+        {
+          "name": "5月",
+          "inputField": "5月",
+          "dbfield": "_5Y",
+          "dataType": "N",
+          "length": 16,
+          "isDimension": false,
+          "decimal": 6
+        },
+        {
+          "name": "6月",
+          "inputField": "6月",
+          "dbfield": "_6Y",
+          "dataType": "N",
+          "length": 16,
+          "isDimension": false,
+          "decimal": 6
+        },
+        {
+          "name": "7月",
+          "inputField": "7月",
+          "dbfield": "_7Y",
+          "dataType": "N",
+          "length": 16,
+          "isDimension": false,
+          "decimal": 6
+        },
+        {
+          "name": "8月",
+          "inputField": "8月",
+          "dbfield": "_8Y",
+          "dataType": "N",
+          "length": 16,
+          "isDimension": false,
+          "decimal": 6
+        },
+        {
+          "name": "9月",
+          "inputField": "9月",
+          "dbfield": "_9Y",
+          "dataType": "N",
+          "length": 16,
+          "isDimension": false,
+          "decimal": 6
+        },
+        {
+          "name": "10月",
+          "inputField": "10月",
+          "dbfield": "_10Y",
+          "dataType": "I",
+          "length": 19,
+          "isDimension": false
+        },
+        {
+          "name": "11月",
+          "inputField": "11月",
+          "dbfield": "_11Y",
+          "dataType": "I",
+          "length": 19,
+          "isDimension": false
+        },
+        {
+          "name": "12月",
+          "inputField": "12月",
+          "dbfield": "_12Y",
+          "dataType": "I",
+          "length": 19,
+          "isDimension": false
+        }
+      ]
+    },
+    {
+      "key": "selected",
+      "type": "Select",
+      "inputs": [
+        "source"
+      ],
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "项目"
+          ],
+          "filter": "[项目] != NULL"
+        }
+      ]
+    },
+    {
+      "key": "monthly",
+      "type": "ColToRow",
+      "inputs": [
+        "selected"
+      ],
+      "config": {
+        "colToRowInfo": {
+          "headers": [
+            "月份",
+            "金额"
+          ],
+          "valuesArray": [
+            [
+              "01",
+              {
+                "name": "1月",
+                "dataType": "N",
+                "length": 16,
+                "decimal": 6
+              }
+            ],
+            [
+              "02",
+              {
+                "name": "2月",
+                "dataType": "N",
+                "length": 16,
+                "decimal": 6
+              }
+            ],
+            [
+              "03",
+              {
+                "name": "3月",
+                "dataType": "N",
+                "length": 16,
+                "decimal": 6
+              }
+            ],
+            [
+              "04",
+              {
+                "name": "4月",
+                "dataType": "N",
+                "length": 16,
+                "decimal": 6
+              }
+            ],
+            [
+              "05",
+              {
+                "name": "5月",
+                "dataType": "N",
+                "length": 16,
+                "decimal": 6
+              }
+            ],
+            [
+              "06",
+              {
+                "name": "6月",
+                "dataType": "N",
+                "length": 16,
+                "decimal": 6
+              }
+            ],
+            [
+              "07",
+              {
+                "name": "7月",
+                "dataType": "N",
+                "length": 16,
+                "decimal": 6
+              }
+            ],
+            [
+              "08",
+              {
+                "name": "8月",
+                "dataType": "N",
+                "length": 16,
+                "decimal": 6
+              }
+            ],
+            [
+              "09",
+              {
+                "name": "9月",
+                "dataType": "N",
+                "length": 16,
+                "decimal": 6
+              }
+            ],
+            [
+              "10",
+              {
+                "name": "10月",
+                "dataType": "I",
+                "length": 19
+              }
+            ],
+            [
+              "11",
+              {
+                "name": "11月",
+                "dataType": "I",
+                "length": 19
+              }
+            ],
+            [
+              "12",
+              {
+                "name": "12月",
+                "dataType": "I",
+                "length": 19
+              }
+            ]
+          ]
+        }
+      },
+      "fields": [
+        {
+          "name": "项目",
+          "inputField": "项目",
+          "dbfield": "XM",
+          "dataType": "C",
+          "length": 90,
+          "isDimension": true,
+          "originalNode": "物业预算汇总",
+          "originalField": "项目"
+        },
+        {
+          "name": "月份",
+          "dbfield": "MONTH_NO",
+          "dataType": "C",
+          "length": 2,
+          "isDimension": true
+        },
+        {
+          "name": "金额",
+          "dbfield": "AMOUNT",
+          "dataType": "N",
+          "length": 25,
+          "decimal": 6,
+          "isDimension": false
+        }
+      ]
+    },
+    {
+      "key": "rename",
+      "type": "Select",
+      "inputs": [
+        "monthly"
+      ],
+      "steps": [
+        {
+          "type": "Refactor",
+          "fields": [
+            "金额"
+          ],
+          "refactor": {
+            "rename": "预算额"
+          }
+        }
+      ]
+    },
+    {
+      "key": "out",
+      "type": "Output",
+      "inputs": [
+        "rename"
+      ]
+    }
+  ]
+}

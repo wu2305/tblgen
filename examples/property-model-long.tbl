@@ -1,0 +1,969 @@
+{
+  "dataFlow": {
+    "nodes": {
+      "default": {
+        "alias": "out",
+        "dimensions": [
+          {
+            "dataType": "C",
+            "dbfield": "XM",
+            "inputField": "项目",
+            "inputNode": "rename",
+            "isDimension": true,
+            "length": 90,
+            "name": "项目",
+            "originalField": "项目",
+            "originalNode": "物业预算汇总"
+          },
+          {
+            "dataType": "C",
+            "dbfield": "MONTH_NO",
+            "inputField": "月份",
+            "inputNode": "rename",
+            "isDimension": true,
+            "length": 2,
+            "name": "月份",
+            "originalField": "月份",
+            "originalNode": "monthly"
+          }
+        ],
+        "fields": [
+          {
+            "dataType": "C",
+            "dbfield": "XM",
+            "inputField": "项目",
+            "inputNode": "rename",
+            "isDimension": true,
+            "length": 90,
+            "name": "项目",
+            "originalField": "项目",
+            "originalNode": "物业预算汇总"
+          },
+          {
+            "dataType": "C",
+            "dbfield": "MONTH_NO",
+            "inputField": "月份",
+            "inputNode": "rename",
+            "isDimension": true,
+            "length": 2,
+            "name": "月份",
+            "originalField": "月份",
+            "originalNode": "monthly"
+          },
+          {
+            "dataType": "N",
+            "dbfield": "AMOUNT",
+            "decimal": 6,
+            "inputField": "预算额",
+            "inputNode": "rename",
+            "isDimension": false,
+            "length": 25,
+            "name": "预算额",
+            "originalField": "金额",
+            "originalNode": "monthly"
+          }
+        ],
+        "id": "default",
+        "inputNodes": [
+          "rename"
+        ],
+        "measures": [
+          {
+            "dataType": "N",
+            "dbfield": "AMOUNT",
+            "decimal": 6,
+            "inputField": "预算额",
+            "inputNode": "rename",
+            "isDimension": false,
+            "length": 25,
+            "name": "预算额",
+            "originalField": "金额",
+            "originalNode": "monthly"
+          }
+        ],
+        "type": "Output"
+      },
+      "monthly": {
+        "alias": "monthly",
+        "colToRowInfo": {
+          "headers": [
+            "月份",
+            "金额"
+          ],
+          "valuesArray": [
+            [
+              "01",
+              {
+                "dataType": "N",
+                "decimal": 6,
+                "length": 16,
+                "name": "1月"
+              }
+            ],
+            [
+              "02",
+              {
+                "dataType": "N",
+                "decimal": 6,
+                "length": 16,
+                "name": "2月"
+              }
+            ],
+            [
+              "03",
+              {
+                "dataType": "N",
+                "decimal": 6,
+                "length": 16,
+                "name": "3月"
+              }
+            ],
+            [
+              "04",
+              {
+                "dataType": "N",
+                "decimal": 6,
+                "length": 16,
+                "name": "4月"
+              }
+            ],
+            [
+              "05",
+              {
+                "dataType": "N",
+                "decimal": 6,
+                "length": 16,
+                "name": "5月"
+              }
+            ],
+            [
+              "06",
+              {
+                "dataType": "N",
+                "decimal": 6,
+                "length": 16,
+                "name": "6月"
+              }
+            ],
+            [
+              "07",
+              {
+                "dataType": "N",
+                "decimal": 6,
+                "length": 16,
+                "name": "7月"
+              }
+            ],
+            [
+              "08",
+              {
+                "dataType": "N",
+                "decimal": 6,
+                "length": 16,
+                "name": "8月"
+              }
+            ],
+            [
+              "09",
+              {
+                "dataType": "N",
+                "decimal": 6,
+                "length": 16,
+                "name": "9月"
+              }
+            ],
+            [
+              "10",
+              {
+                "dataType": "I",
+                "length": 19,
+                "name": "10月"
+              }
+            ],
+            [
+              "11",
+              {
+                "dataType": "I",
+                "length": 19,
+                "name": "11月"
+              }
+            ],
+            [
+              "12",
+              {
+                "dataType": "I",
+                "length": 19,
+                "name": "12月"
+              }
+            ]
+          ]
+        },
+        "dimensions": [
+          {
+            "dataType": "C",
+            "dbfield": "XM",
+            "inputField": "项目",
+            "isDimension": true,
+            "length": 90,
+            "name": "项目",
+            "originalField": "项目",
+            "originalNode": "物业预算汇总"
+          },
+          {
+            "dataType": "C",
+            "dbfield": "MONTH_NO",
+            "isDimension": true,
+            "length": 2,
+            "name": "月份"
+          }
+        ],
+        "fields": [
+          {
+            "dataType": "C",
+            "dbfield": "XM",
+            "inputField": "项目",
+            "isDimension": true,
+            "length": 90,
+            "name": "项目",
+            "originalField": "项目",
+            "originalNode": "物业预算汇总"
+          },
+          {
+            "dataType": "C",
+            "dbfield": "MONTH_NO",
+            "isDimension": true,
+            "length": 2,
+            "name": "月份"
+          },
+          {
+            "dataType": "N",
+            "dbfield": "AMOUNT",
+            "decimal": 6,
+            "isDimension": false,
+            "length": 25,
+            "name": "金额"
+          }
+        ],
+        "id": "monthly",
+        "inputNodes": [
+          "selected"
+        ],
+        "measures": [
+          {
+            "dataType": "N",
+            "dbfield": "AMOUNT",
+            "decimal": 6,
+            "isDimension": false,
+            "length": 25,
+            "name": "金额"
+          }
+        ],
+        "type": "ColToRow"
+      },
+      "rename": {
+        "alias": "rename",
+        "dimensions": [
+          {
+            "dataType": "C",
+            "dbfield": "XM",
+            "inputField": "项目",
+            "inputNode": "monthly",
+            "isDimension": true,
+            "length": 90,
+            "name": "项目",
+            "originalField": "项目",
+            "originalNode": "物业预算汇总"
+          },
+          {
+            "dataType": "C",
+            "dbfield": "MONTH_NO",
+            "inputField": "月份",
+            "inputNode": "monthly",
+            "isDimension": true,
+            "length": 2,
+            "name": "月份",
+            "originalField": "月份",
+            "originalNode": "monthly"
+          }
+        ],
+        "fields": [
+          {
+            "dataType": "C",
+            "dbfield": "XM",
+            "inputField": "项目",
+            "inputNode": "monthly",
+            "isDimension": true,
+            "length": 90,
+            "name": "项目",
+            "originalField": "项目",
+            "originalNode": "物业预算汇总"
+          },
+          {
+            "dataType": "C",
+            "dbfield": "MONTH_NO",
+            "inputField": "月份",
+            "inputNode": "monthly",
+            "isDimension": true,
+            "length": 2,
+            "name": "月份",
+            "originalField": "月份",
+            "originalNode": "monthly"
+          },
+          {
+            "dataType": "N",
+            "dbfield": "AMOUNT",
+            "decimal": 6,
+            "inputField": "金额",
+            "inputNode": "monthly",
+            "isDimension": false,
+            "length": 25,
+            "name": "预算额",
+            "originalField": "金额",
+            "originalNode": "monthly"
+          }
+        ],
+        "id": "rename",
+        "inputNodes": [
+          "monthly"
+        ],
+        "measures": [
+          {
+            "dataType": "N",
+            "dbfield": "AMOUNT",
+            "decimal": 6,
+            "inputField": "金额",
+            "inputNode": "monthly",
+            "isDimension": false,
+            "length": 25,
+            "name": "预算额",
+            "originalField": "金额",
+            "originalNode": "monthly"
+          }
+        ],
+        "stepCount": 1,
+        "steps": [
+          {
+            "fields": [
+              "金额"
+            ],
+            "refactor": {
+              "rename": "预算额"
+            },
+            "type": "Refactor"
+          }
+        ],
+        "type": "Select"
+      },
+      "selected": {
+        "alias": "selected",
+        "dimensions": [
+          {
+            "dataType": "C",
+            "dbfield": "XM",
+            "inputField": "项目",
+            "inputNode": "物业预算汇总",
+            "isDimension": true,
+            "length": 90,
+            "name": "项目",
+            "originalField": "项目",
+            "originalNode": "物业预算汇总"
+          }
+        ],
+        "fields": [
+          {
+            "dataType": "C",
+            "dbfield": "XM",
+            "inputField": "项目",
+            "inputNode": "物业预算汇总",
+            "isDimension": true,
+            "length": 90,
+            "name": "项目",
+            "originalField": "项目",
+            "originalNode": "物业预算汇总"
+          },
+          {
+            "dataType": "N",
+            "dbfield": "_1Y",
+            "decimal": 6,
+            "inputField": "1月",
+            "inputNode": "物业预算汇总",
+            "isDimension": false,
+            "length": 16,
+            "name": "1月",
+            "originalField": "1月",
+            "originalNode": "物业预算汇总"
+          },
+          {
+            "dataType": "N",
+            "dbfield": "_2Y",
+            "decimal": 6,
+            "inputField": "2月",
+            "inputNode": "物业预算汇总",
+            "isDimension": false,
+            "length": 16,
+            "name": "2月",
+            "originalField": "2月",
+            "originalNode": "物业预算汇总"
+          },
+          {
+            "dataType": "N",
+            "dbfield": "_3Y",
+            "decimal": 6,
+            "inputField": "3月",
+            "inputNode": "物业预算汇总",
+            "isDimension": false,
+            "length": 16,
+            "name": "3月",
+            "originalField": "3月",
+            "originalNode": "物业预算汇总"
+          },
+          {
+            "dataType": "N",
+            "dbfield": "_4Y",
+            "decimal": 6,
+            "inputField": "4月",
+            "inputNode": "物业预算汇总",
+            "isDimension": false,
+            "length": 16,
+            "name": "4月",
+            "originalField": "4月",
+            "originalNode": "物业预算汇总"
+          },
+          {
+            "dataType": "N",
+            "dbfield": "_5Y",
+            "decimal": 6,
+            "inputField": "5月",
+            "inputNode": "物业预算汇总",
+            "isDimension": false,
+            "length": 16,
+            "name": "5月",
+            "originalField": "5月",
+            "originalNode": "物业预算汇总"
+          },
+          {
+            "dataType": "N",
+            "dbfield": "_6Y",
+            "decimal": 6,
+            "inputField": "6月",
+            "inputNode": "物业预算汇总",
+            "isDimension": false,
+            "length": 16,
+            "name": "6月",
+            "originalField": "6月",
+            "originalNode": "物业预算汇总"
+          },
+          {
+            "dataType": "N",
+            "dbfield": "_7Y",
+            "decimal": 6,
+            "inputField": "7月",
+            "inputNode": "物业预算汇总",
+            "isDimension": false,
+            "length": 16,
+            "name": "7月",
+            "originalField": "7月",
+            "originalNode": "物业预算汇总"
+          },
+          {
+            "dataType": "N",
+            "dbfield": "_8Y",
+            "decimal": 6,
+            "inputField": "8月",
+            "inputNode": "物业预算汇总",
+            "isDimension": false,
+            "length": 16,
+            "name": "8月",
+            "originalField": "8月",
+            "originalNode": "物业预算汇总"
+          },
+          {
+            "dataType": "N",
+            "dbfield": "_9Y",
+            "decimal": 6,
+            "inputField": "9月",
+            "inputNode": "物业预算汇总",
+            "isDimension": false,
+            "length": 16,
+            "name": "9月",
+            "originalField": "9月",
+            "originalNode": "物业预算汇总"
+          },
+          {
+            "dataType": "I",
+            "dbfield": "_10Y",
+            "inputField": "10月",
+            "inputNode": "物业预算汇总",
+            "isDimension": false,
+            "length": 19,
+            "name": "10月",
+            "originalField": "10月",
+            "originalNode": "物业预算汇总"
+          },
+          {
+            "dataType": "I",
+            "dbfield": "_11Y",
+            "inputField": "11月",
+            "inputNode": "物业预算汇总",
+            "isDimension": false,
+            "length": 19,
+            "name": "11月",
+            "originalField": "11月",
+            "originalNode": "物业预算汇总"
+          },
+          {
+            "dataType": "I",
+            "dbfield": "_12Y",
+            "inputField": "12月",
+            "inputNode": "物业预算汇总",
+            "isDimension": false,
+            "length": 19,
+            "name": "12月",
+            "originalField": "12月",
+            "originalNode": "物业预算汇总"
+          }
+        ],
+        "id": "selected",
+        "inputNodes": [
+          "source"
+        ],
+        "measures": [
+          {
+            "dataType": "N",
+            "dbfield": "_1Y",
+            "decimal": 6,
+            "inputField": "1月",
+            "inputNode": "物业预算汇总",
+            "isDimension": false,
+            "length": 16,
+            "name": "1月",
+            "originalField": "1月",
+            "originalNode": "物业预算汇总"
+          },
+          {
+            "dataType": "N",
+            "dbfield": "_2Y",
+            "decimal": 6,
+            "inputField": "2月",
+            "inputNode": "物业预算汇总",
+            "isDimension": false,
+            "length": 16,
+            "name": "2月",
+            "originalField": "2月",
+            "originalNode": "物业预算汇总"
+          },
+          {
+            "dataType": "N",
+            "dbfield": "_3Y",
+            "decimal": 6,
+            "inputField": "3月",
+            "inputNode": "物业预算汇总",
+            "isDimension": false,
+            "length": 16,
+            "name": "3月",
+            "originalField": "3月",
+            "originalNode": "物业预算汇总"
+          },
+          {
+            "dataType": "N",
+            "dbfield": "_4Y",
+            "decimal": 6,
+            "inputField": "4月",
+            "inputNode": "物业预算汇总",
+            "isDimension": false,
+            "length": 16,
+            "name": "4月",
+            "originalField": "4月",
+            "originalNode": "物业预算汇总"
+          },
+          {
+            "dataType": "N",
+            "dbfield": "_5Y",
+            "decimal": 6,
+            "inputField": "5月",
+            "inputNode": "物业预算汇总",
+            "isDimension": false,
+            "length": 16,
+            "name": "5月",
+            "originalField": "5月",
+            "originalNode": "物业预算汇总"
+          },
+          {
+            "dataType": "N",
+            "dbfield": "_6Y",
+            "decimal": 6,
+            "inputField": "6月",
+            "inputNode": "物业预算汇总",
+            "isDimension": false,
+            "length": 16,
+            "name": "6月",
+            "originalField": "6月",
+            "originalNode": "物业预算汇总"
+          },
+          {
+            "dataType": "N",
+            "dbfield": "_7Y",
+            "decimal": 6,
+            "inputField": "7月",
+            "inputNode": "物业预算汇总",
+            "isDimension": false,
+            "length": 16,
+            "name": "7月",
+            "originalField": "7月",
+            "originalNode": "物业预算汇总"
+          },
+          {
+            "dataType": "N",
+            "dbfield": "_8Y",
+            "decimal": 6,
+            "inputField": "8月",
+            "inputNode": "物业预算汇总",
+            "isDimension": false,
+            "length": 16,
+            "name": "8月",
+            "originalField": "8月",
+            "originalNode": "物业预算汇总"
+          },
+          {
+            "dataType": "N",
+            "dbfield": "_9Y",
+            "decimal": 6,
+            "inputField": "9月",
+            "inputNode": "物业预算汇总",
+            "isDimension": false,
+            "length": 16,
+            "name": "9月",
+            "originalField": "9月",
+            "originalNode": "物业预算汇总"
+          },
+          {
+            "dataType": "I",
+            "dbfield": "_10Y",
+            "inputField": "10月",
+            "inputNode": "物业预算汇总",
+            "isDimension": false,
+            "length": 19,
+            "name": "10月",
+            "originalField": "10月",
+            "originalNode": "物业预算汇总"
+          },
+          {
+            "dataType": "I",
+            "dbfield": "_11Y",
+            "inputField": "11月",
+            "inputNode": "物业预算汇总",
+            "isDimension": false,
+            "length": 19,
+            "name": "11月",
+            "originalField": "11月",
+            "originalNode": "物业预算汇总"
+          },
+          {
+            "dataType": "I",
+            "dbfield": "_12Y",
+            "inputField": "12月",
+            "inputNode": "物业预算汇总",
+            "isDimension": false,
+            "length": 19,
+            "name": "12月",
+            "originalField": "12月",
+            "originalNode": "物业预算汇总"
+          }
+        ],
+        "stepCount": 1,
+        "steps": [
+          {
+            "fields": [
+              "项目"
+            ],
+            "filter": "[项目] != NULL",
+            "type": "Filter"
+          }
+        ],
+        "type": "Select"
+      },
+      "source": {
+        "alias": "物业预算汇总",
+        "dimensions": [
+          {
+            "dataType": "C",
+            "dbfield": "XM",
+            "inputField": "项目",
+            "isDimension": true,
+            "length": 90,
+            "name": "项目"
+          }
+        ],
+        "fields": [
+          {
+            "dataType": "C",
+            "dbfield": "XM",
+            "inputField": "项目",
+            "isDimension": true,
+            "length": 90,
+            "name": "项目"
+          },
+          {
+            "dataType": "N",
+            "dbfield": "_1Y",
+            "decimal": 6,
+            "inputField": "1月",
+            "isDimension": false,
+            "length": 16,
+            "name": "1月"
+          },
+          {
+            "dataType": "N",
+            "dbfield": "_2Y",
+            "decimal": 6,
+            "inputField": "2月",
+            "isDimension": false,
+            "length": 16,
+            "name": "2月"
+          },
+          {
+            "dataType": "N",
+            "dbfield": "_3Y",
+            "decimal": 6,
+            "inputField": "3月",
+            "isDimension": false,
+            "length": 16,
+            "name": "3月"
+          },
+          {
+            "dataType": "N",
+            "dbfield": "_4Y",
+            "decimal": 6,
+            "inputField": "4月",
+            "isDimension": false,
+            "length": 16,
+            "name": "4月"
+          },
+          {
+            "dataType": "N",
+            "dbfield": "_5Y",
+            "decimal": 6,
+            "inputField": "5月",
+            "isDimension": false,
+            "length": 16,
+            "name": "5月"
+          },
+          {
+            "dataType": "N",
+            "dbfield": "_6Y",
+            "decimal": 6,
+            "inputField": "6月",
+            "isDimension": false,
+            "length": 16,
+            "name": "6月"
+          },
+          {
+            "dataType": "N",
+            "dbfield": "_7Y",
+            "decimal": 6,
+            "inputField": "7月",
+            "isDimension": false,
+            "length": 16,
+            "name": "7月"
+          },
+          {
+            "dataType": "N",
+            "dbfield": "_8Y",
+            "decimal": 6,
+            "inputField": "8月",
+            "isDimension": false,
+            "length": 16,
+            "name": "8月"
+          },
+          {
+            "dataType": "N",
+            "dbfield": "_9Y",
+            "decimal": 6,
+            "inputField": "9月",
+            "isDimension": false,
+            "length": 16,
+            "name": "9月"
+          },
+          {
+            "dataType": "I",
+            "dbfield": "_10Y",
+            "inputField": "10月",
+            "isDimension": false,
+            "length": 19,
+            "name": "10月"
+          },
+          {
+            "dataType": "I",
+            "dbfield": "_11Y",
+            "inputField": "11月",
+            "isDimension": false,
+            "length": 19,
+            "name": "11月"
+          },
+          {
+            "dataType": "I",
+            "dbfield": "_12Y",
+            "inputField": "12月",
+            "isDimension": false,
+            "length": 19,
+            "name": "12月"
+          }
+        ],
+        "id": "source",
+        "measures": [
+          {
+            "dataType": "N",
+            "dbfield": "_1Y",
+            "decimal": 6,
+            "inputField": "1月",
+            "isDimension": false,
+            "length": 16,
+            "name": "1月"
+          },
+          {
+            "dataType": "N",
+            "dbfield": "_2Y",
+            "decimal": 6,
+            "inputField": "2月",
+            "isDimension": false,
+            "length": 16,
+            "name": "2月"
+          },
+          {
+            "dataType": "N",
+            "dbfield": "_3Y",
+            "decimal": 6,
+            "inputField": "3月",
+            "isDimension": false,
+            "length": 16,
+            "name": "3月"
+          },
+          {
+            "dataType": "N",
+            "dbfield": "_4Y",
+            "decimal": 6,
+            "inputField": "4月",
+            "isDimension": false,
+            "length": 16,
+            "name": "4月"
+          },
+          {
+            "dataType": "N",
+            "dbfield": "_5Y",
+            "decimal": 6,
+            "inputField": "5月",
+            "isDimension": false,
+            "length": 16,
+            "name": "5月"
+          },
+          {
+            "dataType": "N",
+            "dbfield": "_6Y",
+            "decimal": 6,
+            "inputField": "6月",
+            "isDimension": false,
+            "length": 16,
+            "name": "6月"
+          },
+          {
+            "dataType": "N",
+            "dbfield": "_7Y",
+            "decimal": 6,
+            "inputField": "7月",
+            "isDimension": false,
+            "length": 16,
+            "name": "7月"
+          },
+          {
+            "dataType": "N",
+            "dbfield": "_8Y",
+            "decimal": 6,
+            "inputField": "8月",
+            "isDimension": false,
+            "length": 16,
+            "name": "8月"
+          },
+          {
+            "dataType": "N",
+            "dbfield": "_9Y",
+            "decimal": 6,
+            "inputField": "9月",
+            "isDimension": false,
+            "length": 16,
+            "name": "9月"
+          },
+          {
+            "dataType": "I",
+            "dbfield": "_10Y",
+            "inputField": "10月",
+            "isDimension": false,
+            "length": 19,
+            "name": "10月"
+          },
+          {
+            "dataType": "I",
+            "dbfield": "_11Y",
+            "inputField": "11月",
+            "isDimension": false,
+            "length": 19,
+            "name": "11月"
+          },
+          {
+            "dataType": "I",
+            "dbfield": "_12Y",
+            "inputField": "12月",
+            "isDimension": false,
+            "length": 19,
+            "name": "12月"
+          }
+        ],
+        "moduleTablePath": "./物业预算汇总提取.tbl",
+        "type": "ModelTable"
+      }
+    }
+  },
+  "dimensions": [
+    {
+      "dataType": "C",
+      "dbfield": "XM",
+      "inputField": "项目",
+      "inputNode": "rename",
+      "isDimension": true,
+      "length": 90,
+      "name": "项目",
+      "originalField": "项目",
+      "originalNode": "物业预算汇总"
+    },
+    {
+      "dataType": "C",
+      "dbfield": "MONTH_NO",
+      "inputField": "月份",
+      "inputNode": "rename",
+      "isDimension": true,
+      "length": 2,
+      "name": "月份",
+      "originalField": "月份",
+      "originalNode": "monthly"
+    }
+  ],
+  "measures": [
+    {
+      "dataType": "N",
+      "dbfield": "AMOUNT",
+      "decimal": 6,
+      "inputField": "预算额",
+      "inputNode": "rename",
+      "isDimension": false,
+      "length": 25,
+      "name": "预算额",
+      "originalField": "金额",
+      "originalNode": "monthly"
+    }
+  ],
+  "properties": {
+    "datasource": "defdw",
+    "extractDataEnabled": false,
+    "modelDataType": "DataFlow"
+  },
+  "version": "4.19.0"
+}

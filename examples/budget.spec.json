@@ -1,0 +1,95 @@
+{
+  "format": 1,
+  "version": "4.19.0",
+  "properties": {
+    "modelDataType": "DataFlow",
+    "datasource": "defdw",
+    "dbSchema": "ods",
+    "dbTableName": "ods_budget_summary"
+  },
+  "parameters": [
+    { "name": "property", "dataType": "C" }
+  ],
+  "nodes": [
+    {
+      "key": "src",
+      "type": "FileInput",
+      "alias": "预算文件",
+      "config": {
+        "fileName": "budget.xlsx#Budget",
+        "inferHeads": true,
+        "headsStart": 1,
+        "headsEnd": 1
+      },
+      "fields": [
+        { "name": "property", "dataType": "C", "isDimension": true },
+        { "name": "m01", "dataType": "N", "isDimension": false },
+        { "name": "m02", "dataType": "N", "isDimension": false },
+        { "name": "m03", "dataType": "N", "isDimension": false },
+        { "name": "m04", "dataType": "N", "isDimension": false },
+        { "name": "m05", "dataType": "N", "isDimension": false },
+        { "name": "m06", "dataType": "N", "isDimension": false },
+        { "name": "m07", "dataType": "N", "isDimension": false },
+        { "name": "m08", "dataType": "N", "isDimension": false },
+        { "name": "m09", "dataType": "N", "isDimension": false },
+        { "name": "m10", "dataType": "N", "isDimension": false },
+        { "name": "m11", "dataType": "N", "isDimension": false },
+        { "name": "m12", "dataType": "N", "isDimension": false }
+      ]
+    },
+    {
+      "key": "flt",
+      "type": "Select",
+      "inputs": ["src"],
+      "steps": [
+        { "type": "Filter", "fields": ["property"], "filter": "[property] != NULL" }
+      ]
+    },
+    {
+      "key": "pivot",
+      "type": "ColToRow",
+      "inputs": ["flt"],
+      "config": {
+        "colToRowInfo": {
+          "headers": ["month", "amount"],
+          "valuesArray": [
+            ["01", { "name": "m01", "dataType": "N" }],
+            ["02", { "name": "m02", "dataType": "N" }],
+            ["03", { "name": "m03", "dataType": "N" }],
+            ["04", { "name": "m04", "dataType": "N" }],
+            ["05", { "name": "m05", "dataType": "N" }],
+            ["06", { "name": "m06", "dataType": "N" }],
+            ["07", { "name": "m07", "dataType": "N" }],
+            ["08", { "name": "m08", "dataType": "N" }],
+            ["09", { "name": "m09", "dataType": "N" }],
+            ["10", { "name": "m10", "dataType": "N" }],
+            ["11", { "name": "m11", "dataType": "N" }],
+            ["12", { "name": "m12", "dataType": "N" }]
+          ]
+        }
+      },
+      "fields": [
+        { "name": "month", "dataType": "C", "isDimension": true },
+        { "name": "amount", "dataType": "N", "isDimension": false },
+        { "name": "property", "dataType": "C", "isDimension": true, "inputField": "property" }
+      ]
+    },
+    {
+      "key": "ren",
+      "type": "Select",
+      "inputs": ["pivot"],
+      "steps": [
+        {
+          "type": "Refactor",
+          "fields": ["amount"],
+          "refactor": { "rename": "budget_amount" }
+        }
+      ]
+    },
+    {
+      "key": "out",
+      "type": "Output",
+      "inputs": ["ren"]
+    }
+  ]
+}
