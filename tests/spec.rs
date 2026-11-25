@@ -1201,3 +1201,90 @@ fn expression_refs_validated_conservatively() {
     );
     assert!(!wd.iter().any(|d| d.rule == "err.exp.ref.notfound"));
 }
+
+/// The general `examples.typed` / `examples.rawOnly` arrays: every entry must
+/// validate, generate, and wire-check with zero hard errors; archive and
+/// rawTable forms assert their distinct semantics.
+#[test]
+fn schema_general_examples_typed_and_rawonly() {
+    let doc = schema_document();
+    let ex = &doc["examples"];
+
+    // typed[] — plain generated-form specs
+    for (i, spec) in ex["typed"].as_array().unwrap().iter().enumerate() {
+        let ds = validate_spec(spec);
+        assert!(ds.is_empty(), "typed[{}] invalid: {:?}", i, ds);
+        let tbl = generate(spec).unwrap_or_else(|d| panic!("typed[{}] gen: {}", i, d.to_json()));
+        let w = check(&tbl);
+        let errs: Vec<_> = w.iter().filter(|d| !d.rule.starts_with("warn.")).collect();
+        assert!(
+            errs.is_empty(),
+            "typed[{}] wire errors: {:?}",
+            i,
+            errs.iter().map(|d| &d.rule).collect::<Vec<_>>()
+        );
+    }
+
+    // rawOnly[] — first two are generated-form specs with raw escapes;
+    // last two are the archive / rawTable snapshot forms.
+    let raw = ex["rawOnly"].as_array().unwrap();
+    assert_eq!(raw.len(), 4, "expected rawNode, rawStep, archive, rawTable");
+    for (i, spec) in raw[..2].iter().enumerate() {
+        let ds = validate_spec(spec);
+        assert!(ds.is_empty(), "rawOnly[{}] spec invalid: {:?}", i, ds);
+        let tbl = generate(spec).unwrap_or_else(|d| panic!("rawOnly[{}] gen: {}", i, d.to_json()));
+        let w = check(&tbl);
+        let errs: Vec<_> = w.iter().filter(|d| !d.rule.starts_with("warn.")).collect();
+        assert!(
+            errs.is_empty(),
+            "rawOnly[{}] wire errors: {:?}",
+            i,
+            errs.iter().map(|d| &d.rule).collect::<Vec<_>>()
+        );
+    }
+
+    // archive form: merges top+flow+node bodies into a wire DataFlow
+    let archive = &raw[2];
+    assert!(
+        validate_spec(archive).is_empty(),
+        "archive spec invalid: {:?}",
+        validate_spec(archive)
+    );
+    let tbl = generate(archive).unwrap();
+    assert_eq!(tbl["properties"]["modelDataType"], json!("DataFlow"));
+    let nodes = &tbl["dataFlow"]["nodes"];
+    assert_eq!(nodes["n1"]["type"], json!("FileInput"));
+    assert_eq!(nodes["default"]["type"], json!("Output"));
+    assert_eq!(nodes["default"]["inputNodes"], json!(["n1"]));
+    let w = check(&tbl);
+    let errs: Vec<_> = w.iter().filter(|d| !d.rule.starts_with("warn.")).collect();
+    assert!(
+        errs.is_empty(),
+        "archive wire errors: {:?}",
+        errs.iter().map(|d| &d.rule).collect::<Vec<_>>()
+    );
+    // decompile of the merged wire must yield a usable spec
+    let back = decompile(&tbl).expect("archive wire decompile");
+    assert_eq!(back["format"], json!(1));
+
+    // rawTable form: verbatim non-DataFlow snapshot — no dataFlow, Ods model
+    let rawtable = &raw[3];
+    assert!(
+        validate_spec(rawtable).is_empty(),
+        "rawTable spec invalid: {:?}",
+        validate_spec(rawtable)
+    );
+    let tbl = generate(rawtable).unwrap();
+    assert_eq!(tbl["properties"]["modelDataType"], json!("Ods"));
+    assert!(
+        tbl.get("dataFlow").is_none(),
+        "rawTable must not contain dataFlow"
+    );
+    // nonflow is not assessed for validity (skipped scope -> no diagnostics)
+    assert!(
+        check(&tbl).is_empty(),
+        "nonflow rawTable must produce no diagnostics"
+    );
+    let back = decompile(&tbl).unwrap();
+    assert_eq!(back["rawTable"], tbl, "rawTable must round-trip verbatim");
+}

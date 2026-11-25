@@ -1114,26 +1114,45 @@ fn examples() -> Value {
         output_node("out", &["sel"]),
     ]);
 
+    // rawNode is opaque to the deriver: declare its wire fields explicitly,
+    // and give Output explicit fields (no upstream inference possible).
     let rawnode_spec = wrap(vec![
         fileinput("src"),
-        json!({"key": "x", "rawNode": {"type": "Extend", "id": "x", "alias": "x", "inputNodes": ["src"]}}),
-        output_node("out", &["x"]),
+        json!({"key": "x", "rawNode": {"type": "Extend", "id": "x", "alias": "x",
+                "inputNodes": ["src"], "fields": src_fields()}}),
+        json!({"key": "out", "type": "Output", "alias": "out",
+               "inputs": ["x"], "fields": src_fields()}),
     ]);
     let rawstep_spec = step_spec(
         json!({"rawStep": {"type": "ToNumber", "fields": ["m01"]}}),
         true,
     );
+    // archive: top + flow(excl. nodes) + explicit node bodies; a real
+    // FileInput -> Output chain, Output declares fields explicitly.
     let archive_spec = json!({
         "format": 1,
         "archive": {
             "top": {"properties": {"modelDataType": "DataFlow"}},
-            "flow": {"nodes": {}},
-            "nodes": [{"id": "n1", "body": {"type": "Output", "id": "n1"}}],
+            "flow": {},
+            "nodes": [
+                {"id": "n1", "body": {
+                    "type": "FileInput", "id": "n1", "alias": "src",
+                    "fileName": "data.xlsx#Sheet", "fields": src_fields(),
+                }},
+                {"id": "default", "body": {
+                    "type": "Output", "id": "default", "alias": "out",
+                    "inputNodes": ["n1"], "fields": src_fields(),
+                }},
+            ],
         },
     });
+    // rawTable: a genuinely non-DataFlow table snapshot (no dataFlow).
     let rawtable_spec = json!({
         "format": 1,
-        "rawTable": {"properties": {"modelDataType": "DataFlow"}, "dataFlow": {"nodes": {}}},
+        "rawTable": {
+            "properties": {"modelDataType": "Ods"},
+            "fields": src_fields(),
+        },
     });
 
     json!({

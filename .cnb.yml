@@ -24,11 +24,12 @@
             MACOSX_DEPLOYMENT_TARGET=11.0 cargo zigbuild --locked --release --target aarch64-apple-darwin
             cp target/aarch64-apple-darwin/release/tblgen "dist/$stem-macos-arm64"
             apt-get update
-            apt-get install -y --no-install-recommends gcc-mingw-w64-x86-64-posix
+            apt-get install -y --no-install-recommends gcc-mingw-w64-x86-64-posix python3
             CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER=x86_64-w64-mingw32-gcc-posix cargo build --locked --release --target x86_64-pc-windows-gnu
             cp target/x86_64-pc-windows-gnu/release/tblgen.exe "dist/$stem-windows-amd64.exe"
+            python3 scripts/package_skill.py "$CNB_BRANCH" dist
             cd dist
-            sha256sum "$stem-linux-amd64" "$stem-macos-arm64" "$stem-windows-amd64.exe" > SHA256SUMS
+            sha256sum "$stem-linux-amd64" "$stem-macos-arm64" "$stem-windows-amd64.exe" "tblgen-skill-$CNB_BRANCH.zip" > SHA256SUMS
             sha256sum -c SHA256SUMS
         - name: Create release for this tag
           type: git:release
