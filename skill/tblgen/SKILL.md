@@ -32,7 +32,7 @@ python3 "$RUN" <命令> [参数]
 
 `properties.extractDataEnabled` 决定模型怎么运行，是设计决定，不是可有可无的开关：
 
-- `true`（ETL）：运行时把结果写进 `dbTableName` 这张物理表，查询读这张表，调度按本模型排程。必须同时给出 `dbTableName`，否则平台按「不提取」处理。
+- `true`（ETL）：运行时把结果写进 `dbTableName` 这张物理表，查询读这张表，调度按本模型排程。必须同时给出 `dbTableName`，否则平台按「不提取」处理（`warn.properties.runMode.noTable`）。
 - `false`（查询逻辑）：不落表，查询时把节点图编译成 SQL 执行；调度跳过本模型，改为依赖它的上游。
 - 不写：平台按 `false` 加载。`gen`/`check` 会给出 `warn.properties.runMode.unset` 提醒。
 
@@ -44,10 +44,10 @@ python3 "$RUN" <命令> [参数]
 
 ```
 - [ ] 1. 确认需求：输入源、输出字段及口径、运行方式、最终 .tbl 放在哪个目录
-- [ ] 2. 选起点：常见形态用 `new`（见下）；其他从 schema 示例中选一个，写进临时目录
+- [ ] 2. 选起点：常见形态用 `new`（见下），直接得到 .tbl，跳到第 5 步；其他从 schema 示例中选一个，写进临时目录
 - [ ] 3. 编辑规格
 - [ ] 4. check 规格 → 按诊断修改 → 重复，直到 errors 为空
-- [ ] 5. gen 到新路径，再 check 产物 .tbl
+- [ ] 5. gen 到新路径（用 new 的已经生成），再 check 产物 .tbl，放进项目后 check 整个项目
 - [ ] 6. 写入用户指定的位置，并按「交付」一节汇报
 ```
 
@@ -111,7 +111,7 @@ print(out)
 - 顶层是 `format: 1`、`properties`、`nodes`。每个节点有唯一的 `key`，`inputs` 只引用上游的 `key`，不填别名或 `.tbl` 路径。
 - `properties` 的类型化键就是平台加载器读取的模型属性（`schema` 输出的 `schema.oneOf[0].properties.properties.properties` 列出全部，如 `extractDataEnabled`、`rollbackEnabled`、`modifyDbTableEnabled`、`primaryKeys`），会做类型检查。其他属性（如 `desc`）放进 `properties.raw`，原样合并到 `.tbl`。类型化键同时出现在 `raw` 里也可以，只要值相同；不同会报 `structure.properties.raw.conflict`。
 - 外部输入节点（`ModelTable`、`DbTable`、`FileInput` 等）要显式声明每个字段的 `name`、`dataType`、`isDimension`，按源结构补上 `dbfield`、`length`、`decimal`。字段不清楚就问用户，不要猜。
-- `ModelTable.config.moduleTablePath` 是相对**最终 `.tbl` 所在目录**的路径（如 `../ods/ods_demo.tbl`），不是相对临时规格文件。`check` 不检查这个文件是否存在，交付前自己核对。
+- `ModelTable.config.moduleTablePath` 是相对**最终 `.tbl` 所在目录**的路径（如 `../ods/ods_demo.tbl`），不是相对临时规格文件。单独 check 规格或临时目录里的 `.tbl` 时查不到这个引用，放进项目后 check 项目才会核对它是否存在。
 - 简单的 Select/Output 字段可以由工具推导。Join、Union、行列转换的结果字段要显式写出。不要手工维护 `fields/dimensions/measures` 的重复副本。
 - Select 的 `steps` 按顺序执行，例如：
   - 过滤：`{"type":"Filter","fields":["金额"],"filter":"[金额] > 0"}`
@@ -131,12 +131,12 @@ python3 "$RUN" check model.tbl
 
 模型放进项目后，对整个项目再跑一次 `python3 "$RUN" check <项目目录>`。在项目里（上层有 `data/` 目录）还会检查：
 
-- 引用的模型（`moduleTablePath`，支持 `$DATA:`、`$APP:`、相对路径）和 Script 节点的脚本（`data/script/<名>.action(.ts)`）确实存在；
+- 引用的模型（`moduleTablePath`，按平台规则解析 `$DATA:`、`$APP:`、`$TAPP:`、相对和绝对路径）和 Script 节点的脚本（`data/script/<名>.action(.ts)`）确实存在；
 - 每个加工有 id 为 `default` 的输出节点；
 - `.action.ts` 的脚本规则：不读 `context.params`，常量不写死日期，加工脚本（定义了 `onProcessData` 的数据流脚本节点）有预览减量，批处理循环检查 `isCanceled()`，`BELONGTOID` 归并链有口径联动注释。`onQueryData`/`onUpdateData` 这类模型拓展点脚本不按加工脚本要求。
 - 不归你维护的代码（例如平台自带脚本）用 `--exclude <路径>` 跳过，可重复给出；路径不存在会报用法错误。
 
-任一步退出码不为 0 就停下来修复。修复时按每条诊断的 `path`（JSON Pointer，如 `/nodes/0/inputs/0`）和 `rule`（如 `graph.danglingInput`）回到规格里改。读报告时看 `scope`：`spec`、`dataflow` 表示确实校验过；`skipped` 表示文件不是 DataFlow，**没有校验**，不能算通过。
+任一步退出码不为 0 就停下来修复。修复时按每条诊断的 `path`（JSON Pointer，如 `/nodes/0/inputs/0`）和 `rule`（如 `graph.danglingInput`）回到规格里改。读报告时看 `scope`：`spec`、`dataflow`、`script` 表示确实校验过；`skipped` 表示文件不是 DataFlow 模型（如 App 录入表），**没有校验**，不能算通过。
 
 ## 修改或读懂存量模型
 
@@ -150,7 +150,7 @@ python3 "$RUN" decompile existing.tbl -o existing.spec.json
 - `archive`：DataFlow 保真快照，改字段后**不会**重新推导下游。
 - `rawTable`：非 DataFlow 文件的原样快照。
 
-不加修改直接 `gen` 反解结果，得到的 `.tbl` 与原文件内容一致。在反解结果上做小改动后 `gen` 到新路径，其余内容也会保留。不要手写一份新规格去替换存量模型：规格里没有写进 `properties.raw` 和节点里的属性（如 `version`、`rollbackEnabled`、`lastModifyTime`）都会丢失。
+不加修改直接 `gen` 反解结果，得到的 `.tbl` 与原文件内容一致。在反解结果上做小改动后 `gen` 到新路径，其余内容也会保留。不要手写一份新规格去替换存量模型：手写规格里没写的内容（如顶层 `version`、`rollbackEnabled` 等模型属性、节点的 `lastModifyTime`）都会丢失。
 
 如果改动需要重新推导字段，就按来源重建 typed 节点图，不要把 raw 往返当作语义验证。`archive` 形态改动后不会重新推导，加节点、改字段这类改动更适合在设计器里完成。只有 Script 节点的模型，加工逻辑在它引用的脚本里，改脚本，不要重新生成 `.tbl`。
 
