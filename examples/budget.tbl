@@ -839,6 +839,7 @@
     "datasource": "defdw",
     "dbSchema": "ods",
     "dbTableName": "ods_budget_summary",
+    "extractDataEnabled": true,
     "modelDataType": "DataFlow"
   },
   "version": "4.19.0"

@@ -132,10 +132,11 @@ fn cmd_gen(args: &[String]) -> ExitCode {
         }
     };
     let diags = validate_spec(&spec);
-    if !diags.is_empty() {
-        for d in &diags {
-            eprintln!("{}", d.to_json());
-        }
+    // every diagnostic goes to stderr as JSON; only errors stop generation
+    for d in &diags {
+        eprintln!("{}", d.to_json());
+    }
+    if diags.iter().any(|d| !d.is_warning()) {
         return ExitCode::from(1);
     }
     match generate(&spec) {

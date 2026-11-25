@@ -116,7 +116,9 @@ fn try_generated(tbl: &Value) -> Option<Value> {
                             mdt_ok = false;
                         }
                     }
-                    "datasource" | "dbSchema" | "dbTableName" | "extractDataEnabled" => {
+                    // typed only when the value has the loader's shape;
+                    // anything else stays verbatim in raw
+                    _ if prop_kind(k).is_some_and(|kind| prop_value_fits(kind, v)) => {
                         typed.insert(k.clone(), v.clone());
                     }
                     _ => {

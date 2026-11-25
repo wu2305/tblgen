@@ -73,7 +73,7 @@ pub fn check_file(path: &Path) -> Result<CheckReport, (String, i32)> {
     let mut errors = Vec::new();
     let mut warnings = Vec::new();
     for d in diags {
-        if d.rule.starts_with("warn.") {
+        if d.is_warning() {
             warnings.push(d);
         } else {
             errors.push(d);
@@ -1416,6 +1416,13 @@ fn check_top_level(
     nodes_obj: &serde_json::Map<String, Value>,
     infos: &HashMap<String, NodeInfo>,
 ) {
+    let props = tbl.get("properties");
+    crate::gen::run_mode_warnings(
+        props.and_then(|p| p.get("extractDataEnabled")),
+        props.and_then(|p| p.get("dbTableName")),
+        "/properties",
+        diags,
+    );
     // parameters
     if let Some(ps) = tbl.get("parameters") {
         match ps.as_array() {

@@ -55,6 +55,11 @@ impl Diag {
         Diag::new(path, rule, source, message)
     }
 
+    /// Warnings carry a `warn.` rule prefix and never fail a command.
+    pub fn is_warning(&self) -> bool {
+        self.rule.starts_with("warn.")
+    }
+
     pub fn to_json(&self) -> Value {
         serde_json::json!({
             "path": self.path,
@@ -586,15 +591,70 @@ pub const SPEC_NODE_KEYS: &[&str] = &[
     "rawNode",
 ];
 
-/// Closed keys of `properties` (typed core + explicit raw).
-pub const PROPERTIES_KEYS: &[&str] = &[
-    "modelDataType",
-    "datasource",
-    "dbSchema",
-    "dbTableName",
-    "extractDataEnabled",
-    "raw",
+/// Value shape of a typed `properties` key, as read by the loader.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PropKind {
+    /// fixed to "DataFlow" for generated specs
+    ModelDataType,
+    Bool,
+    Str,
+    StrList,
+    /// list of "field"/"index"/"constraint", or a legacy boolean
+    ModifyDbTable,
+}
+
+/// Typed `properties` keys: every model property that
+/// `DwTableLoader#loadProperties` reads for a DataFlow model, with its shape.
+/// Anything else goes under `properties.raw` and is copied verbatim.
+pub const TYPED_PROPERTIES: &[(&str, PropKind)] = &[
+    ("modelDataType", PropKind::ModelDataType),
+    ("datasource", PropKind::Str),
+    ("dbSchema", PropKind::Str),
+    ("dbTableName", PropKind::Str),
+    ("extractDataEnabled", PropKind::Bool),
+    ("dataReadonly", PropKind::Bool),
+    ("rebuildIndexAndKey", PropKind::Bool),
+    ("extractTargetMode", PropKind::Str),
+    ("modifyDbTableEnabled", PropKind::ModifyDbTable),
+    ("dateKeyValueFormat", PropKind::Str),
+    ("useTruncate", PropKind::Bool),
+    ("enableTempTable", PropKind::Bool),
+    ("rollbackEnabled", PropKind::Bool),
+    ("disableQueryCache", PropKind::Bool),
+    ("disableRowCount", PropKind::Bool),
+    ("allowDownloadAllData", PropKind::Bool),
+    ("primaryKeys", PropKind::StrList),
+    ("businessKeys", PropKind::StrList),
 ];
+
+pub const MODIFY_DB_TABLE_ITEMS: [&str; 3] = ["field", "index", "constraint"];
+
+pub fn prop_kind(k: &str) -> Option<PropKind> {
+    TYPED_PROPERTIES.iter().find(|(n, _)| *n == k).map(|(_, kind)| *kind)
+}
+
+/// Whether `v` has the shape the loader expects for a typed property.
+pub fn prop_value_fits(kind: PropKind, v: &Value) -> bool {
+    match kind {
+        PropKind::ModelDataType => v.as_str() == Some("DataFlow"),
+        PropKind::Bool => v.is_boolean(),
+        PropKind::Str => v.is_string(),
+        PropKind::StrList => v
+            .as_array()
+            .map(|a| a.iter().all(Value::is_string))
+            .unwrap_or(false),
+        PropKind::ModifyDbTable => {
+            v.is_boolean()
+                || v.as_array()
+                    .map(|a| {
+                        a.iter().all(|x| {
+                            x.as_str().map(|s| MODIFY_DB_TABLE_ITEMS.contains(&s)).unwrap_or(false)
+                        })
+                    })
+                    .unwrap_or(false)
+        }
+    }
+}
 
 /// Closed keys of a `parameters[]` item.
 pub const PARAMETER_KEYS: &[&str] = &["name", "dataType", "defaultValue", "raw"];

@@ -463,11 +463,24 @@ fn generated_form_schema() -> Value {
     gp.insert("format".into(), json!({"const": 1}));
     gp.insert("version".into(), str_s());
     let mut pp = Map::new();
-    pp.insert("modelDataType".into(), json!({"const": "DataFlow"}));
-    pp.insert("datasource".into(), str_s());
-    pp.insert("dbSchema".into(), str_s());
-    pp.insert("dbTableName".into(), str_s());
-    pp.insert("extractDataEnabled".into(), bool_s());
+    for (k, kind) in TYPED_PROPERTIES {
+        let s = match kind {
+            PropKind::ModelDataType => json!({"const": "DataFlow"}),
+            PropKind::Bool => bool_s(),
+            PropKind::Str => str_s(),
+            PropKind::StrList => json!({"type": "array", "items": {"type": "string"}}),
+            PropKind::ModifyDbTable => json!({"anyOf": [
+                {"type": "array", "items": {"enum": MODIFY_DB_TABLE_ITEMS}},
+                {"type": "boolean"}
+            ]}),
+        };
+        pp.insert((*k).into(), s);
+    }
+    pp.insert(
+        "extractDataEnabled".into(),
+        json!({"type": "boolean", "description":
+            "Run mode. true: ETL, output written to dbTableName. false or unset: query logic, the graph is compiled to SQL at query time (loader default false)."}),
+    );
     pp.insert("raw".into(), any_obj());
     gp.insert("properties".into(), obj(Value::Object(pp), &[]));
     let param = obj(
@@ -595,7 +608,8 @@ fn select_node(key: &str, input: &str, steps: Value, fields: Option<Vec<Value>>)
 fn wrap(nodes: Vec<Value>) -> Value {
     json!({
         "format": 1,
-        "properties": {"modelDataType": "DataFlow"},
+        // node/step examples are query logic: no output table
+        "properties": {"modelDataType": "DataFlow", "extractDataEnabled": false},
         "nodes": nodes,
     })
 }

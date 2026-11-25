@@ -5,7 +5,8 @@
     "modelDataType": "DataFlow",
     "datasource": "defdw",
     "dbSchema": "ods",
-    "dbTableName": "ods_budget_summary"
+    "dbTableName": "ods_budget_summary",
+    "extractDataEnabled": true
   },
   "parameters": [
     { "name": "property", "dataType": "C" }

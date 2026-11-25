@@ -43,7 +43,7 @@ pub fn generate(spec: &Value) -> Result<Value, Diag> {
         (false, true, false) => build_rawtable(spec),
         (false, false, true) => {
             let diags = validate_spec(spec);
-            if let Some(d) = diags.into_iter().next() {
+            if let Some(d) = diags.into_iter().find(|d| !d.is_warning()) {
                 return Err(d);
             }
             build_generated(spec)
@@ -1470,72 +1470,126 @@ fn validate_step_prereqs(obj: &Value, ty: &str, path: &str, diags: &mut Vec<Diag
 }
 
 fn validate_properties(spec: &Value, diags: &mut Vec<Diag>) {
-    let Some(p) = spec.get("properties") else {
-        return;
-    };
-    let Some(obj) = p.as_object() else {
-        diags.push(Diag::spec(
-            "/properties",
-            "structure.properties",
-            "properties must be an object",
-        ));
-        return;
-    };
-    for k in obj.keys() {
-        if !PROPERTIES_KEYS.contains(&k.as_str()) {
-            diags.push(Diag::spec(
-                format!("/properties/{}", ptr_escape(k)),
-                "structure.properties.key",
-                format!("unexpected properties key {:?}; use properties.raw", k),
-            ));
-        }
-    }
-    if let Some(mdt) = obj.get("modelDataType") {
-        if mdt.as_str() != Some("DataFlow") {
-            diags.push(Diag::spec(
-                "/properties/modelDataType",
-                "structure.properties.modelDataType",
-                "modelDataType is fixed to \"DataFlow\" for generated specs",
-            ));
-        }
-    }
-    for k in ["datasource", "dbSchema", "dbTableName"] {
-        if let Some(v) = obj.get(k) {
-            if !v.is_string() {
+    let empty = Map::new();
+    let obj = match spec.get("properties") {
+        None => &empty,
+        Some(p) => match p.as_object() {
+            Some(o) => o,
+            None => {
                 diags.push(Diag::spec(
-                    format!("/properties/{}", k),
+                    "/properties",
                     "structure.properties",
-                    format!("properties.{} must be a string", k),
+                    "properties must be an object",
                 ));
+                return;
             }
+        },
+    };
+    for (k, v) in obj {
+        if k == "raw" {
+            continue;
+        }
+        let path = format!("/properties/{}", ptr_escape(k));
+        match prop_kind(k) {
+            None => diags.push(Diag::spec(
+                path,
+                "structure.properties.key",
+                format!(
+                    "{:?} is not a typed model property; put it under properties.raw to copy it verbatim",
+                    k
+                ),
+            )),
+            Some(kind) if !prop_value_fits(kind, v) => diags.push(Diag::spec(
+                path,
+                if kind == PropKind::ModelDataType {
+                    "structure.properties.modelDataType"
+                } else {
+                    "structure.properties"
+                },
+                format!("properties.{} must be {}", k, prop_kind_desc(kind)),
+            )),
+            Some(_) => {}
         }
     }
-    if let Some(v) = obj.get("extractDataEnabled") {
-        if !v.is_boolean() {
-            diags.push(Diag::spec(
-                "/properties/extractDataEnabled",
-                "structure.properties",
-                "extractDataEnabled must be a boolean",
-            ));
-        }
-    }
-    if let Some(r) = obj.get("raw") {
-        if !r.is_object() {
-            diags.push(Diag::spec(
-                "/properties/raw",
-                "structure.properties.raw",
-                "properties.raw must be an object",
-            ));
-        } else if let Some(ro) = r.as_object() {
-            for k in ro.keys() {
-                if PROPERTIES_KEYS.contains(&k.as_str()) {
+    let raw = match obj.get("raw") {
+        None => None,
+        Some(r) => match r.as_object() {
+            Some(ro) => Some(ro),
+            None => {
+                diags.push(Diag::spec(
+                    "/properties/raw",
+                    "structure.properties.raw",
+                    "properties.raw must be an object",
+                ));
+                None
+            }
+        },
+    };
+    // A typed key may also appear in raw (e.g. a copied properties block);
+    // it is only an error when both places disagree.
+    if let Some(ro) = raw {
+        for (k, v) in ro {
+            if let Some(typed) = obj.get(k).filter(|_| prop_kind(k).is_some()) {
+                if typed != v {
                     diags.push(Diag::spec(
                         format!("/properties/raw/{}", ptr_escape(k)),
-                        "structure.properties.raw.collision",
-                        format!("raw key {:?} collides with a typed properties key", k),
+                        "structure.properties.raw.conflict",
+                        format!(
+                            "properties.raw.{k} ({}) conflicts with properties.{k} ({}); keep only properties.{k}",
+                            v, typed
+                        ),
                     ));
                 }
             }
+        }
+    }
+    let lookup = |k: &str| obj.get(k).or_else(|| raw.and_then(|r| r.get(k)));
+    run_mode_warnings(lookup("extractDataEnabled"), lookup("dbTableName"), "/properties", diags);
+}
+
+/// Run-mode diagnostics shared by spec and wire checks. `extractDataEnabled`
+/// selects ETL (output written to dbTableName) vs query logic (graph compiled
+/// to SQL at query time); the loader defaults a missing key to false, and an
+/// extracted model without dbTableName is treated as not extracted.
+pub fn run_mode_warnings(
+    extract: Option<&Value>,
+    table: Option<&Value>,
+    base: &str,
+    diags: &mut Vec<Diag>,
+) {
+    let source = "DwTableLoader#loadProperties; QueryUtils#isExtractDataEnabled";
+    let blank_table = table
+        .and_then(Value::as_str)
+        .map(|s| s.trim().is_empty())
+        .unwrap_or(true);
+    match extract.and_then(Value::as_bool) {
+        None if extract.is_none() => diags.push(Diag::new(
+            format!("{}/extractDataEnabled", base),
+            "warn.properties.runMode.unset",
+            source,
+            "extractDataEnabled is not set, so the platform loads this model as query logic \
+             (not extracted; queries compile the graph to SQL). Set true for ETL output to \
+             dbTableName, or false to make query logic explicit",
+        )),
+        Some(true) if blank_table => diags.push(Diag::new(
+            format!("{}/dbTableName", base),
+            "warn.properties.runMode.noTable",
+            source,
+            "extractDataEnabled is true but dbTableName is blank; the platform treats the \
+             model as not extracted. Set dbTableName to the output table",
+        )),
+        _ => {}
+    }
+}
+
+fn prop_kind_desc(kind: PropKind) -> &'static str {
+    match kind {
+        PropKind::ModelDataType => "\"DataFlow\" for generated specs",
+        PropKind::Bool => "a boolean",
+        PropKind::Str => "a string",
+        PropKind::StrList => "an array of strings",
+        PropKind::ModifyDbTable => {
+            "an array of \"field\"/\"index\"/\"constraint\" (or a legacy boolean)"
         }
     }
 }
@@ -3208,28 +3262,20 @@ fn default_output_partition(descs: &[NodeDesc]) -> (Vec<Value>, Vec<Value>) {
 
 fn emit_properties(spec: &Value) -> Result<Value, Diag> {
     let mut m = Map::new();
-    m.insert("modelDataType".into(), Value::String("DataFlow".into()));
     if let Some(p) = spec.get("properties").and_then(Value::as_object) {
-        for k in [
-            "datasource",
-            "dbSchema",
-            "dbTableName",
-            "extractDataEnabled",
-        ] {
-            if let Some(v) = p.get(k) {
-                m.insert(k.into(), v.clone());
-            }
-        }
-        // modelDataType typed value must be DataFlow (validated); emit it anyway
-        if p.contains_key("modelDataType") {
-            m.insert("modelDataType".into(), Value::String("DataFlow".into()));
-        }
+        // raw first so typed keys win (equal values were validated)
         if let Some(raw) = p.get("raw").and_then(Value::as_object) {
             for (k, v) in raw {
                 m.insert(k.clone(), v.clone());
             }
         }
+        for (k, _) in TYPED_PROPERTIES {
+            if let Some(v) = p.get(*k) {
+                m.insert((*k).into(), v.clone());
+            }
+        }
     }
+    m.insert("modelDataType".into(), Value::String("DataFlow".into()));
     Ok(Value::Object(m))
 }
 

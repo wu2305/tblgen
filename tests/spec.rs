@@ -8,6 +8,12 @@ use tblgen::gen::{generate, validate_spec};
 use tblgen::model::*;
 use tblgen::schema::schema_document;
 
+/// Spec diagnostics minus warnings: most tests target error rules, and the
+/// run-mode warning fires for inline specs that leave extractDataEnabled unset.
+fn spec_errors(spec: &Value) -> Vec<Diag> {
+    validate_spec(spec).into_iter().filter(|d| !d.is_warning()).collect()
+}
+
 fn budget_spec() -> Value {
     serde_json::from_str(include_str!("../examples/budget.spec.json")).unwrap()
 }
@@ -19,7 +25,7 @@ fn budget_spec() -> Value {
 #[test]
 fn budget_generates_valid_wire() {
     let spec = budget_spec();
-    assert!(validate_spec(&spec).is_empty(), "spec must validate");
+    assert!(spec_errors(&spec).is_empty(), "spec must validate");
     let tbl = generate(&spec).expect("generate");
     let nodes = tbl.pointer("/dataFlow/nodes").unwrap().as_object().unwrap();
     // ids: first Output -> "default", others -> key
@@ -157,7 +163,7 @@ fn node_type_matrix() {
             "fields":[{"name":"f","dataType":"C","isDimension":true}]
         });
         let spec = minimal_spec_with_node(node.clone());
-        let diags = validate_spec(&spec);
+        let diags = spec_errors(&spec);
         if node_supported(ty) {
             // supported types may still fail arity/etc but must not fail on enum/coverage
             assert!(
@@ -179,7 +185,7 @@ fn node_type_matrix() {
     }
     // unknown type string rejected entirely
     let spec = minimal_spec_with_node(json!({"key":"n","type":"NoSuchType"}));
-    assert!(validate_spec(&spec)
+    assert!(spec_errors(&spec)
         .iter()
         .any(|d| d.rule == "enum.nodeType"));
 }
@@ -199,7 +205,7 @@ fn step_type_matrix() {
                  "fields":[{"name":"f","dataType":"C","isDimension":true}]}
             ]
         });
-        let diags = validate_spec(&spec);
+        let diags = spec_errors(&spec);
         if step_supported(ty) {
             assert!(
                 !diags
@@ -229,7 +235,7 @@ fn step_type_matrix() {
              "fields":[{"name":"f","dataType":"C","isDimension":true}]}
         ]
     });
-    assert!(validate_spec(&spec).is_empty());
+    assert!(spec_errors(&spec).is_empty());
     let tbl = generate(&spec).unwrap();
     assert_eq!(
         tbl.pointer("/dataFlow/nodes/s/steps/0/type").unwrap(),
@@ -254,7 +260,7 @@ fn rejects_cycle_and_dangling() {
              "fields":[{"name":"f","dataType":"C","isDimension":true}]}
         ]
     });
-    assert!(validate_spec(&spec).iter().any(|d| d.rule == "graph.cycle"));
+    assert!(spec_errors(&spec).iter().any(|d| d.rule == "graph.cycle"));
 
     let spec2 = json!({
         "format":1,
@@ -263,7 +269,7 @@ fn rejects_cycle_and_dangling() {
              "fields":[{"name":"f","dataType":"C","isDimension":true}]}
         ]
     });
-    assert!(validate_spec(&spec2)
+    assert!(spec_errors(&spec2)
         .iter()
         .any(|d| d.rule == "graph.danglingInput"));
 }
@@ -278,7 +284,7 @@ fn rejects_duplicate_ids_and_keys() {
             {"key":"b","type":"FileInput","id":"same","fields":[{"name":"f","dataType":"C","isDimension":true}]}
         ]
     });
-    assert!(validate_spec(&spec)
+    assert!(spec_errors(&spec)
         .iter()
         .any(|d| d.rule == "structure.node.id.duplicate"));
     // duplicate keys
@@ -289,7 +295,7 @@ fn rejects_duplicate_ids_and_keys() {
             {"key":"a","type":"FileInput","fields":[{"name":"f","dataType":"C","isDimension":true}]}
         ]
     });
-    assert!(validate_spec(&spec2)
+    assert!(spec_errors(&spec2)
         .iter()
         .any(|d| d.rule == "structure.node.key.duplicate"));
 }
@@ -301,7 +307,7 @@ fn rejects_arity_violations() {
         "format":1,
         "nodes":[{"key":"s","type":"Select","inputs":[]}]
     });
-    assert!(validate_spec(&spec)
+    assert!(spec_errors(&spec)
         .iter()
         .any(|d| d.rule == "err.dataflow.node.input"));
     // FileInput with input
@@ -312,7 +318,7 @@ fn rejects_arity_violations() {
             {"key":"b","type":"FileInput","inputs":["a"],"fields":[{"name":"f","dataType":"C","isDimension":true}]}
         ]
     });
-    assert!(validate_spec(&spec2)
+    assert!(spec_errors(&spec2)
         .iter()
         .any(|d| d.rule == "err.dataflow.node.input"));
 }
@@ -326,7 +332,7 @@ fn rejects_nested_unknown_keys() {
             {"name":"f","dataType":"C","isDimension":true,"bogus":1}
         ]}]
     });
-    assert!(validate_spec(&spec)
+    assert!(spec_errors(&spec)
         .iter()
         .any(|d| d.rule == "structure.field.key"));
     // unknown config key (not FileInput)
@@ -341,12 +347,12 @@ fn rejects_nested_unknown_keys() {
              "fields":[{"name":"f","dataType":"C","isDimension":true}]}
         ]
     });
-    assert!(validate_spec(&spec2)
+    assert!(spec_errors(&spec2)
         .iter()
         .any(|d| d.rule == "structure.config.key"));
     // unknown top-level spec key
     let spec3 = json!({"format":1,"nodes":[],"surprise":{}});
-    assert!(validate_spec(&spec3)
+    assert!(spec_errors(&spec3)
         .iter()
         .any(|d| d.rule == "structure.spec.key"));
     // unknown step payload key
@@ -361,7 +367,7 @@ fn rejects_nested_unknown_keys() {
              "fields":[{"name":"f","dataType":"C","isDimension":true}]}
         ]
     });
-    assert!(validate_spec(&spec4)
+    assert!(spec_errors(&spec4)
         .iter()
         .any(|d| d.rule == "structure.step.payload.key"));
 }
@@ -381,7 +387,7 @@ fn rejects_col_to_row_width_and_missing_fields() {
              "fields":[{"name":"h1","dataType":"C","isDimension":true},{"name":"h2","dataType":"N","isDimension":false}]}
         ]
     });
-    assert!(validate_spec(&spec)
+    assert!(spec_errors(&spec)
         .iter()
         .any(|d| d.rule == "err.dataflow.colToRow.config"));
     // ColToRow without fields -> rejected (no shape inference for pivot)
@@ -394,7 +400,7 @@ fn rejects_col_to_row_width_and_missing_fields() {
              "fields":[{"name":"h1","dataType":"C","isDimension":true}]}
         ]
     });
-    assert!(validate_spec(&spec2)
+    assert!(spec_errors(&spec2)
         .iter()
         .any(|d| d.rule == "field.required"));
 }
@@ -415,7 +421,7 @@ fn rejects_step_field_not_found() {
         ]
     });
     // gen-side name tracking now proves the operated field is missing
-    let diags = validate_spec(&spec);
+    let diags = spec_errors(&spec);
     assert!(
         diags
             .iter()
@@ -464,9 +470,9 @@ fn refactor_string_rename_semantics() {
         ]
     });
     assert!(
-        validate_spec(&spec).is_empty(),
+        spec_errors(&spec).is_empty(),
         "{:?}",
-        validate_spec(&spec)
+        spec_errors(&spec)
     );
     let tbl = generate(&spec).unwrap();
     let names: Vec<String> = tbl
@@ -492,7 +498,7 @@ fn refactor_rejects_object_map_and_multi_field() {
             {"key":"o","type":"Output","inputs":["s"]}
         ]
     });
-    assert!(validate_spec(&spec)
+    assert!(spec_errors(&spec)
         .iter()
         .any(|d| d.rule == "structure.step.payload.type"));
 
@@ -508,7 +514,7 @@ fn refactor_rejects_object_map_and_multi_field() {
             {"key":"o","type":"Output","inputs":["s"]}
         ]
     });
-    assert!(validate_spec(&spec2)
+    assert!(spec_errors(&spec2)
         .iter()
         .any(|d| d.rule == "field.required"));
 }
@@ -529,9 +535,9 @@ fn addfield_and_filter_field_rules() {
     spec["nodes"][1]["steps"] = json!([{"type":"AddField",
         "addField":{"name":"n1","dataType":"N","isDimension":false,"exp":"[f]"}}]);
     assert!(
-        validate_spec(&spec).is_empty(),
+        spec_errors(&spec).is_empty(),
         "{:?}",
-        validate_spec(&spec)
+        spec_errors(&spec)
     );
     let tbl = generate(&spec).unwrap();
     let names: Vec<&str> = tbl
@@ -548,12 +554,12 @@ fn addfield_and_filter_field_rules() {
     let mut bad = base.clone();
     bad["nodes"][1]["steps"] = json!([{"type":"AddField","fields":["other"],
         "addField":{"name":"n1","dataType":"N","isDimension":false,"exp":"[f]"}}]);
-    assert!(!validate_spec(&bad).is_empty());
+    assert!(!spec_errors(&bad).is_empty());
 
     // Filter requires nonempty fields even for constant expressions
     let mut f = base.clone();
     f["nodes"][1]["steps"] = json!([{"type":"Filter","filter":"1 = 1"}]);
-    assert!(validate_spec(&f).iter().any(|d| d.rule == "field.required"));
+    assert!(spec_errors(&f).iter().any(|d| d.rule == "field.required"));
 }
 
 #[test]
@@ -570,7 +576,7 @@ fn case_insensitive_field_lookup() {
             {"key":"o","type":"Output","inputs":["s"]}
         ]
     });
-    let diags = validate_spec(&spec);
+    let diags = spec_errors(&spec);
     assert!(diags.is_empty(), "{:?}", diags);
 }
 
@@ -586,7 +592,7 @@ fn explicit_select_fields_mismatch_detected() {
             {"key":"o","type":"Output","inputs":["s"]}
         ]
     });
-    assert!(validate_spec(&spec)
+    assert!(spec_errors(&spec)
         .iter()
         .any(|d| d.rule == "field.mismatch"));
 }
@@ -740,9 +746,9 @@ fn schema_is_valid_2020_12() {
     // typed example must itself be a valid spec
     for ex in doc["examples"]["typed"].as_array().unwrap() {
         assert!(
-            validate_spec(ex).is_empty(),
+            spec_errors(ex).is_empty(),
             "typed example invalid: {:?}",
-            validate_spec(ex)
+            spec_errors(ex)
         );
     }
 }
@@ -759,7 +765,7 @@ fn schema_examples_generate_and_check() {
             let ty = ex["type"].as_str().unwrap_or("?");
             let spec = &ex["spec"];
             if label == "typed" {
-                let diags = validate_spec(spec);
+                let diags = spec_errors(spec);
                 assert!(
                     diags.is_empty(),
                     "{} {} spec invalid: {:?}",
@@ -996,7 +1002,7 @@ fn field_scalar_types_are_enforced() {
              "fields":[{"name":"f","dataType":"N","isDimension":false}]}
         ]
     });
-    assert!(validate_spec(&spec)
+    assert!(spec_errors(&spec)
         .iter()
         .any(|d| d.rule == "structure.field.type" && d.path.ends_with("/length")));
     // extractable must be boolean
@@ -1010,7 +1016,7 @@ fn field_scalar_types_are_enforced() {
              "fields":[{"name":"f","dataType":"C","isDimension":true}]}
         ]
     });
-    assert!(validate_spec(&spec2)
+    assert!(spec_errors(&spec2)
         .iter()
         .any(|d| d.rule == "structure.field.type" && d.path.ends_with("/extractable")));
 }
@@ -1031,7 +1037,7 @@ fn spechars_must_be_string_and_rename_path_exact() {
              "fields":[{"name":"f","dataType":"C","isDimension":true}]}
         ]
     });
-    let ds = validate_spec(&spec);
+    let ds = spec_errors(&spec);
     assert!(
         ds.iter()
             .any(|d| d.rule == "structure.step.payload.type" && d.path.ends_with("/spechars")),
@@ -1054,7 +1060,7 @@ fn spechars_must_be_string_and_rename_path_exact() {
              "fields":[{"name":"amount","dataType":"N","isDimension":false}]}
         ]
     });
-    let ds2 = validate_spec(&spec2);
+    let ds2 = spec_errors(&spec2);
     let rename_diag = ds2
         .iter()
         .find(|d| d.path.contains("refactor"))
@@ -1091,7 +1097,7 @@ fn invalid_step_enums_rejected() {
             "type",
         ),
     ] {
-        let ds = validate_spec(&mk(step));
+        let ds = spec_errors(&mk(step));
         assert!(
             ds.iter()
                 .any(|d| d.rule == "structure.step.payload.enum" && d.path.ends_with(path_suffix)),
@@ -1102,7 +1108,7 @@ fn invalid_step_enums_rejected() {
     }
     // valid enum values pass
     let ok = mk(json!({"type":"Trim","fields":["f"],"trim":{"trimPosition":"FrontAndEnd"}}));
-    assert!(!validate_spec(&ok)
+    assert!(!spec_errors(&ok)
         .iter()
         .any(|d| d.rule == "structure.step.payload.enum"));
 }
@@ -1123,7 +1129,7 @@ fn expression_refs_validated_conservatively() {
              "fields":[{"name":"f","dataType":"C","isDimension":true}]}
         ]
     });
-    let ds = validate_spec(&bad);
+    let ds = spec_errors(&bad);
     assert!(
         ds.iter()
             .any(|d| d.rule == "err.exp.ref.notfound" && d.path.ends_with("/filter")),
@@ -1152,7 +1158,7 @@ fn expression_refs_validated_conservatively() {
              ]}
         ]
     });
-    let ds2 = validate_spec(&ok);
+    let ds2 = spec_errors(&ok);
     assert!(
         !ds2.iter().any(|d| d.rule == "err.exp.ref.notfound"),
         "parameter ref must be valid: {:?}",
@@ -1173,7 +1179,7 @@ fn expression_refs_validated_conservatively() {
              "fields":[{"name":"f","dataType":"C","isDimension":true}]}
         ]
     });
-    let ds3 = validate_spec(&quoted);
+    let ds3 = spec_errors(&quoted);
     assert!(
         !ds3.iter().any(|d| d.rule == "err.exp.ref.notfound"),
         "quoted literal must not be scanned: {:?}",
@@ -1212,7 +1218,7 @@ fn schema_general_examples_typed_and_rawonly() {
 
     // typed[] — plain generated-form specs
     for (i, spec) in ex["typed"].as_array().unwrap().iter().enumerate() {
-        let ds = validate_spec(spec);
+        let ds = spec_errors(spec);
         assert!(ds.is_empty(), "typed[{}] invalid: {:?}", i, ds);
         let tbl = generate(spec).unwrap_or_else(|d| panic!("typed[{}] gen: {}", i, d.to_json()));
         let w = check(&tbl);
@@ -1230,7 +1236,7 @@ fn schema_general_examples_typed_and_rawonly() {
     let raw = ex["rawOnly"].as_array().unwrap();
     assert_eq!(raw.len(), 4, "expected rawNode, rawStep, archive, rawTable");
     for (i, spec) in raw[..2].iter().enumerate() {
-        let ds = validate_spec(spec);
+        let ds = spec_errors(spec);
         assert!(ds.is_empty(), "rawOnly[{}] spec invalid: {:?}", i, ds);
         let tbl = generate(spec).unwrap_or_else(|d| panic!("rawOnly[{}] gen: {}", i, d.to_json()));
         let w = check(&tbl);
@@ -1246,9 +1252,9 @@ fn schema_general_examples_typed_and_rawonly() {
     // archive form: merges top+flow+node bodies into a wire DataFlow
     let archive = &raw[2];
     assert!(
-        validate_spec(archive).is_empty(),
+        spec_errors(archive).is_empty(),
         "archive spec invalid: {:?}",
-        validate_spec(archive)
+        spec_errors(archive)
     );
     let tbl = generate(archive).unwrap();
     assert_eq!(tbl["properties"]["modelDataType"], json!("DataFlow"));
@@ -1270,9 +1276,9 @@ fn schema_general_examples_typed_and_rawonly() {
     // rawTable form: verbatim non-DataFlow snapshot — no dataFlow, Ods model
     let rawtable = &raw[3];
     assert!(
-        validate_spec(rawtable).is_empty(),
+        spec_errors(rawtable).is_empty(),
         "rawTable spec invalid: {:?}",
-        validate_spec(rawtable)
+        spec_errors(rawtable)
     );
     let tbl = generate(rawtable).unwrap();
     assert_eq!(tbl["properties"]["modelDataType"], json!("Ods"));
@@ -1287,4 +1293,85 @@ fn schema_general_examples_typed_and_rawonly() {
     );
     let back = decompile(&tbl).unwrap();
     assert_eq!(back["rawTable"], tbl, "rawTable must round-trip verbatim");
+}
+
+// ---------------------------------------------------------------------------
+// properties: typed set from DwTableLoader#loadProperties, raw duplicates,
+// run mode (extractDataEnabled)
+// ---------------------------------------------------------------------------
+
+fn props_spec(props: Value) -> Value {
+    json!({
+        "format": 1,
+        "properties": props,
+        "nodes": [
+            {"key":"mt","type":"ModelTable","config":{"moduleTablePath":"../a.tbl"},
+             "fields":[{"name":"m","dataType":"C","isDimension":true}]},
+            {"key":"out","type":"Output","inputs":["mt"]}
+        ]
+    })
+}
+
+fn rules(diags: &[Diag]) -> Vec<String> {
+    diags.iter().map(|d| d.rule.clone()).collect()
+}
+
+#[test]
+fn properties_copied_block_in_raw_is_accepted() {
+    // a real model's properties pasted whole into raw must not collide
+    let spec = props_spec(json!({
+        "extractDataEnabled": true,
+        "dbTableName": "ads_x",
+        "raw": {"extractDataEnabled": true, "dbTableName": "ads_x", "rollbackEnabled": false,
+                "modifyDbTableEnabled": ["field", "index", "constraint"]}
+    }));
+    assert!(validate_spec(&spec).is_empty(), "{:?}", rules(&validate_spec(&spec)));
+    let p = generate(&spec).unwrap()["properties"].clone();
+    assert_eq!(p["extractDataEnabled"], json!(true));
+    assert_eq!(p["rollbackEnabled"], json!(false));
+}
+
+#[test]
+fn properties_raw_conflict_is_an_error() {
+    let spec = props_spec(json!({
+        "extractDataEnabled": true, "dbTableName": "t",
+        "raw": {"extractDataEnabled": false}
+    }));
+    assert_eq!(rules(&validate_spec(&spec)), ["structure.properties.raw.conflict"]);
+}
+
+#[test]
+fn properties_typed_values_are_type_checked() {
+    let spec = props_spec(json!({
+        "extractDataEnabled": false,
+        "rollbackEnabled": "no",
+        "modifyDbTableEnabled": ["field", "rows"]
+    }));
+    let d = validate_spec(&spec);
+    assert_eq!(rules(&d), ["structure.properties", "structure.properties"]);
+}
+
+#[test]
+fn run_mode_warnings_do_not_block_gen() {
+    let unset = props_spec(json!({}));
+    assert_eq!(rules(&validate_spec(&unset)), ["warn.properties.runMode.unset"]);
+    assert!(generate(&unset).is_ok());
+
+    let no_table = props_spec(json!({"extractDataEnabled": true}));
+    assert_eq!(rules(&validate_spec(&no_table)), ["warn.properties.runMode.noTable"]);
+
+    let tbl = generate(&no_table).unwrap();
+    assert!(rules(&check(&tbl)).contains(&"warn.properties.runMode.noTable".to_string()));
+
+    let query = props_spec(json!({"extractDataEnabled": false}));
+    assert!(validate_spec(&query).is_empty());
+}
+
+#[test]
+fn decompile_keeps_off_shape_typed_values_in_raw() {
+    let spec = props_spec(json!({"extractDataEnabled": false, "raw": {"rollbackEnabled": "false"}}));
+    let tbl = generate(&spec).unwrap();
+    let back = decompile(&tbl).unwrap();
+    assert_eq!(back["properties"]["raw"]["rollbackEnabled"], json!("false"));
+    assert_eq!(generate(&back).unwrap(), tbl);
 }
