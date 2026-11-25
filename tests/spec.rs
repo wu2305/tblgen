@@ -1436,6 +1436,11 @@ fn new_models_pass_project_check() {
     std::fs::remove_file(&script).unwrap();
     let r = report(&cli(&["check", &root.display().to_string()]));
     assert!(r.contains(&("dwd_j.tbl".into(), vec!["ref.modelTable.missing".into()])), "{:?}", r);
+    // --exclude drops everything under the path from the report
+    let dwd = tables.join("dwd").display().to_string();
+    let r = report(&cli(&["check", &root.display().to_string(), "--exclude", &dwd]));
+    assert!(!r.iter().any(|(f, _)| f == "dwd_j.tbl"), "{:?}", r);
+    assert_eq!(cli(&["check", &root.display().to_string(), "--exclude", "/no/such/dir"]).status.code(), Some(2));
     assert!(r.contains(&("ods_s.tbl".into(), vec!["ref.script.missing".into()])), "{:?}", r);
     let _ = std::fs::remove_dir_all(&root);
 }

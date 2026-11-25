@@ -28,7 +28,7 @@ const USAGE: &str = "tblgen — offline .tbl <-> spec-format v1 converter
 USAGE:
     tblgen gen <spec.json> [-o out.tbl]
     tblgen decompile <file.tbl> [-o out.json]
-    tblgen check <file|dir>...
+    tblgen check <file|dir>... [--exclude <path>]...
     tblgen schema
     tblgen new script --table <name> --fields <list> --extract <true|false> -o <out.tbl>
                       [--schema S] [--datasource D] [--version V] [--script-name N]
@@ -40,6 +40,7 @@ USAGE:
 
 check: a directory expands to every .tbl and .action.ts below it. Inside a
 project (a directory with data/), model references and scripts are resolved.
+--exclude skips everything under a path (e.g. platform scripts you do not own).
 new: --extract true = ETL into --table; false = query logic. Field list is
 name:TYPE[:length[.decimal]][:m] (TYPE C/N/I/D/P, m = measure); dsl takes
 names only. --input is the reference as written in the model (../ods/x.tbl,
@@ -211,7 +212,7 @@ fn cmd_decompile(args: &[String]) -> ExitCode {
 
 /// Directories expand to every `.tbl` and `.action.ts` below them, sorted;
 /// hidden directories and node_modules are skipped.
-fn expand_dirs(args: &[String]) -> Vec<String> {
+fn expand_dirs(args: &[String], exclude: &[PathBuf]) -> Vec<String> {
     fn walk(dir: &Path, out: &mut Vec<String>) {
         let Ok(rd) = fs::read_dir(dir) else { return };
         let mut entries: Vec<_> = rd.flatten().map(|e| e.path()).collect();
@@ -236,10 +237,38 @@ fn expand_dirs(args: &[String]) -> Vec<String> {
             out.push(a.clone());
         }
     }
+    out.retain(|f| {
+        let abs = fs::canonicalize(f).unwrap_or_else(|_| PathBuf::from(f));
+        !exclude.iter().any(|x| abs.starts_with(x))
+    });
     out
 }
 
 fn cmd_check(args: &[String]) -> ExitCode {
+    // --exclude <path> (repeatable) skips files under that path
+    let mut exclude: Vec<PathBuf> = Vec::new();
+    let mut rest: Vec<String> = Vec::new();
+    let mut i = 0;
+    while i < args.len() {
+        if args[i] == "--exclude" {
+            let Some(x) = args.get(i + 1) else {
+                eprintln!("tblgen check: --exclude requires a path\n\n{}", USAGE);
+                return ExitCode::from(2);
+            };
+            match fs::canonicalize(x) {
+                Ok(p) => exclude.push(p),
+                Err(e) => {
+                    eprintln!("tblgen check: --exclude {}: {}", x, e);
+                    return ExitCode::from(2);
+                }
+            }
+            i += 2;
+        } else {
+            rest.push(args[i].clone());
+            i += 1;
+        }
+    }
+    let args = &rest[..];
     let (files, _) = match parse_io_args(args) {
         Ok(v) => v,
         Err(e) => {
@@ -253,7 +282,7 @@ fn cmd_check(args: &[String]) -> ExitCode {
     }
     let mut reports: Vec<CheckReport> = Vec::new();
     let mut had_io_error = false;
-    for f in expand_dirs(&files) {
+    for f in expand_dirs(&files, &exclude) {
         match check_file(Path::new(&f)) {
             Ok(r) => reports.push(r),
             Err((msg, code)) => {

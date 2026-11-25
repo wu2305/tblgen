@@ -133,7 +133,8 @@ python3 "$RUN" check model.tbl
 
 - 引用的模型（`moduleTablePath`，支持 `$DATA:`、`$APP:`、相对路径）和 Script 节点的脚本（`data/script/<名>.action(.ts)`）确实存在；
 - 每个加工有 id 为 `default` 的输出节点；
-- `.action.ts` 的脚本规则：不读 `context.params`，常量不写死日期，加工脚本有预览减量，批处理循环检查 `isCanceled()`，`BELONGTOID` 归并链有口径联动注释。
+- `.action.ts` 的脚本规则：不读 `context.params`，常量不写死日期，加工脚本（定义了 `onProcessData` 的数据流脚本节点）有预览减量，批处理循环检查 `isCanceled()`，`BELONGTOID` 归并链有口径联动注释。`onQueryData`/`onUpdateData` 这类模型拓展点脚本不按加工脚本要求。
+- 不归你维护的代码（例如平台自带脚本）用 `--exclude <路径>` 跳过，可重复给出；路径不存在会报用法错误。
 
 任一步退出码不为 0 就停下来修复。修复时按每条诊断的 `path`（JSON Pointer，如 `/nodes/0/inputs/0`）和 `rule`（如 `graph.danglingInput`）回到规格里改。读报告时看 `scope`：`spec`、`dataflow` 表示确实校验过；`skipped` 表示文件不是 DataFlow，**没有校验**，不能算通过。
 

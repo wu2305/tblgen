@@ -49,8 +49,12 @@ pub fn check_script(path: &str, src: &str) -> Vec<Diag> {
             ),
         ));
     }
-    // placeholder scripts never write rows, so they need no preview limit
+    // the preview limit is for DataFlow script nodes, whose entry point is
+    // onProcessData (DwDataFlowNodeContributor_script); extension-point
+    // scripts (onQueryData/onUpdateData) in the same directory are exempt,
+    // and placeholder scripts never write rows
     if kind == ScriptKind::DataFlow
+        && defines_function(&code, "onProcessData")
         && !src.contains("占位")
         && (!code.contains("context.isPreview")
             || (!code.contains("PREVIEW_MAX_ROWS") && !src.contains("第一页")))
@@ -109,6 +113,14 @@ pub fn strip_comments(src: &str) -> String {
         }
     }
     String::from_utf8(out).unwrap_or_default()
+}
+
+/// `function <name>` declared in the code (word-bounded name).
+fn defines_function(code: &str, name: &str) -> bool {
+    let needle = format!("function {}", name);
+    code.match_indices(&needle).any(|(i, _)| {
+        !code[i + needle.len()..].chars().next().is_some_and(is_word)
+    })
 }
 
 fn line_of(code: &str, needle: &str) -> Option<usize> {
@@ -211,9 +223,14 @@ mod tests {
 
     #[test]
     fn dataflow_script_rules() {
-        let ok = "const PREVIEW_MAX_ROWS = 200;\nif (context.isPreview) {}";
+        let ok = "function onProcessData(c) {}\nconst PREVIEW_MAX_ROWS = 200;\nif (context.isPreview) {}";
         assert!(rules("/P/data/script/a.action.ts", ok).is_empty());
-        assert_eq!(rules("/P/data/script/a.action.ts", "let x = 1;"), ["script.previewLimit"]);
+        let no_limit = "function onProcessData(c) { output.writeRow([1]); }";
+        assert_eq!(rules("/P/data/script/a.action.ts", no_limit), ["script.previewLimit"]);
+        // extension-point scripts share data/script but are not DataFlow nodes
+        let ext = "function onQueryData(q) {}\nfunction onUpdateData(u) {}";
+        assert!(rules("/P/data/script/a.action.ts", ext).is_empty());
+        assert!(rules("/P/data/script/a.action.ts", "function onProcessDataX() {}").is_empty());
         // placeholder scripts are exempt; comments are ignored for code rules
         assert!(rules("/P/data/script/a.action.ts", "/** 占位 context.params */").is_empty());
         assert_eq!(
