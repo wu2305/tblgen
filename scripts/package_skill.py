@@ -11,7 +11,8 @@ DIST directory containing the three platform binaries built by CI:
      tblgen-<TAG>-windows-amd64.exe
 
 Produces DIST/tblgen-skill-<TAG>.zip containing exactly:
-    tblgen/SKILL.md, tblgen/run.py, tblgen/release.json
+    tblgen/SKILL.md, tblgen/run.py, tblgen/release.json,
+    tblgen/examples/<name>.spec.json for each name in EXAMPLES
 in that fixed order, stored uncompressed with stable 1980-01-01 timestamps.
 The manifest release.json pins the tag and the SHA-256 of each binary.
 Existing assets are never modified; the zip is created exclusively.
@@ -29,6 +30,8 @@ SKILL_DIR = ROOT / 'skill' / 'tblgen'
 
 # binary filename suffix == manifest sha256 key (matches run.py PLATFORMS)
 ASSETS = ['linux-amd64', 'macos-arm64', 'windows-amd64.exe']
+# business examples referenced by SKILL.md, shipped under tblgen/examples/
+EXAMPLES = ['budget', 'property-model-long']
 TAG_RE = re.compile(r'v\d+\.\d+\.\d+')
 
 
@@ -72,7 +75,8 @@ def main(argv):
 
     skill_md = SKILL_DIR / 'SKILL.md'
     run_py = SKILL_DIR / 'run.py'
-    for p in (skill_md, run_py):
+    examples = [ROOT / 'examples' / f'{n}.spec.json' for n in EXAMPLES]
+    for p in (skill_md, run_py, *examples):
         if not p.is_file():
             print(f'missing skill file: {p}', file=sys.stderr)
             return 2
@@ -82,6 +86,7 @@ def main(argv):
         ('tblgen/SKILL.md', skill_md.read_bytes(), 0o644),
         ('tblgen/run.py', run_py.read_bytes(), 0o755),
         ('tblgen/release.json', manifest, 0o644),
+        *((f'tblgen/examples/{p.name}', p.read_bytes(), 0o644) for p in examples),
     ]
     try:
         with zipfile.ZipFile(out, 'x', compression=zipfile.ZIP_STORED) as z:

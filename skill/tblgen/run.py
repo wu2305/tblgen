@@ -10,6 +10,9 @@ Environment:
     TBLGEN_BIN       use this binary instead of downloading (must match the
                      pinned SHA-256 of the released artifact for this platform)
     TBLGEN_CACHE_DIR override the download cache directory
+    TBLGEN_MIRROR    download base URL replacing DEFAULT_MIRROR; the mirror
+                     must serve <base>/<version>/<asset>, and downloads are
+                     still verified against the pinned SHA-256
 
 The version tag and per-platform SHA-256 digests come from release.json,
 which sits next to this script inside the bundle. There is no runtime
@@ -35,7 +38,7 @@ PLATFORMS = {
     ('Linux', 'x86_64'): 'linux-amd64',
     ('Windows', 'amd64'): 'windows-amd64.exe',
 }
-REPO = 'wu2305/tblgen'
+DEFAULT_MIRROR = 'https://cnb.cool/wu2305/tblgen/-/releases/download'
 VERSION_RE = re.compile(r'v\d+\.\d+\.\d+')
 DIGEST_RE = re.compile(r'[0-9a-f]{64}')
 
@@ -105,9 +108,8 @@ def resolve():
         return verify(dest, digest)
     tmp = None
     try:
-        url = (
-            f'https://cnb.cool/{REPO}/-/releases/download/{version}/{name}'
-        )
+        mirror = os.environ.get('TBLGEN_MIRROR') or DEFAULT_MIRROR
+        url = f'{mirror.rstrip("/")}/{version}/{name}'
         with tempfile.NamedTemporaryFile(dir=folder, delete=False) as out:
             tmp = Path(out.name)
             print(f'tblgen: downloading {name}', file=sys.stderr)

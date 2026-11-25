@@ -67,17 +67,24 @@ out.write_text(json.dumps(spec, ensure_ascii=False, indent=2), encoding="utf-8")
 print(out)
 ```
 
-更贴近业务的完整示例在 tblgen 仓库的 `examples/` 目录下：`budget.spec.json` 是 Excel 提取，`property-model-long.spec.json` 是引用已有模型并宽转长。
+更贴近业务的完整示例在本技能包的 `examples/` 目录（与 `run.py` 同级）：
+
+- `examples/budget.spec.json`：Excel 提取 → 宽转长（`FileInput → Select → ColToRow → Select → Output`）。
+- `examples/property-model-long.spec.json`：引用已有模型 → 宽转长（`ModelTable → Select → ColToRow → Select → Output`）。
+
+需求和其中之一相近时，复制到临时目录再改，比从单节点示例拼装更可靠。
 
 ### 第 3 步：编写规格
 
 - 顶层是 `format: 1`、`properties`、`nodes`。每个节点有唯一的 `key`，`inputs` 只引用上游的 `key`，不填别名或 `.tbl` 路径。
+- `properties` 只接受 `datasource`、`dbSchema`、`dbTableName`、`extractDataEnabled`、`modelDataType`。其他模型属性（如 `desc`、`rollbackEnabled`）放进 `properties.raw`，生成时原样合并到 `.tbl` 的 `properties`。
 - 外部输入节点（`ModelTable`、`DbTable`、`FileInput` 等）要显式声明每个字段的 `name`、`dataType`、`isDimension`，按源结构补上 `dbfield`、`length`、`decimal`。字段不清楚就问用户，不要猜。
-- `ModelTable.config.moduleTablePath` 是相对**最终 `.tbl` 所在目录**的路径（如 `../ods/ods_demo.tbl`），不是相对临时规格文件。
+- `ModelTable.config.moduleTablePath` 是相对**最终 `.tbl` 所在目录**的路径（如 `../ods/ods_demo.tbl`），不是相对临时规格文件。`check` 不检查这个文件是否存在，交付前自己核对。
 - 简单的 Select/Output 字段可以由工具推导。Join、Union、行列转换的结果字段要显式写出。不要手工维护 `fields/dimensions/measures` 的重复副本。
 - Select 的 `steps` 按顺序执行，例如：
   - 过滤：`{"type":"Filter","fields":["金额"],"filter":"[金额] > 0"}`
   - 改名：`{"type":"Refactor","fields":["金额"],"refactor":{"rename":"预算额"}}`
+- 表达式（`filter`、`exp` 等）用平台语法：字段写 `[字段名]`，字符串用单引号，如 `[版本] = '最终版'`、`[月份] >= '2025-01'`。`check` 会报出引用了不存在字段的表达式，但不检查语法（括号、引号是否配对），要自己核对。
 
 **SQL 需求怎么落**：过滤可用 `ModelTable → Select → Output`，关联、分组分别优先考虑 `Join`、`Agg`。`[金额] > 0` 是平台 Filter 表达式，不带 `WHERE`。若必须保留原生查询，如 `select amount from budget where amount > 0`，从 `Sql` 节点示例起步，在 `config.sql`（不是 `config.selectSql`）写查询，显式声明返回字段；物理表名、列名不能由中文名猜测。`gen` 不输出最终 SQL，`check` 不连接数据库。默认只写单条只读查询；多语句或写操作须先说明副作用并单独确认。
 
@@ -103,7 +110,9 @@ python3 "$RUN" decompile existing.tbl -o existing.spec.json
 - `archive`：DataFlow 保真快照，改字段后**不会**重新推导下游。
 - `rawTable`：非 DataFlow 文件的原样快照。
 
-只做小改动时，可以在反解结果上编辑，再 `gen` 到新路径。如果改动需要重新推导字段，就按来源重建 typed 节点图，不要把 raw 往返当作语义验证。
+不加修改直接 `gen` 反解结果，得到的 `.tbl` 与原文件内容一致。在反解结果上做小改动后 `gen` 到新路径，其余内容也会保留。不要手写一份新规格去替换存量模型：规格里没有写进 `properties.raw` 和节点里的属性（如 `version`、`rollbackEnabled`、`lastModifyTime`）都会丢失。
+
+如果改动需要重新推导字段，就按来源重建 typed 节点图，不要把 raw 往返当作语义验证。`archive` 形态改动后不会重新推导，加节点、改字段这类改动更适合在设计器里完成。只有 Script 节点的模型，加工逻辑在它引用的脚本里，改脚本，不要重新生成 `.tbl`。
 
 ## 交付
 
@@ -117,5 +126,8 @@ python3 "$RUN" decompile existing.tbl -o existing.spec.json
 ## 启动器问题排查
 
 - 首次运行会从 CNB Release 下载当前平台的二进制并校验 SHA-256，之后使用缓存。支持 macOS-arm64、Linux-amd64、Windows-amd64。
-- 无法联网时，设置 `TBLGEN_BIN=<本地二进制>`。这个文件必须与发布产物的 SHA-256 一致，否则会被拒绝执行。`TBLGEN_CACHE_DIR` 可以改缓存目录。
+- 访问不了 cnb.cool 时，二选一（哈希仍按 `release.json` 校验，不一致就拒绝执行）：
+  - 有镜像：设置 `TBLGEN_MIRROR=<基础 URL>`，启动器改从 `<基础 URL>/<版本>/<产物名>` 下载。
+  - 完全离线：设置 `TBLGEN_BIN=<本地二进制>`，必须是同版本的发布产物。
+- `TBLGEN_CACHE_DIR` 可以改缓存目录。HTTP(S) 代理按标准的 `HTTPS_PROXY` 环境变量生效。
 - `tblgen launcher: ...` 开头、退出码为 2 的错误来自启动器（网络、哈希不符、缺少 `release.json`），不是规格问题，不要去改规格。

@@ -24,7 +24,7 @@ tblgen decompile my-budget.tbl -o editable.json
 
 ### Agent 技能包
 
-`tblgen-skill-<tag>.zip` 内含 `tblgen/SKILL.md`、`tblgen/run.py`、`tblgen/release.json` 三件套。解压后按 `SKILL.md` 的说明调用 `run.py`（macOS/Linux 用 `python3`，Windows 用 `py -3`，用 SKILL.md 所在目录的绝对路径，不依赖当前目录）。`run.py` 按包内 `release.json` 清单从 Release 下载对应平台二进制并校验 SHA-256 后执行；已缓存或设置 `TBLGEN_BIN`/`TBLGEN_CACHE_DIR` 时可完全离线，详见 SKILL.md「启动器环境」。源码树中的 `skill/tblgen/` 是模板，`release.json` 由打包流程生成，源码树内不能直接运行。
+`tblgen-skill-<tag>.zip` 内含 `tblgen/SKILL.md`、`tblgen/run.py`、`tblgen/release.json` 和 `tblgen/examples/` 下的业务示例。解压后按 `SKILL.md` 的说明调用 `run.py`（macOS/Linux 用 `python3`，Windows 用 `py -3`，用 SKILL.md 所在目录的绝对路径，不依赖当前目录）。`run.py` 按包内 `release.json` 清单从 Release 下载对应平台二进制并校验 SHA-256 后执行；已缓存或设置 `TBLGEN_BIN`/`TBLGEN_CACHE_DIR` 时可完全离线，设置 `TBLGEN_MIRROR` 可改从镜像下载（仍校验 SHA-256），详见 SKILL.md「启动器问题排查」。源码树中的 `skill/tblgen/` 是模板，`release.json` 由打包流程生成，源码树内不能直接运行。
 
 ## 构建
 
