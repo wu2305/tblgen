@@ -4,6 +4,7 @@ pub mod check;
 pub mod decompile;
 pub mod gen;
 pub mod model;
+pub mod new;
 pub mod project;
 pub mod schema;
 pub mod script;

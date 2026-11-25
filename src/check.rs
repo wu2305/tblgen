@@ -735,6 +735,20 @@ fn check_join_conditions(
             ),
         ));
     }
+    // JoinRelationImpl#loadJsonMap: indexOf(JOINTYPES); unknown -> -1, which
+    // is dropped on save
+    for (i, c) in arr.iter().enumerate() {
+        if let Some(t) = c.get("joinType").and_then(Value::as_str) {
+            if !JOIN_TYPES.contains(&t) {
+                diags.push(err(
+                    format!("{}/{}/joinType", cpath, i),
+                    "join.condition.joinType",
+                    &src(cite::JOIN_REL, "320", "JoinRelationImpl#loadJsonMap"),
+                    format!("joinType {:?} is not one of {:?}", t, JOIN_TYPES),
+                ));
+            }
+        }
+    }
     // alias set of this node's inputs
     let input_keys: Vec<String> = node
         .get("inputNodes")

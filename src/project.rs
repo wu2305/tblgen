@@ -19,7 +19,16 @@ pub struct Located {
 /// Find the project that contains `file` and its platform path, or `None`
 /// when the file is not inside a project layout.
 pub fn locate(file: &Path) -> Option<Located> {
-    let abs = std::fs::canonicalize(file).ok()?;
+    locate_abs(std::fs::canonicalize(file).ok()?)
+}
+
+/// Like `locate`, for a file that may not exist yet (its directory must).
+pub fn locate_new(file: &Path) -> Option<Located> {
+    let dir = file.parent().filter(|d| !d.as_os_str().is_empty()).unwrap_or(Path::new("."));
+    locate_abs(std::fs::canonicalize(dir).ok()?.join(file.file_name()?))
+}
+
+fn locate_abs(abs: PathBuf) -> Option<Located> {
     let mut dir = abs.parent();
     while let Some(d) = dir {
         let name = d.file_name()?.to_string_lossy();

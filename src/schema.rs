@@ -697,7 +697,7 @@ fn node_examples() -> Vec<Value> {
                 "key": "j", "type": "Join", "alias": "j", "inputs": ["l", "r"],
                 "config": {"joinConditions": [{
                     "leftTable": "left", "rightTable": "right",
-                    "joinType": "INNER JOIN",
+                    "joinType": "InnerJoin",
                     "clauses": [{
                         "leftExp": "[left].[k]", "rightExp": "[right].[k]",
                         "operator": "=", "exp": "[left].[k] = [right].[k]",

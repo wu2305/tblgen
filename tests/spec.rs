@@ -1375,3 +1375,67 @@ fn decompile_keeps_off_shape_typed_values_in_raw() {
     assert_eq!(back["properties"]["raw"]["rollbackEnabled"], json!("false"));
     assert_eq!(generate(&back).unwrap(), tbl);
 }
+
+// ---------------------------------------------------------------------------
+// CLI: new + project-aware check
+// ---------------------------------------------------------------------------
+
+fn cli(args: &[&str]) -> std::process::Output {
+    Command::new(env!("CARGO_BIN_EXE_tblgen")).args(args).output().unwrap()
+}
+
+fn report(out: &std::process::Output) -> Vec<(String, Vec<String>)> {
+    let v: Value = serde_json::from_slice(&out.stdout).unwrap();
+    v["files"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|f| {
+            let rules = f["errors"].as_array().unwrap().iter().map(|e| e["rule"].as_str().unwrap().to_string());
+            (f["file"].as_str().unwrap().rsplit('/').next().unwrap().to_string(), rules.collect())
+        })
+        .collect()
+}
+
+#[test]
+fn new_models_pass_project_check() {
+    let root = std::env::temp_dir().join(format!("tblgen-new-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let tables = root.join("P/data/tables");
+    std::fs::create_dir_all(&tables).unwrap();
+    let t = |p: &str| tables.join(p).display().to_string();
+
+    let o = cli(&["new", "script", "--table", "ods_s", "--schema", "ods", "--extract", "true",
+                  "--fields", "k:C:20,v:N:18.2:m", "-o", &t("ods/ods_s.tbl")]);
+    assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
+    let script = root.join(format!("P/data/script/{}.action.ts", tblgen::new::md5_hex(b"ods_s")));
+    assert!(script.is_file());
+
+    let o = cli(&["new", "dsl", "--table", "dim_d", "--extract", "false", "--input", "../ods/ods_s.tbl",
+                  "--fields", "k", "-o", &t("dim/dim_d.tbl")]);
+    assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
+    let o = cli(&["new", "dsl", "--table", "dwd_j", "--extract", "true", "--input", "../ods/ods_s.tbl",
+                  "--input", "$DATA:/dim/dim_d.tbl", "--join-on", "k", "--fields", "k,v",
+                  "-o", &t("dwd/dwd_j.tbl")]);
+    assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
+
+    // never overwrite; unknown fields and typed dsl fields are rejected
+    assert_eq!(cli(&["new", "dsl", "--table", "dim_d", "--extract", "false", "--input",
+                     "../ods/ods_s.tbl", "-o", &t("dim/dim_d.tbl")]).status.code(), Some(2));
+    assert_eq!(cli(&["new", "dsl", "--table", "x", "--extract", "false", "--input",
+                     "../ods/ods_s.tbl", "--fields", "nope", "-o", &t("dim/x.tbl")]).status.code(), Some(2));
+    assert_eq!(cli(&["new", "script", "--table", "x", "--fields", "k:C", "-o", &t("x.tbl")]).status.code(), Some(2),
+               "--extract is required");
+
+    let o = cli(&["check", &root.display().to_string()]);
+    assert!(o.status.success(), "{:?}", report(&o));
+    assert_eq!(report(&o).len(), 4);
+
+    // break the references: missing upstream model and missing script
+    std::fs::remove_file(tables.join("dim/dim_d.tbl")).unwrap();
+    std::fs::remove_file(&script).unwrap();
+    let r = report(&cli(&["check", &root.display().to_string()]));
+    assert!(r.contains(&("dwd_j.tbl".into(), vec!["ref.modelTable.missing".into()])), "{:?}", r);
+    assert!(r.contains(&("ods_s.tbl".into(), vec!["ref.script.missing".into()])), "{:?}", r);
+    let _ = std::fs::remove_dir_all(&root);
+}

@@ -12,7 +12,7 @@
 use std::env;
 use std::fs;
 use std::io::{self, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use serde_json::{json, Value};
@@ -28,8 +28,23 @@ const USAGE: &str = "tblgen — offline .tbl <-> spec-format v1 converter
 USAGE:
     tblgen gen <spec.json> [-o out.tbl]
     tblgen decompile <file.tbl> [-o out.json]
-    tblgen check <file.tbl|spec.json>...
+    tblgen check <file|dir>...
     tblgen schema
+    tblgen new script --table <name> --fields <list> --extract <true|false> -o <out.tbl>
+                      [--schema S] [--datasource D] [--version V] [--script-name N]
+                      [--script-out P | --no-script] [--template placeholder|transform]
+                      [--cn C] [--note N] [--spec-out P]
+    tblgen new dsl    --table <name> --input <ref> [--input <ref>] --extract <true|false>
+                      -o <out.tbl> [--fields <names>] [--join-on K] [--join-type T]
+                      [--schema S] [--datasource D] [--version V] [--spec-out P]
+
+check: a directory expands to every .tbl and .action.ts below it. Inside a
+project (a directory with data/), model references and scripts are resolved.
+new: --extract true = ETL into --table; false = query logic. Field list is
+name:TYPE[:length[.decimal]][:m] (TYPE C/N/I/D/P, m = measure); dsl takes
+names only. --input is the reference as written in the model (../ods/x.tbl,
+$DATA:/ods/x.tbl). Script name defaults to md5(--table); the script goes to
+<project>/data/script/. Existing files are never overwritten.
 
 EXIT CODES: 0 ok | 1 invalid data | 2 usage / I/O error";
 
@@ -44,6 +59,7 @@ fn main() -> ExitCode {
         "decompile" => cmd_decompile(&args[1..]),
         "check" => cmd_check(&args[1..]),
         "schema" => cmd_schema(&args[1..]),
+        "new" => cmd_new(&args[1..]),
         // help goes to stderr only — stdout is reserved for JSON results
         "-h" | "--help" | "help" => {
             eprintln!("{}", USAGE);
@@ -291,4 +307,148 @@ fn cmd_schema(args: &[String]) -> ExitCode {
             ExitCode::from(2)
         }
     }
+}
+
+/// `new script|dsl`: build a starter spec, generate it, write the .tbl (and
+/// for script models the script skeleton). Nothing is written if any target
+/// exists or the spec has errors.
+fn cmd_new(args: &[String]) -> ExitCode {
+    match run_new(args) {
+        Ok(code) => code,
+        Err(msg) => {
+            eprintln!("tblgen new: {}\n\n{}", msg, USAGE);
+            ExitCode::from(2)
+        }
+    }
+}
+
+fn run_new(args: &[String]) -> Result<ExitCode, String> {
+    use std::collections::HashMap;
+    use tblgen::new::*;
+    use tblgen::project;
+
+    let kind = args.first().map(String::as_str).ok_or("expected script or dsl")?;
+    if kind != "script" && kind != "dsl" {
+        return Err(format!("unknown model kind {:?}; expected script or dsl", kind));
+    }
+    const VALUED: [&str; 16] = [
+        "--table", "--schema", "--datasource", "--fields", "--extract", "-o", "--version",
+        "--script-name", "--script-out", "--template", "--cn", "--note", "--spec-out",
+        "--input", "--join-on", "--join-type",
+    ];
+    let mut opts: HashMap<&str, Vec<String>> = HashMap::new();
+    let mut no_script = false;
+    let mut i = 1;
+    while i < args.len() {
+        let a = args[i].as_str();
+        if a == "--no-script" {
+            no_script = true;
+        } else if let Some(k) = VALUED.iter().find(|k| **k == a) {
+            let v = args.get(i + 1).ok_or(format!("{} requires a value", a))?;
+            let entry = opts.entry(k).or_default();
+            if !entry.is_empty() && *k != "--input" {
+                return Err(format!("duplicate {}", a));
+            }
+            entry.push(v.clone());
+            i += 1;
+        } else {
+            return Err(format!("unknown argument {:?}", a));
+        }
+        i += 1;
+    }
+    let one = |k: &str| opts.get(k).and_then(|v| v.first()).cloned();
+    let need = |k: &str| one(k).ok_or(format!("{} is required", k));
+
+    let out = PathBuf::from(need("-o")?);
+    let extract = match need("--extract")?.as_str() {
+        "true" => true,
+        "false" => false,
+        v => return Err(format!("--extract must be true (ETL, writes dbTableName) or false (query logic), got {:?}", v)),
+    };
+    let common = Common {
+        table: need("--table")?,
+        schema: one("--schema"),
+        datasource: one("--datasource"),
+        extract,
+        version: one("--version"),
+    };
+    if let Some(parent) = out.parent().filter(|p| !p.as_os_str().is_empty()) {
+        fs::create_dir_all(parent).map_err(|e| format!("{}: {}", parent.display(), e))?;
+    }
+    let located = project::locate_new(&out);
+
+    let mut writes: Vec<(PathBuf, String)> = Vec::new();
+    let spec = if kind == "script" {
+        let fields = parse_fields(&need("--fields")?, false)?;
+        let script_name = one("--script-name").unwrap_or_else(|| md5_hex(common.table.as_bytes()));
+        if !no_script {
+            let target = match (one("--script-out"), &located) {
+                (Some(p), _) => PathBuf::from(p),
+                (None, Some(at)) => project::script_candidates(
+                    &at.projects_root,
+                    project::project_name(&at.platform_path),
+                    &script_name,
+                )[1]
+                .clone(),
+                (None, None) => {
+                    return Err("the output is not inside a project (no data/ directory above it); \
+                                pass --script-out or --no-script".into())
+                }
+            };
+            let template = one("--template").unwrap_or_else(|| "placeholder".into());
+            if template != "placeholder" && template != "transform" {
+                return Err(format!("--template must be placeholder or transform, got {:?}", template));
+            }
+            let cn = one("--cn").unwrap_or_else(|| common.table.clone());
+            let note = one("--note").unwrap_or_else(|| "占位，待数据源或口径确认".into());
+            writes.push((target, script_source(template == "transform", &cn, &common.table, &note, &fields)));
+        }
+        script_spec(&common, &fields, &script_name)
+    } else {
+        let refs = opts.get("--input").cloned().unwrap_or_default();
+        let mut inputs = Vec::new();
+        for r in &refs {
+            let disk = match &located {
+                Some(at) => {
+                    let p = project::resolve_reference(&at.platform_path, r)
+                        .ok_or(format!("cannot resolve --input {:?}", r))?;
+                    project::to_disk(&at.projects_root, &p)
+                }
+                None if r.starts_with('$') => {
+                    return Err(format!("--input {:?} needs the output inside a project layout", r))
+                }
+                None => out.parent().unwrap_or(Path::new(".")).join(r),
+            };
+            inputs.push(read_input(r, &disk)?);
+        }
+        let fields = one("--fields").map(|f| parse_fields(&f, true)).transpose()?;
+        let join_type = one("--join-type").unwrap_or_else(|| "LeftJoin".into());
+        dsl_spec(&common, &inputs, fields.as_deref(), one("--join-on").as_deref(), &join_type)?
+    };
+
+    let diags = validate_spec(&spec);
+    for d in &diags {
+        eprintln!("{}", d.to_json());
+    }
+    if diags.iter().any(|d| !d.is_warning()) {
+        return Ok(ExitCode::from(1));
+    }
+    let tbl = generate(&spec).map_err(|d| d.to_json().to_string())?;
+    let pretty = |v: &Value| serde_json::to_string_pretty(v).unwrap_or_default() + "\n";
+    writes.insert(0, (out, pretty(&tbl)));
+    if let Some(p) = one("--spec-out") {
+        writes.push((PathBuf::from(p), pretty(&spec)));
+    }
+    if let Some((p, _)) = writes.iter().find(|(p, _)| p.exists()) {
+        eprintln!("tblgen: {}: already exists (use a fresh path)", p.display());
+        return Ok(ExitCode::from(2));
+    }
+    for (p, text) in &writes {
+        if let Some(parent) = p.parent().filter(|d| !d.as_os_str().is_empty()) {
+            fs::create_dir_all(parent).map_err(|e| format!("{}: {}", parent.display(), e))?;
+        }
+        fs::write(p, text).map_err(|e| format!("{}: {}", p.display(), e))?;
+        eprintln!("tblgen: wrote {}", p.display());
+    }
+    Ok(ExitCode::SUCCESS)
 }

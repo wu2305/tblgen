@@ -421,6 +421,10 @@ pub fn config_scalar_kind(ty: &str, k: &str) -> ScalarKind {
 }
 
 /// Union type enum values (wire `unionType`).
+/// Join node condition types (`JoinRelation.JOINTYPES`, union types excluded).
+pub const JOIN_TYPES: [&str; 7] =
+    ["InnerJoin", "LeftJoin", "RightJoin", "FullJoin", "CrossJoin", "AntiJoin", "SemiJoin"];
+
 pub const UNION_TYPES: [&str; 4] = ["UnionAll", "Union", "Minus", "Intersect"];
 
 pub fn config_key_allowed(ty: &str, k: &str) -> bool {
