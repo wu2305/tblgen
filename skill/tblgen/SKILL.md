@@ -1,11 +1,11 @@
 ---
 name: tblgen
-description: 从声明式 JSON 规格离线生成、校验和反解 BI 平台 DataFlow 加工模型（.tbl 文件）。用于新建或修改加工模型（库内加工、Excel/文件提取、引用已有模型、宽表转长表、行列转换、Join/Union/汇总等），把 SQL 加工意图转成 .tbl，或检查、读懂存量 .tbl。不连接数据库、不执行 SQL、不部署。
+description: 离线生成、校验和反解 SuccBI 平台 DataFlow 加工模型（.tbl 文件）及其服务端脚本（.action.ts）。用于新建或修改加工模型（脚本型、库内加工、Excel/文件提取、引用已有模型、宽表转长表、行列转换、Join/Union/汇总等），把 SQL 加工意图转成 .tbl，检查整个项目的模型引用与脚本规则，或读懂存量 .tbl。不连接数据库、不执行 SQL、不部署。
 ---
 
 # tblgen：制作与检查 .tbl 加工模型
 
-工作方式：写**规格**（spec，JSON）→ `check` → `gen` 出 `.tbl` → 再 `check` 产物。tblgen 只做离线的结构与引用校验，通过不代表平台上能执行；资源路径、数据源和 SQL 是否可用仍需用户在设计器里确认。
+工作方式：用 `new` 或写**规格**（spec，JSON）→ `check` → `gen` 出 `.tbl` → 再 `check` 产物。tblgen 只做离线的结构与引用校验，通过不代表平台上能执行；资源路径、数据源和 SQL 是否可用仍需用户在设计器里确认。
 
 ## 调用
 
@@ -18,29 +18,61 @@ python3 "$RUN" <命令> [参数]
 | 命令 | 作用 |
 | --- | --- |
 | `schema` | 在 stdout 输出 `{"schema": ..., "examples": ...}`。不带任何参数。 |
-| `check <文件>...` | 校验一个或多个规格 / `.tbl`，stdout 输出一份 `{"files":[{file, scope, errors, warnings}]}` 报告。 |
+| `check <文件或目录>...` | 校验规格、`.tbl` 和 `.action.ts`；目录会递归展开。stdout 输出一份 `{"files":[{file, scope, errors, warnings}]}` 报告。 |
+| `new script\|dsl ...` | 直接生成常见模型（见「用 new 起步」），写 `.tbl`，脚本型还写脚本骨架。 |
 | `gen <spec.json> [-o <out.tbl>]` | 校验并生成 `.tbl`。不加 `-o` 时写 stdout。 |
 | `decompile <in.tbl> [-o <out.json>]` | 把 `.tbl` 反解为规格，自动选择形态。 |
 | `help`、`-h`、`--help` | 顶层帮助写 stderr；不要放在子命令之后。 |
 
-- `-o` 只用于 `gen` 和 `decompile`，目标必须不存在。`schema` 不接受选项；`check` 即使收到 `-o 路径` 也不会写报告，要保存结果请捕获 stdout。没有 `--form`、`--force` 或 `--version`。
-- stdout 只放 JSON 结果；下载进度、`tblgen: wrote ...`、帮助和 `gen` 的失败诊断都写 stderr（`gen` 每行一个 JSON 诊断）。两个流分开读。
+- 所有写文件的命令都不覆盖已有文件，目标必须不存在。`schema` 不接受选项；`check` 不写文件，要保存报告请捕获 stdout。完整参数见 `"$RUN" --help`。
+- stdout 只放 JSON 结果；下载进度、`tblgen: wrote ...`、帮助和 `gen`/`new` 的诊断都写 stderr（每行一个 JSON 诊断）。两个流分开读。`rule` 以 `warn.` 开头的是警告，不会让命令失败，但要读并在交付时说明。
 - 退出码：`0` 成功（可能带 warnings），`1` 规格或模型无效，`2` 用法、I/O 或启动器错误。
+
+## 先定运行方式：提取还是查询
+
+`properties.extractDataEnabled` 决定模型怎么运行，是设计决定，不是可有可无的开关：
+
+- `true`（ETL）：运行时把结果写进 `dbTableName` 这张物理表，查询读这张表，调度按本模型排程。必须同时给出 `dbTableName`，否则平台按「不提取」处理。
+- `false`（查询逻辑）：不落表，查询时把节点图编译成 SQL 执行；调度跳过本模型，改为依赖它的上游。
+- 不写：平台按 `false` 加载。`gen`/`check` 会给出 `warn.properties.runMode.unset` 提醒。
+
+用户没说明时按用途问清楚：要给报表或下游直接读一张表的，用 `true`；只是把几张模型组合成一个可查询视图的，用 `false`。
 
 ## 新建模型流程
 
 复制这份清单并逐项勾选：
 
 ```
-- [ ] 1. 确认需求：输入源、输出字段及口径、最终 .tbl 放在哪个目录
-- [ ] 2. 从 schema 示例中选一个起点，写进临时目录
+- [ ] 1. 确认需求：输入源、输出字段及口径、运行方式、最终 .tbl 放在哪个目录
+- [ ] 2. 选起点：常见形态用 `new`（见下）；其他从 schema 示例中选一个，写进临时目录
 - [ ] 3. 编辑规格
 - [ ] 4. check 规格 → 按诊断修改 → 重复，直到 errors 为空
 - [ ] 5. gen 到新路径，再 check 产物 .tbl
 - [ ] 6. 写入用户指定的位置，并按「交付」一节汇报
 ```
 
-### 第 2 步：选起点
+### 第 2 步：用 new 起步
+
+两种常见形态可以一条命令生成。`--extract` 必填，`-o` 是最终位置（目录不存在会创建）：
+
+```bash
+# 脚本型：Script 节点 → 输出；脚本骨架写到 <项目>/data/script/<md5(表名)>.action.ts
+python3 "$RUN" new script --table ods_demo --schema ods --extract true \
+  --fields "stat_month:C:7,corp_code:C:20,amount:N:18.2:m" -o <项目>/data/tables/ods/ods_demo.tbl
+
+# 声明式：引用已有模型 →（Join）→ 列加工 → 输出；字段只写名字，定义取自上游
+python3 "$RUN" new dsl --table dwd_demo --schema dwd --extract true \
+  --input ../ods/ods_demo.tbl --input '$DATA:/dim/dim_corp.tbl' --join-on corp_code \
+  --fields "stat_month,corp_code,amount" -o <项目>/data/tables/dwd/dwd_demo.tbl
+```
+
+- 字段串：`name:TYPE[:length[.decimal]][:m]`，TYPE 为 `C/N/I/D/P`，`m` 表示度量；`dbfield` 取大写名。
+- `--input` 按模型里的写法给（相对路径或 `$DATA:/...`），按平台规则解析后读取上游字段；单输入可省略 `--fields`，取上游全部字段。
+- 脚本骨架默认是占位版（预览返回字段结构，正式运行报错）；有上游输入的转换加 `--template transform`。不想写脚本用 `--no-script`。
+- 加 `--spec-out <路径>` 可同时保存规格，以后在它上面继续加步骤再 `gen`。
+- 命令只填平台通用的默认值（数据源 `defdw`、设计器新建模型的表属性）。分层、表名前缀、数据源等仓库约定按仓库文档传参。
+
+### 选其他起点
 
 `schema` 输出的 `schema` 键是规格本身的 JSON Schema（Draft 2020-12），不是 `.tbl` 格式，也不是数据库 schema。`examples` 下的每一项都是可直接 `gen` 的完整规格：
 
@@ -77,13 +109,14 @@ print(out)
 ### 第 3 步：编写规格
 
 - 顶层是 `format: 1`、`properties`、`nodes`。每个节点有唯一的 `key`，`inputs` 只引用上游的 `key`，不填别名或 `.tbl` 路径。
-- `properties` 只接受 `datasource`、`dbSchema`、`dbTableName`、`extractDataEnabled`、`modelDataType`。其他模型属性（如 `desc`、`rollbackEnabled`）放进 `properties.raw`，生成时原样合并到 `.tbl` 的 `properties`。
+- `properties` 的类型化键就是平台加载器读取的模型属性（`schema` 输出的 `schema.oneOf[0].properties.properties.properties` 列出全部，如 `extractDataEnabled`、`rollbackEnabled`、`modifyDbTableEnabled`、`primaryKeys`），会做类型检查。其他属性（如 `desc`）放进 `properties.raw`，原样合并到 `.tbl`。类型化键同时出现在 `raw` 里也可以，只要值相同；不同会报 `structure.properties.raw.conflict`。
 - 外部输入节点（`ModelTable`、`DbTable`、`FileInput` 等）要显式声明每个字段的 `name`、`dataType`、`isDimension`，按源结构补上 `dbfield`、`length`、`decimal`。字段不清楚就问用户，不要猜。
 - `ModelTable.config.moduleTablePath` 是相对**最终 `.tbl` 所在目录**的路径（如 `../ods/ods_demo.tbl`），不是相对临时规格文件。`check` 不检查这个文件是否存在，交付前自己核对。
 - 简单的 Select/Output 字段可以由工具推导。Join、Union、行列转换的结果字段要显式写出。不要手工维护 `fields/dimensions/measures` 的重复副本。
 - Select 的 `steps` 按顺序执行，例如：
   - 过滤：`{"type":"Filter","fields":["金额"],"filter":"[金额] > 0"}`
   - 改名：`{"type":"Refactor","fields":["金额"],"refactor":{"rename":"预算额"}}`
+- Join 的 `joinType` 取 `LeftJoin`、`InnerJoin`、`RightJoin`、`FullJoin`、`CrossJoin`、`AntiJoin`、`SemiJoin` 之一，写错会在保存时丢失。
 - 表达式（`filter`、`exp` 等）用平台语法：字段写 `[字段名]`，字符串用单引号，如 `[版本] = '最终版'`、`[月份] >= '2025-01'`。`check` 会报出引用了不存在字段的表达式，但不检查语法（括号、引号是否配对），要自己核对。
 
 **SQL 需求怎么落**：过滤可用 `ModelTable → Select → Output`，关联、分组分别优先考虑 `Join`、`Agg`。`[金额] > 0` 是平台 Filter 表达式，不带 `WHERE`。若必须保留原生查询，如 `select amount from budget where amount > 0`，从 `Sql` 节点示例起步，在 `config.sql`（不是 `config.selectSql`）写查询，显式声明返回字段；物理表名、列名不能由中文名猜测。`gen` 不输出最终 SQL，`check` 不连接数据库。默认只写单条只读查询；多语句或写操作须先说明副作用并单独确认。
@@ -95,6 +128,12 @@ python3 "$RUN" check model.spec.json
 python3 "$RUN" gen model.spec.json -o model.tbl
 python3 "$RUN" check model.tbl
 ```
+
+模型放进项目后，对整个项目再跑一次 `python3 "$RUN" check <项目目录>`。在项目里（上层有 `data/` 目录）还会检查：
+
+- 引用的模型（`moduleTablePath`，支持 `$DATA:`、`$APP:`、相对路径）和 Script 节点的脚本（`data/script/<名>.action(.ts)`）确实存在；
+- 每个加工有 id 为 `default` 的输出节点；
+- `.action.ts` 的脚本规则：不读 `context.params`，常量不写死日期，加工脚本有预览减量，批处理循环检查 `isCanceled()`，`BELONGTOID` 归并链有口径联动注释。
 
 任一步退出码不为 0 就停下来修复。修复时按每条诊断的 `path`（JSON Pointer，如 `/nodes/0/inputs/0`）和 `rule`（如 `graph.danglingInput`）回到规格里改。读报告时看 `scope`：`spec`、`dataflow` 表示确实校验过；`skipped` 表示文件不是 DataFlow，**没有校验**，不能算通过。
 

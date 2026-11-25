@@ -1,6 +1,6 @@
 # tblgen
 
-离线生成、校验和反解 BI DataFlow `.tbl` 模型的命令行工具。`examples/` 中的物业预算模型使用虚拟测试数据，不连接真实工作簿或服务。
+离线生成、校验和反解 SuccBI DataFlow `.tbl` 模型、并按平台规则检查整个项目的命令行工具。`examples/` 中的物业预算模型使用虚拟测试数据，不连接真实工作簿或服务。
 
 ## 使用
 
@@ -18,9 +18,12 @@ tblgen check examples/budget.spec.json
 tblgen gen examples/budget.spec.json -o my-budget.tbl
 tblgen check my-budget.tbl
 tblgen decompile my-budget.tbl -o editable.json
+tblgen new script --table ods_demo --schema ods --extract true \
+  --fields "k:C:20,amount:N:18.2:m" -o projects/P/data/tables/ods/ods_demo.tbl
+tblgen check projects/P
 ```
 
-`schema` 返回完整规格和节点、步骤示例。不应把 `archive` 或 `rawTable` 归档的保真往返当作字段推导。`check` 只校验离线结构，不验证外部资源或 SQL 实际执行。
+`schema` 返回完整规格和节点、步骤示例。不应把 `archive` 或 `rawTable` 归档的保真往返当作字段推导。`new` 生成脚本型或声明式（ModelTable →（Join）→ Select → Output）模型，`--extract` 决定提取（ETL，写入 `--table`）还是查询逻辑。`check` 接受目录：在项目目录（含 `data/`）内会按平台规则解析模型引用和脚本路径，并检查 `.action.ts` 脚本规则。它只做离线校验，不验证数据库或 SQL 的实际执行。
 
 ### Agent 技能包
 
