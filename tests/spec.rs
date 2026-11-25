@@ -1444,3 +1444,47 @@ fn new_models_pass_project_check() {
     assert!(r.contains(&("ods_s.tbl".into(), vec!["ref.script.missing".into()])), "{:?}", r);
     let _ = std::fs::remove_dir_all(&root);
 }
+
+#[test]
+fn renamed_script_fields_are_caught() {
+    // Chinese display names on the model while the script still declares the
+    // English names: both the script name rule and the lineage rule fire
+    let root = std::env::temp_dir().join(format!("tblgen-rename-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let tbl = root.join("P/data/tables/ods/ods_r.tbl");
+    std::fs::create_dir_all(tbl.parent().unwrap()).unwrap();
+    let o = cli(&["new", "script", "--table", "ods_r", "--extract", "true",
+                  "--fields", "stat_month:C:7,amt:N:18.2:m", "-o", &tbl.display().to_string()]);
+    assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
+    let ok = report(&cli(&["check", &root.display().to_string()]));
+    assert!(ok.iter().all(|(_, e)| e.is_empty()), "{:?}", ok);
+
+    let mut d: Value = serde_json::from_str(&std::fs::read_to_string(&tbl).unwrap()).unwrap();
+    fn rename(v: &mut Value) {
+        match v {
+            Value::Object(m) => {
+                if let Some(Value::String(n)) = m.get_mut("name") {
+                    if n == "stat_month" { *n = "统计年月".into(); }
+                }
+                m.values_mut().for_each(rename);
+            }
+            Value::Array(a) => a.iter_mut().for_each(rename),
+            _ => {}
+        }
+    }
+    rename(&mut d);
+    std::fs::write(&tbl, d.to_string()).unwrap();
+    let r = report(&cli(&["check", &root.display().to_string()]));
+    let rules: Vec<&String> = r.iter().flat_map(|(_, e)| e).collect();
+    assert!(rules.iter().any(|x| *x == "ref.script.fieldName"), "{:?}", r);
+    assert!(rules.iter().any(|x| *x == "field.inputField.missing"), "{:?}", r);
+
+    // the consistent way: display name with an explicit dbfield
+    let t2 = root.join("P/data/tables/ods/ods_c.tbl");
+    let o = cli(&["new", "script", "--table", "ods_c", "--extract", "true",
+                  "--fields", "统计年月=stat_month:C:7", "-o", &t2.display().to_string()]);
+    assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
+    let r = report(&cli(&["check", &t2.display().to_string()]));
+    assert!(r.iter().all(|(_, e)| e.is_empty()), "{:?}", r);
+    let _ = std::fs::remove_dir_all(&root);
+}

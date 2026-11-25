@@ -58,15 +58,15 @@ python3 "$RUN" <命令> [参数]
 ```bash
 # 脚本型：Script 节点 → 输出；脚本骨架写到 <项目>/data/script/<md5(表名)>.action.ts
 python3 "$RUN" new script --table ods_demo --schema ods --extract true \
-  --fields "stat_month:C:7,corp_code:C:20,amount:N:18.2:m" -o <项目>/data/tables/ods/ods_demo.tbl
+  --fields "统计年月=stat_month:C:7,公司编码=corp_code:C:20,金额=amount:N:18.2:m" -o <项目>/data/tables/ods/ods_demo.tbl
 
 # 声明式：引用已有模型 →（Join）→ 列加工 → 输出；字段只写名字，定义取自上游
 python3 "$RUN" new dsl --table dwd_demo --schema dwd --extract true \
   --input ../ods/ods_demo.tbl --input '$DATA:/dim/dim_corp.tbl' --join-on corp_code \
-  --fields "stat_month,corp_code,amount" -o <项目>/data/tables/dwd/dwd_demo.tbl
+  --fields "统计年月,公司编码,金额" -o <项目>/data/tables/dwd/dwd_demo.tbl
 ```
 
-- 字段串：`name:TYPE[:length[.decimal]][:m]`，TYPE 为 `C/N/I/D/P`，`m` 表示度量；`dbfield` 取大写名。
+- 字段串：`name[=dbfield]:TYPE[:length[.decimal]][:m]`，TYPE 为 `C/N/I/D/P`，`m` 表示度量。`name` 是用户看到的字段名（平台惯例常用中文），`dbfield` 是物理列名，必须是英文标识符，缺省取 `name` 的大写；中文名要显式写，如 `统计年月=stat_month:C:7`。
 - `--input` 按模型里的写法给（相对路径或 `$DATA:/...`），按平台规则解析后读取上游字段；单输入可省略 `--fields`，取上游全部字段。
 - 脚本骨架默认是占位版（预览返回字段结构，正式运行报错）；有上游输入的转换加 `--template transform`。不想写脚本用 `--no-script`。`--cn`、`--note` 只写进脚本头注释；模型的中文名不在 `.tbl` 里，按仓库约定维护（通常是目录 `.meta` 的 `desc`）。只属于另一种模型的参数会直接报错。
 - 加 `--spec-out <路径>` 可同时保存规格，以后在它上面继续加步骤再 `gen`。
@@ -133,6 +133,8 @@ python3 "$RUN" check model.tbl
 
 - 引用的模型（`moduleTablePath`，按平台规则解析 `$DATA:`、`$APP:`、`$TAPP:`、相对和绝对路径）和 Script 节点的脚本（`data/script/<名>.action(.ts)`）确实存在；
 - 每个加工有 id 为 `default` 的输出节点；
+- 字段沿袭：字段的 `inputField` 能在它读取的节点里找到同名字段（`field.inputField.missing`）；
+- Script 节点的字段名与脚本 `fieldsInfo` 按 `dbfield` 对应后一致（`ref.script.fieldName`）。运行时以脚本声明的名字为准，所以改字段名要同时改脚本、Script 节点和下游的 `inputField`，`dbfield` 不变；
 - `.action.ts` 的脚本规则：不读 `context.params`，常量不写死日期，加工脚本（定义了 `onProcessData` 的数据流脚本节点）有预览减量，批处理循环检查 `isCanceled()`，`BELONGTOID` 归并链有口径联动注释。`onQueryData`/`onUpdateData` 这类模型拓展点脚本不按加工脚本要求。
 - 不归你维护的代码（例如平台自带脚本）用 `--exclude <路径>` 跳过，可重复给出；路径不存在会报用法错误。
 

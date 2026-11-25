@@ -42,8 +42,9 @@ check: a directory expands to every .tbl and .action.ts below it. Inside a
 project (a directory with data/), model references and scripts are resolved.
 --exclude skips everything under a path (e.g. platform scripts you do not own).
 new: --extract true = ETL into --table; false = query logic. Field list is
-name:TYPE[:length[.decimal]][:m] (TYPE C/N/I/D/P, m = measure); dsl takes
-names only. --input is the reference as written in the model (../ods/x.tbl,
+name[=dbfield]:TYPE[:length[.decimal]][:m] (TYPE C/N/I/D/P, m = measure),
+e.g. 统计年月=stat_month:C:7; dbfield defaults to the upper-cased name and
+must be ASCII. dsl takes names only. --input is the reference as written in the model (../ods/x.tbl,
 $DATA:/ods/x.tbl). Script name defaults to md5(--table); the script goes to
 <project>/data/script/. --cn/--note only fill the script header comment (a
 model's display name lives in the folder's .meta, not in the .tbl).

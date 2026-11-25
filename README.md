@@ -19,11 +19,11 @@ tblgen gen examples/budget.spec.json -o my-budget.tbl
 tblgen check my-budget.tbl
 tblgen decompile my-budget.tbl -o editable.json
 tblgen new script --table ods_demo --schema ods --extract true \
-  --fields "k:C:20,amount:N:18.2:m" -o projects/P/data/tables/ods/ods_demo.tbl
+  --fields "键=k:C:20,金额=amount:N:18.2:m" -o projects/P/data/tables/ods/ods_demo.tbl
 tblgen check projects/P
 ```
 
-`schema` 返回完整规格和节点、步骤示例。不应把 `archive` 或 `rawTable` 归档的保真往返当作字段推导。`new` 生成脚本型或声明式（ModelTable →（Join）→ Select → Output）模型，`--extract` 决定提取（ETL，写入 `--table`）还是查询逻辑。`check` 接受目录：在项目目录（含 `data/`）内会按平台规则解析模型引用和脚本路径，并检查 `.action.ts` 脚本规则。它只做离线校验，不验证数据库或 SQL 的实际执行。
+`schema` 返回完整规格和节点、步骤示例。不应把 `archive` 或 `rawTable` 归档的保真往返当作字段推导。`new` 生成脚本型或声明式（ModelTable →（Join）→ Select → Output）模型，`--extract` 决定提取（ETL，写入 `--table`）还是查询逻辑。`check` 接受目录：在项目目录（含 `data/`）内会按平台规则解析模型引用和脚本路径，核对字段沿袭和 Script 节点与脚本 `fieldsInfo` 的字段名，并检查 `.action.ts` 脚本规则。它只做离线校验，不验证数据库或 SQL 的实际执行。
 
 ### Agent 技能包
 

@@ -1,3 +1,13 @@
+# every branch push: run the test suite so problems show before a release tag
+"**":
+  push:
+    - name: Test
+      docker:
+        image: messense/cargo-zigbuild@sha256:3abe26afb5537ea225c223c6790c1bf056271ef51ea52d2c4e343c569c8f129a
+      stages:
+        - name: cargo test
+          script: cargo test --locked
+
 "$":
   tag_push:
     - name: Publish tagged binaries

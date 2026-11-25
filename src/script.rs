@@ -84,6 +84,53 @@ pub fn check_script(path: &str, src: &str) -> Vec<Diag> {
     d
 }
 
+/// `dbfield` (upper-cased) -> `name` for every object literal in the script
+/// that declares both as string literals, e.g. a `fieldsInfo` entry
+/// `{ name: "会员号", dbfield: "VIPCODE", ... }`. Fields built at run time
+/// are not visible here.
+pub fn declared_fields(src: &str) -> std::collections::HashMap<String, String> {
+    let code = strip_comments(src);
+    let mut out = std::collections::HashMap::new();
+    let mut start = None;
+    for (i, c) in code.char_indices() {
+        match c {
+            '{' => start = Some(i),
+            '}' => {
+                if let Some(s) = start.take() {
+                    let obj = &code[s..i];
+                    if let (Some(n), Some(d)) = (string_prop(obj, "name"), string_prop(obj, "dbfield")) {
+                        out.insert(d.to_uppercase(), n);
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    out
+}
+
+/// Value of `key: "..."` / `key: '...'` in an object literal body.
+fn string_prop(obj: &str, key: &str) -> Option<String> {
+    let mut from = 0;
+    while let Some(off) = obj[from..].find(key) {
+        let at = from + off;
+        from = at + key.len();
+        if obj[..at].chars().next_back().is_some_and(is_word) {
+            continue;
+        }
+        let rest = obj[at + key.len()..].trim_start();
+        let Some(rest) = rest.strip_prefix(':') else { continue };
+        let rest = rest.trim_start();
+        let q = rest.chars().next()?;
+        if q != '"' && q != '\'' {
+            continue;
+        }
+        let end = rest[1..].find(q)?;
+        return Some(rest[1..1 + end].to_string());
+    }
+    None
+}
+
 /// Remove `/* */` and `//` comments (same as the original lint: string
 /// contents are not special-cased).
 pub fn strip_comments(src: &str) -> String {
@@ -237,6 +284,15 @@ mod tests {
             rules("/P/data/script/a.action.ts", "/*占位*/ let p = context.params;"),
             ["script.params"]
         );
+    }
+
+    #[test]
+    fn declared_fields_by_dbfield() {
+        let src = "let fieldsInfo = [\n  { name: \"会员号\", dataType: FieldDataType.C, dbfield: \"VIPCODE\" },\n  // { name: \"x\", dbfield: \"GONE\" }\n  { dbfield: 'shop', name: '门店' },\n  { tablename: \"t\", dbfield: \"NONAME\" }\n];";
+        let d = declared_fields(src);
+        assert_eq!(d.get("VIPCODE").map(String::as_str), Some("会员号"));
+        assert_eq!(d.get("SHOP").map(String::as_str), Some("门店"));
+        assert!(!d.contains_key("GONE") && !d.contains_key("NONAME"));
     }
 
     #[test]

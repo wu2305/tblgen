@@ -27,8 +27,9 @@ impl FieldReq {
     }
 }
 
-/// Parse the field shorthand `name:TYPE[:length[.decimal]][:m]`, comma
-/// separated. TYPE is C/N/I/D/P; length defaults to C=100, N=18, else 0; an N
+/// Parse the field shorthand `name[=dbfield]:TYPE[:length[.decimal]][:m]`,
+/// comma separated. `name` is the display name; `dbfield` (the physical
+/// column, upper-cased) defaults to the name and must be an ASCII identifier. TYPE is C/N/I/D/P; length defaults to C=100, N=18, else 0; an N
 /// measure without decimals gets 2; a trailing `m` marks a measure.
 /// With `allow_inherit`, a bare `name` takes its definition from upstream.
 pub fn parse_fields(s: &str, allow_inherit: bool) -> Result<Vec<FieldReq>, String> {
@@ -41,7 +42,23 @@ pub fn parse_fields(s: &str, allow_inherit: bool) -> Result<Vec<FieldReq>, Strin
         }
         let ty = seg.get(1).map(|t| t.to_uppercase()).unwrap_or_default();
         if seg.len() < 2 || !FIELD_TYPES.contains(&ty.as_str()) || seg[0].is_empty() {
-            return Err(format!("bad field {:?}: expected name:TYPE[:length[.decimal]][:m]", part));
+            return Err(format!("bad field {:?}: expected name[=dbfield]:TYPE[:length[.decimal]][:m]", part));
+        }
+        // `显示名=dbfield`: the name users see, and the physical column
+        let (name, dbfield) = match seg[0].split_once('=') {
+            Some((n, d)) => (n.trim().to_string(), d.trim().to_uppercase()),
+            None => (seg[0].to_string(), seg[0].to_uppercase()),
+        };
+        let ident = |s: &str| {
+            !s.is_empty()
+                && s.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+                && !s.starts_with(|c: char| c.is_ascii_digit())
+        };
+        if name.is_empty() || !ident(&dbfield) {
+            return Err(format!(
+                "bad field {:?}: dbfield {:?} must be an ASCII identifier; write 显示名=dbfield, e.g. 统计年月=stat_month:C:7",
+                part, dbfield
+            ));
         }
         let mut length: i64 = match ty.as_str() {
             "C" => 100,
@@ -64,7 +81,7 @@ pub fn parse_fields(s: &str, allow_inherit: bool) -> Result<Vec<FieldReq>, Strin
             decimal = Some(2);
         }
         let mut f = json!({
-            "name": seg[0], "dbfield": seg[0].to_uppercase(), "dataType": ty,
+            "name": name, "dbfield": dbfield, "dataType": ty,
             "length": length, "isDimension": is_dim,
         });
         if let Some(d) = decimal {
@@ -472,6 +489,13 @@ mod tests {
         assert_eq!((v[2]["length"].clone(), v[2]["decimal"].clone()), (json!(18), json!(2)));
         assert_eq!(v[3]["length"], json!(0));
         assert!(parse_fields("x", false).is_err());
+        let v = match &parse_fields("统计年月=stat_month:C:7", false).unwrap()[0] {
+            FieldReq::Explicit(v) => v.clone(),
+            _ => panic!(),
+        };
+        assert_eq!((v["name"].clone(), v["dbfield"].clone()), (json!("统计年月"), json!("STAT_MONTH")));
+        assert!(parse_fields("统计年月:C:7", false).is_err(), "Chinese name needs an explicit dbfield");
+        assert!(parse_fields("a=1x:C", false).is_err());
         assert!(matches!(parse_fields("x", true).unwrap()[0], FieldReq::Inherit(_)));
     }
 }

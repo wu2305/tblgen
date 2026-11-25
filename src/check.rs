@@ -324,6 +324,7 @@ pub fn check(tbl: &Value) -> Vec<Diag> {
 
     // light top-level checks
     check_top_level(&mut diags, tbl, nodes_obj, &infos);
+    check_lineage(&mut diags, nodes_obj);
     diags
 }
 
@@ -1618,7 +1619,34 @@ pub fn check_references(tbl: &Value, at: &crate::project::Located) -> Vec<Diag> 
                 };
                 let project = project_name(&at.platform_path);
                 let cands = script_candidates(&at.projects_root, project, name);
-                if !cands.iter().any(|p| p.is_file()) {
+                // the runner takes field names from the script (onProcessFields);
+                // a node that names a dbfield differently is out of sync
+                let source = cands.iter().rev().find_map(|p| fs::read_to_string(p).ok());
+                if let Some(text) = &source {
+                    let declared = crate::script::declared_fields(text);
+                    for (i, f) in node.get("fields").and_then(Value::as_array).into_iter().flatten().enumerate() {
+                        let (Some(db), Some(fname)) = (
+                            f.get("dbfield").and_then(Value::as_str),
+                            f.get("name").and_then(Value::as_str),
+                        ) else {
+                            continue;
+                        };
+                        if let Some(sname) = declared.get(&db.to_uppercase()) {
+                            if sname != fname {
+                                diags.push(err(
+                                    format!("{}/fields/{}/name", base, i),
+                                    "ref.script.fieldName",
+                                    &src(cite::SCRIPT_NODE, "448", "DwDataFlowNodeContributor_script#onProcessFields"),
+                                    format!(
+                                        "field {:?} (dbfield {}) is named {:?} in script {}; the script's name is used at run time",
+                                        fname, db, sname, name
+                                    ),
+                                ));
+                            }
+                        }
+                    }
+                }
+                if source.is_none() {
                     diags.push(err(
                         format!("{}/scriptName", base),
                         "ref.script.missing",
@@ -1631,4 +1659,69 @@ pub fn check_references(tbl: &Value, at: &crate::project::Located) -> Vec<Diag> 
         }
     }
     diags
+}
+
+/// Field lineage: a field's `inputField` must name a field of the node it
+/// reads from (its `inputNode`, or the only input). The runner matches
+/// lineage by name, case-insensitively (DwDataFlowContext). Nodes that define
+/// their own fields (sources, scripts) or remap them (Join, Union, row/column
+/// transforms, Agg) are not checked; computed fields (`exp`) have no input.
+fn check_lineage(diags: &mut Vec<Diag>, nodes: &serde_json::Map<String, Value>) {
+    const NOT_DERIVED: [&str; 12] = [
+        "Join", "Union", "ColToRow", "RowToCol", "Agg", "SubProcess",
+        "Script", "DbTable", "Sql", "Extend", "FileInput", "ModelTable",
+    ];
+    let by_alias: HashMap<&str, &str> = nodes
+        .iter()
+        .filter_map(|(k, n)| n.get("alias").and_then(Value::as_str).map(|a| (a, k.as_str())))
+        .collect();
+    let names_of = |n: &Value| -> HashSet<String> {
+        n.get("fields")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(|f| f.get("name").and_then(Value::as_str).map(str::to_uppercase))
+            .collect()
+    };
+    for (id, node) in nodes {
+        let ty = node.get("type").and_then(Value::as_str).unwrap_or("");
+        if NOT_DERIVED.contains(&ty) {
+            continue;
+        }
+        let inputs: Vec<&str> = node
+            .get("inputNodes")
+            .and_then(Value::as_array)
+            .map(|a| a.iter().filter_map(Value::as_str).collect())
+            .unwrap_or_default();
+        for (i, f) in node.get("fields").and_then(Value::as_array).into_iter().flatten().enumerate() {
+            let Some(input_field) = f.get("inputField").and_then(Value::as_str).filter(|s| !s.is_empty()) else {
+                continue;
+            };
+            if f.get("exp").and_then(Value::as_str).is_some_and(|e| !e.is_empty()) {
+                continue;
+            }
+            let src_key = match f.get("inputNode").and_then(Value::as_str) {
+                Some(n) => by_alias.get(n).copied().or(Some(n)),
+                None if inputs.len() == 1 => Some(inputs[0]),
+                None => None,
+            };
+            let Some(src_node) = src_key.and_then(|k| nodes.get(k)) else {
+                continue;
+            };
+            let names = names_of(src_node);
+            if !names.is_empty() && !names.contains(&input_field.to_uppercase()) {
+                diags.push(err(
+                    format!("/dataFlow/nodes/{}/fields/{}/inputField", ptr_escape(id), i),
+                    "field.inputField.missing",
+                    &src(cite::DATAFLOW_CTX, "207", "DwDataFlowContext#initNodeFields"),
+                    format!(
+                        "field {:?} reads {:?}, which node {:?} does not have",
+                        f.get("name").and_then(Value::as_str).unwrap_or(""),
+                        input_field,
+                        src_key.unwrap_or("")
+                    ),
+                ));
+            }
+        }
+    }
 }
