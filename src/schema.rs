@@ -793,7 +793,8 @@ fn node_examples() -> Vec<Value> {
         "Output",
         wrap(vec![fileinput("src"), output_node("out", &["src"])]),
     );
-    // DbOutput: terminal writer
+    // DbOutput: terminal writer branch; the model still needs its default
+    // Output (the runner resolves nodes["default"])
     add(
         "typed",
         "DbOutput",
@@ -804,6 +805,7 @@ fn node_examples() -> Vec<Value> {
                 "config": {"datasource": "defdw", "dbSchema": "ads", "dbTableName": "ads_demo"},
                 "fields": src_fields(),
             }),
+            output_node("out", &["src"]),
         ]),
     );
     // RowToCol: rowToColInfo is NOT a closed typed config -> explicit raw

@@ -191,6 +191,36 @@ fn cmd_decompile(args: &[String]) -> ExitCode {
     }
 }
 
+/// Directories expand to every `.tbl` and `.action.ts` below them, sorted;
+/// hidden directories and node_modules are skipped.
+fn expand_dirs(args: &[String]) -> Vec<String> {
+    fn walk(dir: &Path, out: &mut Vec<String>) {
+        let Ok(rd) = fs::read_dir(dir) else { return };
+        let mut entries: Vec<_> = rd.flatten().map(|e| e.path()).collect();
+        entries.sort();
+        for p in entries {
+            let name = p.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+            if p.is_dir() {
+                if !name.starts_with('.') && name != "node_modules" {
+                    walk(&p, out);
+                }
+            } else if name.ends_with(".tbl") || name.ends_with(".action.ts") {
+                out.push(p.display().to_string());
+            }
+        }
+    }
+    let mut out = Vec::new();
+    for a in args {
+        let p = Path::new(a);
+        if p.is_dir() {
+            walk(p, &mut out);
+        } else {
+            out.push(a.clone());
+        }
+    }
+    out
+}
+
 fn cmd_check(args: &[String]) -> ExitCode {
     let (files, _) = match parse_io_args(args) {
         Ok(v) => v,
@@ -205,7 +235,7 @@ fn cmd_check(args: &[String]) -> ExitCode {
     }
     let mut reports: Vec<CheckReport> = Vec::new();
     let mut had_io_error = false;
-    for f in files {
+    for f in expand_dirs(&files) {
         match check_file(Path::new(&f)) {
             Ok(r) => reports.push(r),
             Err((msg, code)) => {

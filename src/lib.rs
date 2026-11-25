@@ -4,7 +4,9 @@ pub mod check;
 pub mod decompile;
 pub mod gen;
 pub mod model;
+pub mod project;
 pub mod schema;
+pub mod script;
 
 pub use check::{check, check_file, CheckReport};
 pub use decompile::decompile;

@@ -30,6 +30,11 @@ pub struct CheckReport {
 pub fn check_file(path: &Path) -> Result<CheckReport, (String, i32)> {
     let file = path.display().to_string();
     let text = fs::read_to_string(path).map_err(|e| (format!("{}: {}", file, e), 2))?;
+    if file.ends_with(".action.ts") {
+        let at = crate::project::locate(path).map(|l| l.platform_path).unwrap_or_else(|| file.clone());
+        let errors = crate::script::check_script(&at, &text);
+        return Ok(CheckReport { file, scope: "script".into(), errors, warnings: Vec::new() });
+    }
     // tolerate an optional UTF-8 BOM on JSON reads
     let text = text.strip_prefix('\u{feff}').unwrap_or(&text);
     let v: Value =
@@ -65,7 +70,11 @@ pub fn check_file(path: &Path) -> Result<CheckReport, (String, i32)> {
     let (scope, diags) = if is_spec {
         ("spec", crate::gen::validate_spec(&v))
     } else if v.get("dataFlow").is_some() || declares_flow {
-        ("dataflow", check(&v))
+        let mut d = check(&v);
+        if let Some(at) = crate::project::locate(path) {
+            d.extend(check_references(&v, &at));
+        }
+        ("dataflow", d)
     } else {
         ("skipped", Vec::new())
     };
@@ -1526,14 +1535,86 @@ fn check_top_level(
             ));
         }
     }
-    // default Output sanity: exactly one Output-type node is typical; warn if none
-    let has_output = infos.values().any(|i| i.ty == "Output");
-    if !has_output && !nodes_obj.is_empty() {
-        diags.push(warn(
+    // the runner resolves its output as nodes["default"] and fails without it
+    if !nodes_obj.is_empty() && !nodes_obj.contains_key("default") {
+        diags.push(err(
             "/dataFlow/nodes".into(),
-            "warn.flow.noOutput",
-            &src(cite::LOADER, "1257", "DwTableLoader#loadDataFlow"),
-            "dataFlow has no Output node; top-level dimensions/measures will be empty",
+            "flow.noDefaultOutput",
+            &src(cite::DATAFLOW_CTX, "173", "DwDataFlowContext#initNodes"),
+            "dataFlow has no node with id \"default\"; running the model fails with err.dataflow.nooutput",
+        ));
+    } else if nodes_obj.get("default").and_then(|n| n.get("type")).and_then(Value::as_str)
+        .is_some_and(|t| t != "Output")
+    {
+        diags.push(warn(
+            "/dataFlow/nodes/default/type".into(),
+            "flow.defaultNotOutput",
+            &src(cite::LOADER, "399", "DwTableLoader#getOutputNode"),
+            "node \"default\" is not an Output node; the loader takes it as the model output",
         ));
     }
+    let _ = infos;
+}
+
+/// Cross-file checks for a `.tbl` inside a project layout: ModelTable
+/// references and Script node scripts must exist. A reference into a project
+/// that is not on disk cannot be verified and is only a warning.
+pub fn check_references(tbl: &Value, at: &crate::project::Located) -> Vec<Diag> {
+    use crate::project::{project_name, resolve_reference, script_candidates, to_disk};
+    let mut diags = Vec::new();
+    let Some(nodes) = tbl.pointer("/dataFlow/nodes").and_then(Value::as_object) else {
+        return diags;
+    };
+    let project_on_disk = |p: &str| at.projects_root.join(project_name(p)).is_dir();
+    for (id, node) in nodes {
+        let base = format!("/dataFlow/nodes/{}", ptr_escape(id));
+        match node.get("type").and_then(Value::as_str) {
+            Some("ModelTable") => {
+                let Some(r) = node.get("moduleTablePath").and_then(Value::as_str) else {
+                    continue;
+                };
+                let Some(target) = resolve_reference(&at.platform_path, r) else {
+                    continue;
+                };
+                if to_disk(&at.projects_root, &target).is_file() {
+                    continue;
+                }
+                let path = format!("{}/moduleTablePath", base);
+                let source = src(cite::DWTABLE_NODE, "50", "DwDataFlowNodeContributor_dwtable#initNode");
+                if project_on_disk(&target) {
+                    diags.push(err(
+                        path,
+                        "ref.modelTable.missing",
+                        &source,
+                        format!("{:?} resolves to {} which does not exist (err.dataflow.dwtable.notfound)", r, target),
+                    ));
+                } else {
+                    diags.push(warn(
+                        path,
+                        "ref.modelTable.unverifiable",
+                        &source,
+                        format!("{:?} resolves to {} in a project that is not on disk", r, target),
+                    ));
+                }
+            }
+            Some("Script") => {
+                let Some(name) = node.get("scriptName").and_then(Value::as_str).filter(|s| !s.is_empty())
+                else {
+                    continue;
+                };
+                let project = project_name(&at.platform_path);
+                let cands = script_candidates(&at.projects_root, project, name);
+                if !cands.iter().any(|p| p.is_file()) {
+                    diags.push(err(
+                        format!("{}/scriptName", base),
+                        "ref.script.missing",
+                        &src(cite::SCRIPT_NODE, "205", "DwDataFlowNodeContributor_script#getScript"),
+                        format!("script /{}/data/script/{}.action(.ts) does not exist", project, name),
+                    ));
+                }
+            }
+            _ => {}
+        }
+    }
+    diags
 }
