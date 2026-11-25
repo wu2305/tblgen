@@ -44,7 +44,9 @@ new: --extract true = ETL into --table; false = query logic. Field list is
 name:TYPE[:length[.decimal]][:m] (TYPE C/N/I/D/P, m = measure); dsl takes
 names only. --input is the reference as written in the model (../ods/x.tbl,
 $DATA:/ods/x.tbl). Script name defaults to md5(--table); the script goes to
-<project>/data/script/. Existing files are never overwritten.
+<project>/data/script/. --cn/--note only fill the script header comment (a
+model's display name lives in the folder's .meta, not in the .tbl).
+Existing files are never overwritten. `tblgen new --help` shows this text.
 
 EXIT CODES: 0 ok | 1 invalid data | 2 usage / I/O error";
 
@@ -327,6 +329,10 @@ fn run_new(args: &[String]) -> Result<ExitCode, String> {
     use tblgen::new::*;
     use tblgen::project;
 
+    if args.iter().any(|a| a == "--help" || a == "-h") {
+        eprintln!("{}", USAGE);
+        return Ok(ExitCode::SUCCESS);
+    }
     let kind = args.first().map(String::as_str).ok_or("expected script or dsl")?;
     if kind != "script" && kind != "dsl" {
         return Err(format!("unknown model kind {:?}; expected script or dsl", kind));
@@ -355,6 +361,16 @@ fn run_new(args: &[String]) -> Result<ExitCode, String> {
             return Err(format!("unknown argument {:?}", a));
         }
         i += 1;
+    }
+    // reject options that the other model kind would silently ignore
+    let script_only = ["--script-name", "--script-out", "--template", "--cn", "--note"];
+    let dsl_only = ["--input", "--join-on", "--join-type"];
+    let foreign: &[&str] = if kind == "script" { &dsl_only } else { &script_only };
+    if let Some(k) = foreign.iter().find(|k| opts.contains_key(*k)) {
+        return Err(format!("{} does not apply to new {}", k, kind));
+    }
+    if kind == "dsl" && no_script {
+        return Err("--no-script does not apply to new dsl".into());
     }
     let one = |k: &str| opts.get(k).and_then(|v| v.first()).cloned();
     let need = |k: &str| one(k).ok_or(format!("{} is required", k));

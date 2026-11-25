@@ -22,7 +22,7 @@ python3 "$RUN" <命令> [参数]
 | `new script\|dsl ...` | 直接生成常见模型（见「用 new 起步」），写 `.tbl`，脚本型还写脚本骨架。 |
 | `gen <spec.json> [-o <out.tbl>]` | 校验并生成 `.tbl`。不加 `-o` 时写 stdout。 |
 | `decompile <in.tbl> [-o <out.json>]` | 把 `.tbl` 反解为规格，自动选择形态。 |
-| `help`、`-h`、`--help` | 顶层帮助写 stderr；不要放在子命令之后。 |
+| `help`、`-h`、`--help` | 完整用法写 stderr；`new --help` 同样可用。 |
 
 - 所有写文件的命令都不覆盖已有文件，目标必须不存在。`schema` 不接受选项；`check` 不写文件，要保存报告请捕获 stdout。完整参数见 `"$RUN" --help`。
 - stdout 只放 JSON 结果；下载进度、`tblgen: wrote ...`、帮助和 `gen`/`new` 的诊断都写 stderr（每行一个 JSON 诊断）。两个流分开读。`rule` 以 `warn.` 开头的是警告，不会让命令失败，但要读并在交付时说明。
@@ -68,7 +68,7 @@ python3 "$RUN" new dsl --table dwd_demo --schema dwd --extract true \
 
 - 字段串：`name:TYPE[:length[.decimal]][:m]`，TYPE 为 `C/N/I/D/P`，`m` 表示度量；`dbfield` 取大写名。
 - `--input` 按模型里的写法给（相对路径或 `$DATA:/...`），按平台规则解析后读取上游字段；单输入可省略 `--fields`，取上游全部字段。
-- 脚本骨架默认是占位版（预览返回字段结构，正式运行报错）；有上游输入的转换加 `--template transform`。不想写脚本用 `--no-script`。
+- 脚本骨架默认是占位版（预览返回字段结构，正式运行报错）；有上游输入的转换加 `--template transform`。不想写脚本用 `--no-script`。`--cn`、`--note` 只写进脚本头注释；模型的中文名不在 `.tbl` 里，按仓库约定维护（通常是目录 `.meta` 的 `desc`）。只属于另一种模型的参数会直接报错。
 - 加 `--spec-out <路径>` 可同时保存规格，以后在它上面继续加步骤再 `gen`。
 - 命令只填平台通用的默认值（数据源 `defdw`、设计器新建模型的表属性）。分层、表名前缀、数据源等仓库约定按仓库文档传参。
 
