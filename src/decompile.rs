@@ -278,11 +278,7 @@ fn node_to_spec(key: &str, body: &Value, first_output_seen: &mut bool) -> Option
     }
 
     if !node_supported(ty) {
-        // unsupported/unknown type -> rawNode verbatim
-        let mut m = Map::new();
-        m.insert("key".into(), Value::String(key.to_string()));
-        m.insert("rawNode".into(), body.clone());
-        return Some(Value::Object(m));
+        return rawnode_fallback(key, body);
     }
 
     // typed candidate
@@ -392,6 +388,12 @@ fn node_to_spec(key: &str, body: &Value, first_output_seen: &mut bool) -> Option
 }
 
 fn rawnode_fallback(key: &str, body: &Value) -> Option<Value> {
+    // rawNode bodies are emitted verbatim, while the equality check strips
+    // `dataFlow.nodes.*.lastModifyTime` from the input. A rawNode carrying
+    // that key can therefore never regenerate the normalized wire.
+    if body.get("lastModifyTime").is_some() {
+        return None;
+    }
     let mut m = Map::new();
     m.insert("key".into(), Value::String(key.to_string()));
     m.insert("rawNode".into(), body.clone());
