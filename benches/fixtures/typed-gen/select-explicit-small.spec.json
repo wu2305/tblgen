@@ -1,0 +1,116 @@
+{
+  "format": 1,
+  "version": "4.19.0",
+  "properties": {
+    "datasource": "defdw",
+    "extractDataEnabled": false
+  },
+  "nodes": [
+    {
+      "key": "src",
+      "type": "FileInput",
+      "alias": "src",
+      "config": {
+        "fileName": "small-explicit.xlsx#S"
+      },
+      "fields": [
+        {
+          "name": "Alpha",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "beta",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "Gamma",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "delta",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "epsilon",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "zeta",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "Eta",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "Theta",
+          "dataType": "C",
+          "isDimension": true
+        }
+      ]
+    },
+    {
+      "key": "sel",
+      "type": "Select",
+      "inputs": [
+        "src"
+      ],
+      "fields": [
+        {
+          "name": "theta",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "ETA",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "ZETA",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "Epsilon",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "DELTA",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "gamma",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "Beta",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "ALPHA",
+          "dataType": "C",
+          "isDimension": true
+        }
+      ]
+    },
+    {
+      "key": "out",
+      "type": "Output",
+      "inputs": [
+        "sel"
+      ]
+    }
+  ]
+}

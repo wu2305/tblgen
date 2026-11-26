@@ -6,10 +6,48 @@
 //! diagnostic as `Err`; `validate_spec` is exposed for `check` on spec input.
 
 use std::collections::{HashMap, HashSet};
+use std::time::Instant;
 
 use serde_json::{Map, Value};
 
 use crate::model::*;
+
+/// Optional stage timings for the generated-form compile path. The public
+/// generator never collects these; the hidden profile entry point is for
+/// benchmarks only.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct GeneratedCompileProfile {
+    pub validate_ns: u128,
+    pub spec_validation_ns: u128,
+    pub node_entry_validation_ns: u128,
+    pub prepare_ns: u128,
+    pub topo_sort_ns: u128,
+    pub graph_semantics_ns: u128,
+    pub field_compute_ns: u128,
+    pub wire_emit_ns: u128,
+    pub wire_check_ns: u128,
+    pub diag_remap_ns: u128,
+    pub nodes: usize,
+    pub fields: usize,
+    pub steps: usize,
+    pub input_edges: usize,
+    pub wire_diagnostics: usize,
+    pub mapped_diagnostics: usize,
+}
+
+fn profile_start(profile: &Option<&mut GeneratedCompileProfile>) -> Option<Instant> {
+    profile.as_ref().map(|_| Instant::now())
+}
+
+macro_rules! profile_stage {
+    ($profile:ident, $field:ident, $start:expr) => {
+        if let Some(__start) = $start {
+            if let Some(__p) = $profile.as_mut().map(|__p| &mut **__p) {
+                __p.$field += __start.elapsed().as_nanos();
+            }
+        }
+    };
+}
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -19,6 +57,24 @@ use crate::model::*;
 /// succeeds) plus ALL diagnostics — warnings included. Single entry for
 /// the `gen`/`new` CLI so validation and emission share one compile pass.
 pub fn generate_with_diagnostics(spec: &Value) -> (Option<Value>, Vec<Diag>) {
+    generate_impl(spec, None)
+}
+
+/// Benchmark-only entry point: same diagnostics and wire output as
+/// [`generate_with_diagnostics`], plus generated-form stage timings.
+#[doc(hidden)]
+pub fn generate_with_diagnostics_profile(
+    spec: &Value,
+) -> (Option<Value>, Vec<Diag>, GeneratedCompileProfile) {
+    let mut profile = GeneratedCompileProfile::default();
+    let (wire, diags) = generate_impl(spec, Some(&mut profile));
+    (wire, diags, profile)
+}
+
+fn generate_impl(
+    spec: &Value,
+    profile: Option<&mut GeneratedCompileProfile>,
+) -> (Option<Value>, Vec<Diag>) {
     let mut diags = Vec::new();
     if !spec.is_object() {
         diags.push(Diag::spec(
@@ -70,7 +126,7 @@ pub fn generate_with_diagnostics(spec: &Value) -> (Option<Value>, Vec<Diag>) {
             }
         }
         (false, false, true) => {
-            let wire = compile_generated(spec, &mut diags);
+            let wire = compile_generated(spec, &mut diags, profile);
             (wire, diags)
         }
         _ => {
@@ -122,7 +178,7 @@ pub fn validate_spec(spec: &Value) -> Vec<Diag> {
         (true, false, false) => validate_archive(spec, &mut d),
         (false, true, false) => validate_rawtable(spec, &mut d),
         (false, false, true) => {
-            compile_generated(spec, &mut d);
+            compile_generated(spec, &mut d, None);
         }
         _ => d.push(Diag::spec(
             "",
@@ -138,21 +194,35 @@ pub fn validate_spec(spec: &Value) -> Vec<Diag> {
 /// `check` so errors only visible on the wire (rawNode bodies, emitted step
 /// payloads, top-level partition) surface with spec paths. Returns the wire
 /// document when no hard diagnostic was produced.
-fn compile_generated(spec: &Value, diags: &mut Vec<Diag>) -> Option<Value> {
+fn compile_generated(
+    spec: &Value,
+    diags: &mut Vec<Diag>,
+    mut profile: Option<&mut GeneratedCompileProfile>,
+) -> Option<Value> {
     // one prepare pass shared by validation, build and wire-diag mapping
-    let descs = validate_generated(spec, diags);
+    let validate_start = profile_start(&profile);
+    let descs = validate_generated_inner(spec, diags, profile.as_mut().map(|p| &mut **p));
+    profile_stage!(profile, validate_ns, validate_start);
     if diags.iter().any(|d| !d.is_warning()) {
         return None;
     }
-    let (wire, descs) = build_generated_collect(spec, descs, diags);
+    let (wire, descs) =
+        build_generated_collect_inner(spec, descs, diags, profile.as_mut().map(|p| &mut **p));
     let Some(wire) = wire else {
         return None;
     };
     // wire invariants: pure check, no filesystem, no recursion into generate
+    let check_start = profile_start(&profile);
     let wire_diags = crate::check::check(&wire);
+    profile_stage!(profile, wire_check_ns, check_start);
+    if let Some(p) = profile.as_mut().map(|p| &mut **p) {
+        p.wire_diagnostics = wire_diags.len();
+    }
     if wire_diags.is_empty() {
         return Some(wire);
     }
+    let remap_start = profile_start(&profile);
+    let mut mapped = 0usize;
     for wd in wire_diags {
         // warnings the spec side already reports with better paths
         if matches!(
@@ -164,6 +234,11 @@ fn compile_generated(spec: &Value, diags: &mut Vec<Diag>) -> Option<Value> {
             continue;
         }
         diags.push(map_wire_diag(wd, &descs));
+        mapped += 1;
+    }
+    profile_stage!(profile, diag_remap_ns, remap_start);
+    if let Some(p) = profile.as_mut().map(|p| &mut **p) {
+        p.mapped_diagnostics = mapped;
     }
     if diags.iter().any(|d| !d.is_warning()) {
         None
@@ -307,7 +382,11 @@ fn node_ty(spec_node: &Value) -> Option<String> {
         .map(str::to_string)
 }
 
-fn prepare_nodes<'a>(spec: &'a Value, diags: &mut Vec<Diag>) -> Vec<NodeDesc<'a>> {
+fn prepare_nodes_inner<'a>(
+    spec: &'a Value,
+    diags: &mut Vec<Diag>,
+    profile: Option<&mut GeneratedCompileProfile>,
+) -> Vec<NodeDesc<'a>> {
     // borrow the spec's node array (lifetime 'a) — do not clone
     let nodes: &[Value] = spec
         .get("nodes")
@@ -474,7 +553,13 @@ fn prepare_nodes<'a>(spec: &'a Value, diags: &mut Vec<Diag>) -> Vec<NodeDesc<'a>
     }
 
     // topo order (stable: declaration order among ready nodes)
+    let topo_start = profile_start(&profile);
     topo_sort(&mut descs, diags);
+    if let Some(p) = profile {
+        if let Some(start) = topo_start {
+            p.topo_sort_ns += start.elapsed().as_nanos();
+        }
+    }
     descs
 }
 
@@ -557,7 +642,12 @@ impl<'a> NodeDesc<'a> {
 /// Validate the generated form, returning the prepared node descriptors
 /// (topo-sorted, wire keys resolved) for reuse by build + diag mapping.
 /// Empty when structural validation failed before preparation.
-fn validate_generated<'a>(spec: &'a Value, diags: &mut Vec<Diag>) -> Vec<NodeDesc<'a>> {
+fn validate_generated_inner<'a>(
+    spec: &'a Value,
+    diags: &mut Vec<Diag>,
+    mut profile: Option<&mut GeneratedCompileProfile>,
+) -> Vec<NodeDesc<'a>> {
+    let spec_start = profile_start(&profile);
     // closed top-level keys for generated form
     const ALLOWED_TOP: [&str; 7] = [
         "format",
@@ -596,6 +686,7 @@ fn validate_generated<'a>(spec: &'a Value, diags: &mut Vec<Diag>) -> Vec<NodeDes
             diags.push(Diag::spec("/raw", "structure.raw", "raw must be an object"));
         }
     }
+    profile_stage!(profile, spec_validation_ns, spec_start);
 
     let nodes = spec.get("nodes").and_then(Value::as_array);
     let Some(nodes) = nodes else {
@@ -607,16 +698,22 @@ fn validate_generated<'a>(spec: &'a Value, diags: &mut Vec<Diag>) -> Vec<NodeDes
         return Vec::new();
     };
 
+    let entry_start = profile_start(&profile);
     // per-node structural validation
     for (i, n) in nodes.iter().enumerate() {
         validate_node_entry(n, i, diags);
     }
+    profile_stage!(profile, node_entry_validation_ns, entry_start);
 
     // graph + semantic validation needs prepared descriptors
     let mut graph_diags = Vec::new();
-    let descs = prepare_nodes(spec, &mut graph_diags);
+    let prepare_start = profile_start(&profile);
+    let descs = prepare_nodes_inner(spec, &mut graph_diags, profile.as_mut().map(|p| &mut **p));
+    profile_stage!(profile, prepare_ns, prepare_start);
     diags.extend(graph_diags);
+    let graph_start = profile_start(&profile);
     validate_graph_semantics(spec, &descs, diags);
+    profile_stage!(profile, graph_semantics_ns, graph_start);
     descs
 }
 
@@ -2216,21 +2313,13 @@ fn validate_graph_semantics(spec: &Value, descs: &[NodeDesc], diags: &mut Vec<Di
             );
         }
         if ty == "Select" {
-            check_select_step_fields(
+            check_select_names(
                 d,
                 descs,
                 &key_to_idx_s,
                 &mut name_memo,
                 &mut name_visiting,
                 &param_names_s,
-                diags,
-            );
-            check_select_explicit_vs_derived(
-                d,
-                descs,
-                &key_to_idx_s,
-                &mut name_memo,
-                &mut name_visiting,
                 diags,
             );
         }
@@ -2441,8 +2530,14 @@ fn resolve_field_names_inner(
     }
 }
 
-/// Per-step operated-field existence for Select nodes (names provable only).
-fn check_select_step_fields(
+/// Combined Select name checks, evolved ONCE per node: the per-step
+/// operated-field existence and expression-reference checks plus the
+/// explicit-`fields`-vs-derived multiset comparison all read the same
+/// predecessor name list walked through the typed steps. Previously two
+/// separate passes re-evolved identical name lists; the merged pass keeps
+/// diagnostic order (step diagnostics in step order, then at most one
+/// `field.mismatch`) and every early-exit condition of both checks.
+fn check_select_names(
     d: &NodeDesc,
     descs: &[NodeDesc],
     key_to_idx: &HashMap<String, usize>,
@@ -2455,179 +2550,158 @@ fn check_select_step_fields(
     let Some(pred_key) = d.inputs.first() else {
         return;
     };
+    let explicit = sn.get("fields").and_then(Value::as_array);
+    let steps = sn.get("steps").and_then(Value::as_array);
+    // A leading rawStep stops step checking immediately and makes the name
+    // derivation unprovable, so neither check can emit a diagnostic.
+    if steps
+        .and_then(|arr| arr.first())
+        .map(|s| s.get("rawStep").is_some())
+        .unwrap_or(false)
+    {
+        return;
+    }
+    let has_checkable_steps = steps.map(|arr| !arr.is_empty()).unwrap_or(false);
+    // No explicit projection and no steps to check: nothing to validate.
+    // (Resolving predecessor names is a pure memo side effect with no
+    // diagnostic effect, so it is skipped here.)
+    if explicit.is_none() && !has_checkable_steps {
+        return;
+    }
     let Some(mut current) = resolve_field_names(descs, key_to_idx, pred_key, memo, visiting) else {
         return; // cannot prove the input field set
     };
-    let Some(steps) = sn.get("steps").and_then(Value::as_array) else {
-        return;
-    };
-    for (si, st) in steps.iter().enumerate() {
-        if st.get("rawStep").is_some() {
-            break; // tracking lost
-        }
-        let ty = st.get("type").and_then(Value::as_str).unwrap_or("");
-        // Java checkStep exempts Text2Id only when it carries srcField
-        let operated = matches!(
-            ty,
-            "RemoveField"
-                | "SplitField"
-                | "Refactor"
-                | "SubString"
-                | "Replace"
-                | "ToUppercase"
-                | "ToLowercase"
-                | "ToNumber"
-                | "ToDate"
-                | "ToSynonym"
-                | "Trim"
-                | "DeleteNumbers"
-                | "DeleteLetters"
-                | "DeleteSpechars"
-                | "DeletePunctuations"
-                | "ExcludeEmpty"
-                | "ExtractNumber"
-                | "TransformToCalculatedField"
-                | "Distinct"
-                | "GroupNumber"
-                | "ReGroup"
-        ) || (ty == "Text2Id"
-            && st
-                .pointer("/text2id/srcField")
-                .and_then(Value::as_str)
-                .map(|x| x.is_empty())
-                .unwrap_or(true));
-        if operated {
-            if let Some(fl) = st.get("fields").and_then(Value::as_array) {
-                for (fi, fv) in fl.iter().enumerate() {
-                    if let Some(name) = fv.as_str() {
-                        if ty != "RemoveField" && !current.iter().any(|c| field_eq(c, name)) {
-                            diags.push(Diag::spec(
-                                format!("/nodes/{}/steps/{}/fields/{}", d.idx, si, fi),
-                                "err.dataflow.stepField.notfound",
-                                format!("step {} references unknown field {:?}", ty, name),
-                            ));
+    // names evolve first: collision detection + authoritative name set
+    let mut derivable = true;
+    if let Some(steps) = steps {
+        for (si, st) in steps.iter().enumerate() {
+            if st.get("rawStep").is_some() {
+                derivable = false;
+                break; // tracking lost
+            }
+            let ty = st.get("type").and_then(Value::as_str).unwrap_or("");
+            // Java checkStep exempts Text2Id only when it carries srcField
+            let operated = matches!(
+                ty,
+                "RemoveField"
+                    | "SplitField"
+                    | "Refactor"
+                    | "SubString"
+                    | "Replace"
+                    | "ToUppercase"
+                    | "ToLowercase"
+                    | "ToNumber"
+                    | "ToDate"
+                    | "ToSynonym"
+                    | "Trim"
+                    | "DeleteNumbers"
+                    | "DeleteLetters"
+                    | "DeleteSpechars"
+                    | "DeletePunctuations"
+                    | "ExcludeEmpty"
+                    | "ExtractNumber"
+                    | "TransformToCalculatedField"
+                    | "Distinct"
+                    | "GroupNumber"
+                    | "ReGroup"
+            ) || (ty == "Text2Id"
+                && st
+                    .pointer("/text2id/srcField")
+                    .and_then(Value::as_str)
+                    .map(|x| x.is_empty())
+                    .unwrap_or(true));
+            if operated {
+                if let Some(fl) = st.get("fields").and_then(Value::as_array) {
+                    for (fi, fv) in fl.iter().enumerate() {
+                        if let Some(name) = fv.as_str() {
+                            if ty != "RemoveField" && !current.iter().any(|c| field_eq(c, name)) {
+                                diags.push(Diag::spec(
+                                    format!("/nodes/{}/steps/{}/fields/{}", d.idx, si, fi),
+                                    "err.dataflow.stepField.notfound",
+                                    format!("step {} references unknown field {:?}", ty, name),
+                                ));
+                            }
                         }
                     }
                 }
             }
-        }
-        // conservative expression check: bracket refs in filter/addField.exp/
-        // transformFieldInfo.exp must resolve to a current field or a
-        // declared parameter (unqualified, case-insensitive). Qualified refs
-        // and unparseable grammar are skipped — never guessed.
-        for (ekey, epath) in [
-            ("filter", "filter"),
-            ("addField", "addField/exp"),
-            ("transformFieldInfo", "transformFieldInfo/exp"),
-        ] {
-            let exp = if ekey == "filter" {
-                st.get("filter").and_then(Value::as_str)
-            } else {
-                st.pointer(&format!("/{}/exp", ekey))
-                    .and_then(Value::as_str)
-            };
-            let Some(exp) = exp else { continue };
-            for (name, qualified) in exp_bracket_refs(exp) {
-                if qualified || name.is_empty() {
-                    continue;
-                }
-                let upper = name.to_uppercase();
-                let known =
-                    current.iter().any(|c| field_eq(c, &name)) || param_names.contains(&upper);
-                if !known {
-                    diags.push(Diag::spec(
-                        format!("/nodes/{}/steps/{}/{}", d.idx, si, epath),
-                        "err.exp.ref.notfound",
-                        format!(
-                            "expression references unknown field/parameter {:?} (unqualified refs resolve against current fields + parameters)",
-                            name
-                        ),
-                    ));
-                }
-            }
-        }
-        match evolve_names(&mut current, st) {
-            Ok(true) => {}
-            Ok(false) => break, // tracking lost
-            Err(tag) => {
-                // step-time name collision (AddField/Refactor rename): the
-                // platform would produce two fields with the same name
-                diags.push(Diag::spec(
-                    format!("/nodes/{}/steps/{}/{}", d.idx, si, tag),
-                    "field.duplicate",
-                    format!("step {} creates a duplicate field name", ty),
-                ));
-                break;
-            }
-        }
-    }
-}
-
-/// Compare a Select's explicit `fields` against the provable derivation:
-/// name sequence (case-insensitive) per position. Display/other attributes
-/// are never required to match.
-fn check_select_explicit_vs_derived(
-    d: &NodeDesc,
-    descs: &[NodeDesc],
-    key_to_idx: &HashMap<String, usize>,
-    memo: &mut HashMap<String, Option<Vec<String>>>,
-    visiting: &mut HashSet<String>,
-    diags: &mut Vec<Diag>,
-) {
-    let Some(sn) = d.spec else { return };
-    let Some(explicit) = sn.get("fields").and_then(Value::as_array) else {
-        return;
-    };
-    let Some(pred_key) = d.inputs.first() else {
-        return;
-    };
-    let Some(mut names) = resolve_field_names(descs, key_to_idx, pred_key, memo, visiting) else {
-        return;
-    };
-    let derivable = match sn.get("steps").and_then(Value::as_array) {
-        Some(steps) => {
-            let mut ok = true;
-            for st in steps {
-                match evolve_names(&mut names, st) {
-                    Ok(true) => {}
-                    _ => {
-                        ok = false;
-                        break;
+            // conservative expression check: bracket refs in
+            // filter/addField.exp/transformFieldInfo.exp must resolve to a
+            // current field or a declared parameter (unqualified,
+            // case-insensitive). Qualified refs and unparseable grammar are
+            // skipped — never guessed.
+            for (exp, epath) in [
+                (st.get("filter").and_then(Value::as_str), "filter"),
+                (
+                    st.pointer("/addField/exp").and_then(Value::as_str),
+                    "addField/exp",
+                ),
+                (
+                    st.pointer("/transformFieldInfo/exp")
+                        .and_then(Value::as_str),
+                    "transformFieldInfo/exp",
+                ),
+            ] {
+                let Some(exp) = exp else { continue };
+                for (name, qualified) in exp_bracket_refs(exp) {
+                    if qualified || name.is_empty() {
+                        continue;
+                    }
+                    let upper = name.to_uppercase();
+                    let known = current.iter().any(|c| field_eq(c, &name))
+                        || param_names.contains(&upper);
+                    if !known {
+                        diags.push(Diag::spec(
+                            format!("/nodes/{}/steps/{}/{}", d.idx, si, epath),
+                            "err.exp.ref.notfound",
+                            format!(
+                                "expression references unknown field/parameter {:?} (unqualified refs resolve against current fields + parameters)",
+                                name
+                            ),
+                        ));
                     }
                 }
             }
-            ok
+            match evolve_names(&mut current, st) {
+                Ok(true) => {}
+                Ok(false) => {
+                    derivable = false;
+                    break; // tracking lost
+                }
+                Err(tag) => {
+                    // step-time name collision (AddField/Refactor rename):
+                    // the platform would produce two fields with the same
+                    // name
+                    diags.push(Diag::spec(
+                        format!("/nodes/{}/steps/{}/{}", d.idx, si, tag),
+                        "field.duplicate",
+                        format!("step {} creates a duplicate field name", ty),
+                    ));
+                    derivable = false;
+                    break;
+                }
+            }
         }
-        None => true,
-    };
+    }
+    // Compare a Select's explicit `fields` against the provable derivation:
+    // name multiset (order-insensitive, Unicode-aware field_eq) — mirrors
+    // QueryImpl name semantics (toUpperCase). Display/other attributes are
+    // never required to match.
+    let Some(explicit) = explicit else { return };
     if !derivable {
         return;
     }
-    // multiset comparison, order-insensitive, Unicode-aware field_eq —
-    // mirrors QueryImpl name semantics (toUpperCase)
     let exp_names: Vec<String> = explicit
         .iter()
         .filter_map(|f| f.get("name").and_then(Value::as_str).map(str::to_string))
         .collect();
-    let mut remaining = names.clone();
-    let mut matched = true;
-    'outer: for en in &exp_names {
-        for (i, dn) in remaining.iter().enumerate() {
-            if field_eq(en, dn) {
-                remaining.remove(i);
-                continue 'outer;
-            }
-        }
-        matched = false;
-        break;
-    }
-    if !matched || !remaining.is_empty() {
+    if !name_multiset_eq(&exp_names, &current) {
         diags.push(Diag::spec(
             format!("/nodes/{}/fields", d.idx),
             "field.mismatch",
             format!(
                 "explicit fields {:?} do not match derivable output {:?}",
-                exp_names, names
+                exp_names, current
             ),
         ));
     }
@@ -3103,14 +3177,12 @@ struct ComputedNode {
     step_hints: Vec<Option<Value>>,
 }
 
-/// Build the wire document from already-prepared descriptors; returns the
-/// (possibly field-annotated) descriptors alongside for wire-diag mapping.
-fn build_generated_collect<'a>(
-    spec: &Value,
+/// Compute output fields in topo order; returns descriptors with computed
+/// `out_fields` for emission and wire-diag mapping.
+fn compute_generated_fields<'a>(
     descs: Vec<NodeDesc<'a>>,
     diags: &mut Vec<Diag>,
-) -> (Option<Value>, Vec<NodeDesc<'a>>) {
-    // compute output fields in topo order
+) -> Vec<NodeDesc<'a>> {
     let key_to_idx: HashMap<String, usize> = descs
         .iter()
         .enumerate()
@@ -3128,13 +3200,25 @@ fn build_generated_collect<'a>(
             (None, None) => {}
         }
     }
-    if diags.iter().any(|d| !d.is_warning()) {
-        return (None, descs);
-    }
+    descs
+}
+
+/// Emit the wire document from descriptors with computed fields; typed
+/// emission consumes `out_fields`. Returns the wire value alongside the
+/// descriptors for wire-diag mapping.
+fn emit_generated_wire<'a>(
+    spec: &Value,
+    mut descs: Vec<NodeDesc<'a>>,
+    diags: &mut Vec<Diag>,
+) -> (Option<Value>, Vec<NodeDesc<'a>>) {
+    // Typed emission consumes `out_fields`; collect the read-only default
+    // Output partition and extract warnings before that consuming pass.
+    let (top_dims, top_measures, partition_diag) = default_output_partition(&descs);
+    let extract_diags = extract_dbfield_diags(spec, &descs);
 
     // emit nodes
     let mut nodes_map = Map::new();
-    for d in &descs {
+    for d in &mut descs {
         let body = if let Some(rn) = d.raw_body {
             rn.clone() // verbatim, never mutated
         } else {
@@ -3197,39 +3281,15 @@ fn build_generated_collect<'a>(
     }
     // top dimensions/measures from the default Output; empty partitions are
     // omitted entirely (the platform writes no empty arrays)
-    let (dims, measures) = default_output_partition(&descs, diags);
-    // extraction needs a physical column name per top field; the wire check
-    // flags it on /dimensions//measures — report it here on the spec side,
-    // routed to the default Output's fields.
-    let extract = spec
-        .pointer("/properties/extractDataEnabled")
-        .and_then(Value::as_bool)
-        .unwrap_or(false);
-    if extract {
-        if let Some(d) = descs.iter().find(|d| is_default_output(d)) {
-            if let Some(fields) = &d.out_fields {
-                for (fi, f) in fields.iter().enumerate() {
-                    let ok = f
-                        .get("dbfield")
-                        .and_then(Value::as_str)
-                        .map(|s| !s.trim().is_empty() && s.chars().all(|c| c.is_ascii()))
-                        .unwrap_or(false);
-                    if !ok {
-                        diags.push(Diag::spec(
-                            format!("/nodes/{}/fields/{}/dbfield", d.idx, fi),
-                            "warn.extract.dbfield",
-                            "extractDataEnabled is set but this output field has no ASCII dbfield",
-                        ));
-                    }
-                }
-            }
-        }
+    if let Some(d) = partition_diag {
+        diags.push(d);
     }
-    if !dims.is_empty() {
-        tbl.insert("dimensions".into(), Value::Array(dims));
+    diags.extend(extract_diags);
+    if !top_dims.is_empty() {
+        tbl.insert("dimensions".into(), Value::Array(top_dims));
     }
-    if !measures.is_empty() {
-        tbl.insert("measures".into(), Value::Array(measures));
+    if !top_measures.is_empty() {
+        tbl.insert("measures".into(), Value::Array(top_measures));
     }
     tbl.insert("dataFlow".into(), Value::Object(flow));
     // top raw merge (collisions already validated)
@@ -3242,6 +3302,42 @@ fn build_generated_collect<'a>(
         return (None, descs);
     }
     (Some(Value::Object(tbl)), descs)
+}
+
+/// Build the wire document from already-prepared descriptors; returns the
+/// wire value alongside descriptors for wire-diag mapping. Typed emission may
+/// consume `out_fields`, so returned descriptors are not guaranteed to retain them.
+fn build_generated_collect_inner<'a>(
+    spec: &Value,
+    descs: Vec<NodeDesc<'a>>,
+    diags: &mut Vec<Diag>,
+    mut profile: Option<&mut GeneratedCompileProfile>,
+) -> (Option<Value>, Vec<NodeDesc<'a>>) {
+    let field_start = profile_start(&profile);
+    let descs = compute_generated_fields(descs, diags);
+    profile_stage!(profile, field_compute_ns, field_start);
+    if let Some(p) = profile.as_mut().map(|p| &mut **p) {
+        p.nodes = descs.len();
+        p.input_edges = descs.iter().map(|d| d.inputs.len()).sum();
+        p.fields = descs
+            .iter()
+            .map(|d| d.out_fields.as_ref().map_or(0, Vec::len))
+            .sum();
+        p.steps = descs
+            .iter()
+            .filter_map(|d| d.spec)
+            .filter_map(|sn| sn.get("steps").and_then(Value::as_array))
+            .map(Vec::len)
+            .sum();
+    }
+    if diags.iter().any(|d| !d.is_warning()) {
+        return (None, descs);
+    }
+
+    let emit_start = profile_start(&profile);
+    let result = emit_generated_wire(spec, descs, diags);
+    profile_stage!(profile, wire_emit_ns, emit_start);
+    result
 }
 
 /// Resolve a spec input key to its prepared descriptor.
@@ -3289,7 +3385,7 @@ fn node_is_source(d: &NodeDesc) -> bool {
 /// pivot-born/unmatched columns carry NO origin — never fabricated. A
 /// source's own fields root at the source itself, so stale explicit
 /// `original*` on them is rewritten rather than trusted.
-fn field_origin(f: &Value, pred: &NodeDesc) -> Option<(String, String)> {
+fn field_origin(f: &Value, pred: &NodeDesc, alias: Option<&str>) -> Option<(String, String)> {
     let nonblank = |k: &str| {
         f.get(k)
             .and_then(Value::as_str)
@@ -3302,7 +3398,10 @@ fn field_origin(f: &Value, pred: &NodeDesc) -> Option<(String, String)> {
     if node_is_source(pred) {
         let name = f.get("name").and_then(Value::as_str).unwrap_or("");
         if !name.is_empty() {
-            return Some((node_alias(pred), name.to_string()));
+            let alias = alias
+                .map(str::to_string)
+                .unwrap_or_else(|| node_alias(pred));
+            return Some((alias, name.to_string()));
         }
         return None;
     }
@@ -3411,14 +3510,54 @@ fn field_match_name(f: &Value) -> &str {
         .unwrap_or("")
 }
 
-/// Find a predecessor field by name (Unicode-aware).
-fn find_pred_field<'a>(fields: &'a [Value], want: &str) -> Option<&'a Value> {
-    fields.iter().find(|pf| {
-        pf.get("name")
-            .and_then(Value::as_str)
-            .map(|n| field_eq(n, want))
-            .unwrap_or(false)
-    })
+/// Per-projection lookup tables for explicit field resolution. Keys are the
+/// same Unicode `to_uppercase()` form `field_eq` compares; the first field
+/// with a folded name wins, exactly like the previous linear scan.
+struct ProjectionLookup {
+    aliases: Vec<String>,
+    alias_keys: Vec<String>,
+    by_alias: HashMap<String, Vec<usize>>,
+    all: Vec<usize>,
+    field_maps: Vec<HashMap<String, usize>>,
+}
+
+impl ProjectionLookup {
+    fn new(preds: &[&NodeDesc], fields_of: &[&Vec<Value>]) -> Self {
+        let mut aliases = Vec::with_capacity(preds.len());
+        let mut alias_keys = Vec::with_capacity(preds.len());
+        let mut by_alias: HashMap<String, Vec<usize>> = HashMap::new();
+        let mut field_maps = Vec::with_capacity(preds.len());
+        for (pi, pred) in preds.iter().enumerate() {
+            let alias = node_alias(pred);
+            let alias_key = alias.to_uppercase();
+            by_alias.entry(alias_key.clone()).or_default().push(pi);
+            aliases.push(alias);
+            alias_keys.push(alias_key);
+
+            let mut by_name: HashMap<String, usize> = HashMap::new();
+            for (fi, pf) in fields_of[pi].iter().enumerate() {
+                if let Some(name) = pf.get("name").and_then(Value::as_str) {
+                    by_name.entry(name.to_uppercase()).or_insert(fi);
+                }
+            }
+            field_maps.push(by_name);
+        }
+        let all = (0..preds.len()).collect();
+        Self {
+            aliases,
+            alias_keys,
+            by_alias,
+            all,
+            field_maps,
+        }
+    }
+
+    fn candidates(&self, want_node_key: Option<&str>) -> &[usize] {
+        match want_node_key {
+            Some(key) => self.by_alias.get(key).map(Vec::as_slice).unwrap_or(&[]),
+            None => &self.all,
+        }
+    }
 }
 
 fn compute_node_fields(
@@ -3598,7 +3737,7 @@ fn clone_passthrough(f: &Value, pred: &NodeDesc) -> Value {
     let name = field_name(f, 0);
     m.insert("name".into(), Value::String(name.clone()));
     m.insert("inputField".into(), Value::String(name));
-    if let Some((on, of)) = field_origin(f, pred) {
+    if let Some((on, of)) = field_origin(f, pred, None) {
         m.insert("originalNode".into(), Value::String(on));
         m.insert("originalField".into(), Value::String(of));
     }
@@ -3622,6 +3761,7 @@ fn resolve_declared_fields(
         .and_then(Value::as_array)
         .cloned()
         .unwrap_or_default();
+    let lookup = ProjectionLookup::new(preds, fields_of);
     let mut out = Vec::with_capacity(declared.len());
     for (fi, df) in declared.iter().enumerate() {
         if has_exp(df) {
@@ -3630,15 +3770,12 @@ fn resolve_declared_fields(
         }
         let want = field_match_name(df);
         let want_node = field_str(df, "inputNode");
-        let mut matches: Vec<(&NodeDesc, &Value)> = Vec::new();
-        for (pi, pred) in preds.iter().enumerate() {
-            if let Some(wn) = want_node {
-                if !field_eq(wn, &node_alias(pred)) {
-                    continue;
-                }
-            }
-            if let Some(pf) = find_pred_field(fields_of[pi], want) {
-                matches.push((pred, pf));
+        let want_key = want.to_uppercase();
+        let want_node_key = want_node.map(|s| s.to_uppercase());
+        let mut matches: Vec<(usize, &NodeDesc, &Value)> = Vec::new();
+        for &pi in lookup.candidates(want_node_key.as_deref()) {
+            if let Some(&fi) = lookup.field_maps[pi].get(&want_key) {
+                matches.push((pi, preds[pi], &fields_of[pi][fi]));
             }
         }
         match matches.len() {
@@ -3653,23 +3790,20 @@ fn resolve_declared_fields(
                 out.push(emit_unresolved(df));
             }
             1 => {
-                let (pred, pf) = matches[0];
+                let (pi, pred, pf) = matches[0];
                 let pname = pf
                     .get("name")
                     .and_then(Value::as_str)
                     .unwrap_or(want)
                     .to_string();
-                let in_node = if emit_input_node {
-                    Some(node_alias(pred))
-                } else {
-                    None
-                };
+                let alias = lookup.aliases[pi].as_str();
+                let in_node = if emit_input_node { Some(alias) } else { None };
                 out.push(merge_declared(
                     df,
                     pf,
                     &pname,
-                    in_node.as_deref(),
-                    field_origin(pf, pred),
+                    in_node,
+                    field_origin(pf, pred, Some(alias)),
                 ));
             }
             _ => {
@@ -3815,6 +3949,7 @@ fn compute_union_fields(
             )),
         );
     }
+    let lookup = ProjectionLookup::new(&preds, &fields_of);
     let sn = d.spec.unwrap();
     let map = sn
         .get("config")
@@ -3825,8 +3960,9 @@ fn compute_union_fields(
     // field name) per visible row; duplicate keys are an error
     struct URow {
         key_pos: usize,
-        key_alias: String,
+        key_alias_key: String,
         key_field: String,
+        key_field_key: String,
         values: Vec<Option<String>>,
     }
     let mut rows: Vec<URow> = Vec::new();
@@ -3857,8 +3993,9 @@ fn compute_union_fields(
             if kpos >= preds.len() {
                 continue; // width mismatch already diagnosed
             }
-            let kalias = node_alias(preds[kpos]);
-            if !key_seen.insert((kalias.to_uppercase(), kfield.to_uppercase())) {
+            let key_alias_key = lookup.aliases[kpos].to_uppercase();
+            let key_field_key = kfield.to_uppercase();
+            if !key_seen.insert((key_alias_key.clone(), key_field_key.clone())) {
                 return (
                     None,
                     Some(Diag::spec(
@@ -3870,12 +4007,27 @@ fn compute_union_fields(
             }
             rows.push(URow {
                 key_pos: kpos,
-                key_alias: kalias,
+                key_alias_key,
                 key_field: kfield,
+                key_field_key,
                 values,
             });
         }
     }
+
+    let mut primary_by_field: HashMap<&str, Vec<usize>> = HashMap::new();
+    for (ri, r) in rows.iter().enumerate() {
+        primary_by_field
+            .entry(r.key_field_key.as_str())
+            .or_default()
+            .push(ri);
+    }
+    // Secondary (renamed-value) indexes are built lazily on the first declared
+    // field whose canonical key misses: most map rows resolve primarily.
+    let mut secondary_index: Option<(
+        HashMap<String, Vec<usize>>,
+        HashMap<String, HashMap<String, Vec<usize>>>,
+    )> = None;
 
     let declared = sn
         .get("fields")
@@ -3903,15 +4055,17 @@ fn compute_union_fields(
             // legacy no-map resolution: inputField = declared name, origin
             // looked up in the first input
             let want = field_match_name(df);
-            let origin = find_pred_field(fields_of[0], want)
-                .map(|pf| field_origin(pf, preds[0]))
-                .flatten();
+            let want_key = want.to_uppercase();
+            let origin = lookup.field_maps[0]
+                .get(&want_key)
+                .and_then(|&fi| fields_of[0].get(fi))
+                .and_then(|pf| field_origin(pf, preds[0], Some(lookup.aliases[0].as_str())));
             let mut m = df.as_object().cloned().unwrap_or_default();
             m.remove("originalNode");
             m.remove("originalField");
             m.remove("inputNode");
             m.insert("inputField".into(), Value::String(want.to_string()));
-            m.insert("inputNode".into(), Value::String(node_alias(preds[0])));
+            m.insert("inputNode".into(), Value::String(lookup.aliases[0].clone()));
             if let Some((on, of)) = origin {
                 m.insert("originalNode".into(), Value::String(on));
                 m.insert("originalField".into(), Value::String(of));
@@ -3933,34 +4087,73 @@ fn compute_union_fields(
         }
         let want_field = field_match_name(df);
         let want_node = field_str(df, "inputNode");
+        let want_field_key = want_field.to_uppercase();
+        let want_node_key = want_node.map(|s| s.to_uppercase());
         // primary: match the canonical key (field + optional alias)
-        let mut primary: Vec<&URow> = rows
-            .iter()
-            .filter(|r| {
-                field_eq(&r.key_field, want_field)
-                    && want_node
-                        .map(|wn| field_eq(wn, &r.key_alias))
-                        .unwrap_or(true)
-            })
-            .collect();
+        let mut primary: Vec<&URow> = Vec::new();
+        if let Some(indices) = primary_by_field.get(want_field_key.as_str()) {
+            for &ri in indices {
+                let r = &rows[ri];
+                if want_node_key
+                    .as_ref()
+                    .map(|wn| wn == r.key_alias_key.as_str())
+                    .unwrap_or(true)
+                {
+                    primary.push(r);
+                }
+            }
+        }
         // secondary: the field may be renamed — match any other populated
         // values[j] together with that input's alias
         if primary.is_empty() {
+            if secondary_index.is_none() {
+                let mut any: HashMap<String, Vec<usize>> = HashMap::new();
+                let mut by_alias: HashMap<String, HashMap<String, Vec<usize>>> = HashMap::new();
+                for (ri, r) in rows.iter().enumerate() {
+                    for (j, v) in r.values.iter().enumerate() {
+                        if j == r.key_pos || j >= lookup.alias_keys.len() {
+                            continue;
+                        }
+                        let Some(sv) = v.as_ref().filter(|s| !s.is_empty()) else {
+                            continue;
+                        };
+                        let value_key = sv.to_uppercase();
+                        let alias_key = lookup.alias_keys[j].clone();
+                        let any_vec = any.entry(value_key.clone()).or_default();
+                        if any_vec.last().copied() != Some(ri) {
+                            any_vec.push(ri);
+                        }
+                        let alias_vec = by_alias
+                            .entry(value_key)
+                            .or_default()
+                            .entry(alias_key)
+                            .or_default();
+                        if alias_vec.last().copied() != Some(ri) {
+                            alias_vec.push(ri);
+                        }
+                    }
+                }
+                secondary_index = Some((any, by_alias));
+            }
+            let (any, by_alias) = secondary_index.as_ref().unwrap();
             let mut secondary: Vec<&URow> = Vec::new();
-            for r in &rows {
-                for (j, v) in r.values.iter().enumerate() {
-                    let Some(sv) = v.as_ref().filter(|s| !s.is_empty()) else {
-                        continue;
-                    };
-                    if j == r.key_pos || !field_eq(sv, want_field) {
-                        continue;
+            match want_node_key.as_deref() {
+                Some(wn) => {
+                    if let Some(indices) = by_alias
+                        .get(want_field_key.as_str())
+                        .and_then(|m| m.get(wn))
+                    {
+                        for &ri in indices {
+                            secondary.push(&rows[ri]);
+                        }
                     }
-                    let alias_j = node_alias(preds[j]);
-                    if want_node.map(|wn| !field_eq(wn, &alias_j)).unwrap_or(false) {
-                        continue;
+                }
+                None => {
+                    if let Some(indices) = any.get(want_field_key.as_str()) {
+                        for &ri in indices {
+                            secondary.push(&rows[ri]);
+                        }
                     }
-                    secondary.push(r);
-                    break;
                 }
             }
             primary = secondary;
@@ -3968,7 +4161,10 @@ fn compute_union_fields(
         match primary.len() {
             1 => {
                 let r = primary[0];
-                let Some(pf) = find_pred_field(fields_of[r.key_pos], &r.key_field) else {
+                let Some(pf) = lookup.field_maps[r.key_pos]
+                    .get(&r.key_field_key)
+                    .and_then(|&fi| fields_of[r.key_pos].get(fi))
+                else {
                     return (
                         None,
                         Some(Diag::spec(
@@ -3983,7 +4179,7 @@ fn compute_union_fields(
                 };
                 // two visible noncomputed fields resolving to the same
                 // canonical map key would read the same runtime column
-                if !used_keys.insert((r.key_alias.to_uppercase(), r.key_field.to_uppercase())) {
+                if !used_keys.insert((r.key_alias_key.clone(), r.key_field_key.clone())) {
                     return (
                         None,
                         Some(Diag::spec(
@@ -3996,10 +4192,18 @@ fn compute_union_fields(
                         )),
                     );
                 }
-                let origin = field_origin(pf, preds[r.key_pos]);
-                let pname = r.key_field.clone();
-                let kalias = r.key_alias.clone();
-                out.push(merge_declared(df, pf, &pname, Some(&kalias), origin));
+                let origin = field_origin(
+                    pf,
+                    preds[r.key_pos],
+                    Some(lookup.aliases[r.key_pos].as_str()),
+                );
+                out.push(merge_declared(
+                    df,
+                    pf,
+                    r.key_field.as_str(),
+                    Some(lookup.aliases[r.key_pos].as_str()),
+                    origin,
+                ));
             }
             0 => {
                 return (
@@ -4258,20 +4462,32 @@ fn simulate_select(
         .iter()
         .map(|f| clone_passthrough(f, pred))
         .collect();
-    let steps = sn
+    let empty_steps: &[Value] = &[];
+    let steps: &[Value] = sn
         .get("steps")
         .and_then(Value::as_array)
-        .cloned()
-        .unwrap_or_default();
+        .map(Vec::as_slice)
+        .unwrap_or(empty_steps);
     let mut step_hints: Vec<Option<Value>> = vec![None; steps.len()];
+    if steps.is_empty() {
+        // no evolution to prove: skip the name-list mirror entirely
+        return Ok(SimResult {
+            fields: work,
+            step_hints,
+            opaque_at: None,
+        });
+    }
+    // names mirror `work` across the whole simulation: `evolve_names` and
+    // `apply_step_mutation` apply the same name effects to the same step, so
+    // one carried list replaces the previous per-step rebuild from `work`.
+    let mut names: Vec<String> = work
+        .iter()
+        .enumerate()
+        .map(|(i, f)| field_name(f, i))
+        .collect();
     let mut opaque_at = None;
     for (si, s) in steps.iter().enumerate() {
         // names evolve first: collision detection + authoritative name set
-        let mut names: Vec<String> = work
-            .iter()
-            .enumerate()
-            .map(|(i, f)| field_name(f, i))
-            .collect();
         match evolve_names(&mut names, s) {
             Ok(true) => {}
             Ok(false) => {
@@ -4459,17 +4675,23 @@ fn name_multiset_eq(a: &[String], b: &[String]) -> bool {
     if a.len() != b.len() {
         return false;
     }
-    let mut remaining = b.to_vec();
-    'outer: for x in a {
-        for (i, y) in remaining.iter().enumerate() {
-            if field_eq(x, y) {
-                remaining.remove(i);
-                continue 'outer;
-            }
-        }
-        return false;
+    // Counts, not a set: folded-name multiplicity must match exactly. With
+    // equal lengths, matching every `a` entry consumes all `b` counts.
+    let mut counts: HashMap<String, usize> = HashMap::with_capacity(b.len());
+    for y in b {
+        *counts.entry(y.to_uppercase()).or_insert(0) += 1;
     }
-    remaining.is_empty()
+    for x in a {
+        let key = x.to_uppercase();
+        let Some(count) = counts.get_mut(&key) else {
+            return false;
+        };
+        if *count == 0 {
+            return false;
+        }
+        *count -= 1;
+    }
+    true
 }
 
 /// Select field computation: the sequential simulation provides lineage,
@@ -4519,11 +4741,11 @@ fn compute_select_fields(
                 )),
             );
         };
-        let steps = sn
+        let steps: &[Value] = sn
             .get("steps")
             .and_then(Value::as_array)
-            .cloned()
-            .unwrap_or_default();
+            .map(Vec::as_slice)
+            .unwrap_or(&[]);
         let mut fields: Vec<Value> = decl
             .iter()
             .map(|df| {
@@ -4534,7 +4756,7 @@ fn compute_select_fields(
                 }
             })
             .collect();
-        if let Err(e) = apply_escape_steps(d, &steps, &mut fields, 0) {
+        if let Err(e) = apply_escape_steps(d, steps, &mut fields, 0) {
             return (None, Some(e));
         }
         return (
@@ -4568,12 +4790,12 @@ fn compute_select_fields(
                     })
                     .collect();
                 let hints = res.step_hints;
-                let steps = sn
+                let steps: &[Value] = sn
                     .get("steps")
                     .and_then(Value::as_array)
-                    .cloned()
-                    .unwrap_or_default();
-                if let Err(e) = apply_escape_steps(d, &steps, &mut fields, oi + 1) {
+                    .map(Vec::as_slice)
+                    .unwrap_or(&[]);
+                if let Err(e) = apply_escape_steps(d, steps, &mut fields, oi + 1) {
                     return (None, Some(e));
                 }
                 return (
@@ -4606,18 +4828,22 @@ fn compute_select_fields(
                     )),
                 );
             }
+            // First folded-name index preserves the previous linear scan's
+            // first match; declared order still determines output order.
+            let mut sim_by_name: HashMap<String, usize> = HashMap::with_capacity(res.fields.len());
+            for (si, sf) in res.fields.iter().enumerate() {
+                if let Some(name) = sf.get("name").and_then(Value::as_str) {
+                    sim_by_name.entry(name.to_uppercase()).or_insert(si);
+                }
+            }
             // project each declaration onto its simulated field: declared
             // order + presentation keys, simulated
             // inputField/exp/original* enforced by name
             let mut out = Vec::with_capacity(decl.len());
             for df in decl {
                 let dn = df.get("name").and_then(Value::as_str).unwrap_or("");
-                if let Some(sf) = res.fields.iter().find(|sf| {
-                    sf.get("name")
-                        .and_then(Value::as_str)
-                        .map(|n| field_eq(n, dn))
-                        .unwrap_or(false)
-                }) {
+                if let Some(&si) = sim_by_name.get(&dn.to_uppercase()) {
+                    let sf = &res.fields[si];
                     let mut m = sf.as_object().cloned().unwrap_or_default();
                     if let Some(do_) = df.as_object() {
                         for (k, v) in do_ {
@@ -4646,11 +4872,11 @@ fn compute_select_fields(
         }
         None => {
             if let Some(si) = res.opaque_at {
-                let steps = sn
+                let steps: &[Value] = sn
                     .get("steps")
                     .and_then(Value::as_array)
-                    .cloned()
-                    .unwrap_or_default();
+                    .map(Vec::as_slice)
+                    .unwrap_or(&[]);
                 let ty = steps
                     .get(si)
                     .and_then(|s| s.get("type"))
@@ -4699,7 +4925,7 @@ fn fill_fileinput_identity(fields: &mut [Value]) {
     }
 }
 
-fn emit_typed_node(d: &NodeDesc) -> Result<Value, Diag> {
+fn emit_typed_node(d: &mut NodeDesc) -> Result<Value, Diag> {
     let sn = d.spec.unwrap();
     let ty = d.ty.as_deref().unwrap_or("");
     let mut body = Map::new();
@@ -4718,10 +4944,15 @@ fn emit_typed_node(d: &NodeDesc) -> Result<Value, Diag> {
         body.insert("inputNodes".into(), Value::Array(ids));
     }
     // fields partition: fields:[] is retained for known-empty outputs, but
-    // empty dimensions/measures lists are omitted entirely
-    if let Some(fields) = &d.out_fields {
-        let (dims, meas) = partition_fields(fields);
-        body.insert("fields".into(), Value::Array(fields.clone()));
+    // empty dimensions/measures lists are omitted entirely. The computed
+    // fields are moved into the wire body; partitions still need owned copies.
+    let mut fileinput_original_fields = None;
+    if let Some(fields) = d.out_fields.take() {
+        let (dims, meas) = partition_fields(&fields);
+        if sn.get("originalFields").is_none() && ty == "FileInput" {
+            fileinput_original_fields = Some(fields.clone());
+        }
+        body.insert("fields".into(), Value::Array(fields));
         if !dims.is_empty() {
             body.insert("dimensions".into(), Value::Array(dims));
         }
@@ -4731,11 +4962,9 @@ fn emit_typed_node(d: &NodeDesc) -> Result<Value, Diag> {
     }
     if let Some(of) = sn.get("originalFields") {
         body.insert("originalFields".into(), of.clone());
-    } else if ty == "FileInput" {
+    } else if let Some(fields) = fileinput_original_fields {
         // source nodes copy source fields into originalFields by default
-        if let Some(fields) = &d.out_fields {
-            body.insert("originalFields".into(), Value::Array(fields.clone()));
-        }
+        body.insert("originalFields".into(), Value::Array(fields));
     }
     if ty == "Select" {
         // steps: typed verbatim / rawStep verbatim; empty lists omitted.
@@ -4841,13 +5070,18 @@ fn is_default_output(d: &NodeDesc) -> bool {
     d.wire_key == "default" && d.ty.as_deref() == Some("Output")
 }
 
-fn default_output_partition(descs: &[NodeDesc], diags: &mut Vec<Diag>) -> (Vec<Value>, Vec<Value>) {
+fn default_output_partition(descs: &[NodeDesc]) -> (Vec<Value>, Vec<Value>, Option<Diag>) {
     for d in descs {
         if is_default_output(d) {
-            match &d.out_fields {
-                Some(fields) => return partition_fields(fields),
-                None => {
-                    diags.push(Diag::spec(
+            return match &d.out_fields {
+                Some(fields) => {
+                    let (dims, meas) = partition_fields(fields);
+                    (dims, meas, None)
+                }
+                None => (
+                    vec![],
+                    vec![],
+                    Some(Diag::spec(
                         if d.raw_body.is_some() {
                             format!("/nodes/{}/rawNode/fields", d.idx)
                         } else {
@@ -4855,13 +5089,45 @@ fn default_output_partition(descs: &[NodeDesc], diags: &mut Vec<Diag>) -> (Vec<V
                         },
                         "field.required",
                         "default Output fields are required to build the top-level partition",
+                    )),
+                ),
+            };
+        }
+    }
+    (vec![], vec![], None)
+}
+
+/// Extraction needs a physical column name per top field; the wire check
+/// flags it on /dimensions//measures — report it here on the spec side,
+/// routed to the default Output's fields.
+fn extract_dbfield_diags(spec: &Value, descs: &[NodeDesc]) -> Vec<Diag> {
+    let mut diags = Vec::new();
+    let extract = spec
+        .pointer("/properties/extractDataEnabled")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    if !extract {
+        return diags;
+    }
+    if let Some(d) = descs.iter().find(|d| is_default_output(d)) {
+        if let Some(fields) = &d.out_fields {
+            for (fi, f) in fields.iter().enumerate() {
+                let ok = f
+                    .get("dbfield")
+                    .and_then(Value::as_str)
+                    .map(|s| !s.trim().is_empty() && s.chars().all(|c| c.is_ascii()))
+                    .unwrap_or(false);
+                if !ok {
+                    diags.push(Diag::spec(
+                        format!("/nodes/{}/fields/{}/dbfield", d.idx, fi),
+                        "warn.extract.dbfield",
+                        "extractDataEnabled is set but this output field has no ASCII dbfield",
                     ));
-                    return (vec![], vec![]);
                 }
             }
         }
     }
-    (vec![], vec![])
+    diags
 }
 
 fn emit_properties(spec: &Value) -> Result<Value, Diag> {

@@ -1,0 +1,1091 @@
+{
+  "format": 1,
+  "version": "4.19.0",
+  "properties": {
+    "datasource": "defdw",
+    "extractDataEnabled": false
+  },
+  "nodes": [
+    {
+      "key": "src",
+      "type": "FileInput",
+      "alias": "src",
+      "config": {
+        "fileName": "deep.xlsx#S"
+      },
+      "fields": [
+        {
+          "name": "f0",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "f1",
+          "dataType": "C",
+          "isDimension": false
+        },
+        {
+          "name": "f2",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "f3",
+          "dataType": "C",
+          "isDimension": false
+        },
+        {
+          "name": "f4",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "f5",
+          "dataType": "C",
+          "isDimension": false
+        },
+        {
+          "name": "f6",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "f7",
+          "dataType": "C",
+          "isDimension": false
+        }
+      ]
+    },
+    {
+      "key": "s000",
+      "type": "Select",
+      "inputs": [
+        "src"
+      ],
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "f0"
+          ],
+          "filter": "[f0] != NULL"
+        }
+      ]
+    },
+    {
+      "key": "s001",
+      "type": "Select",
+      "inputs": [
+        "s000"
+      ],
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "f0"
+          ],
+          "filter": "[f0] != NULL"
+        }
+      ]
+    },
+    {
+      "key": "s002",
+      "type": "Select",
+      "inputs": [
+        "s001"
+      ],
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "f0"
+          ],
+          "filter": "[f0] != NULL"
+        }
+      ]
+    },
+    {
+      "key": "s003",
+      "type": "Select",
+      "inputs": [
+        "s002"
+      ],
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "f0"
+          ],
+          "filter": "[f0] != NULL"
+        }
+      ]
+    },
+    {
+      "key": "s004",
+      "type": "Select",
+      "inputs": [
+        "s003"
+      ],
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "f0"
+          ],
+          "filter": "[f0] != NULL"
+        }
+      ]
+    },
+    {
+      "key": "s005",
+      "type": "Select",
+      "inputs": [
+        "s004"
+      ],
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "f0"
+          ],
+          "filter": "[f0] != NULL"
+        }
+      ]
+    },
+    {
+      "key": "s006",
+      "type": "Select",
+      "inputs": [
+        "s005"
+      ],
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "f0"
+          ],
+          "filter": "[f0] != NULL"
+        }
+      ]
+    },
+    {
+      "key": "s007",
+      "type": "Select",
+      "inputs": [
+        "s006"
+      ],
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "f0"
+          ],
+          "filter": "[f0] != NULL"
+        }
+      ]
+    },
+    {
+      "key": "s008",
+      "type": "Select",
+      "inputs": [
+        "s007"
+      ],
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "f0"
+          ],
+          "filter": "[f0] != NULL"
+        }
+      ]
+    },
+    {
+      "key": "s009",
+      "type": "Select",
+      "inputs": [
+        "s008"
+      ],
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "f0"
+          ],
+          "filter": "[f0] != NULL"
+        }
+      ]
+    },
+    {
+      "key": "s010",
+      "type": "Select",
+      "inputs": [
+        "s009"
+      ],
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "f0"
+          ],
+          "filter": "[f0] != NULL"
+        }
+      ]
+    },
+    {
+      "key": "s011",
+      "type": "Select",
+      "inputs": [
+        "s010"
+      ],
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "f0"
+          ],
+          "filter": "[f0] != NULL"
+        }
+      ]
+    },
+    {
+      "key": "s012",
+      "type": "Select",
+      "inputs": [
+        "s011"
+      ],
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "f0"
+          ],
+          "filter": "[f0] != NULL"
+        }
+      ]
+    },
+    {
+      "key": "s013",
+      "type": "Select",
+      "inputs": [
+        "s012"
+      ],
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "f0"
+          ],
+          "filter": "[f0] != NULL"
+        }
+      ]
+    },
+    {
+      "key": "s014",
+      "type": "Select",
+      "inputs": [
+        "s013"
+      ],
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "f0"
+          ],
+          "filter": "[f0] != NULL"
+        }
+      ]
+    },
+    {
+      "key": "s015",
+      "type": "Select",
+      "inputs": [
+        "s014"
+      ],
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "f0"
+          ],
+          "filter": "[f0] != NULL"
+        }
+      ]
+    },
+    {
+      "key": "s016",
+      "type": "Select",
+      "inputs": [
+        "s015"
+      ],
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "f0"
+          ],
+          "filter": "[f0] != NULL"
+        }
+      ]
+    },
+    {
+      "key": "s017",
+      "type": "Select",
+      "inputs": [
+        "s016"
+      ],
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "f0"
+          ],
+          "filter": "[f0] != NULL"
+        }
+      ]
+    },
+    {
+      "key": "s018",
+      "type": "Select",
+      "inputs": [
+        "s017"
+      ],
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "f0"
+          ],
+          "filter": "[f0] != NULL"
+        }
+      ]
+    },
+    {
+      "key": "s019",
+      "type": "Select",
+      "inputs": [
+        "s018"
+      ],
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "f0"
+          ],
+          "filter": "[f0] != NULL"
+        }
+      ]
+    },
+    {
+      "key": "s020",
+      "type": "Select",
+      "inputs": [
+        "s019"
+      ],
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "f0"
+          ],
+          "filter": "[f0] != NULL"
+        }
+      ]
+    },
+    {
+      "key": "s021",
+      "type": "Select",
+      "inputs": [
+        "s020"
+      ],
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "f0"
+          ],
+          "filter": "[f0] != NULL"
+        }
+      ]
+    },
+    {
+      "key": "s022",
+      "type": "Select",
+      "inputs": [
+        "s021"
+      ],
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "f0"
+          ],
+          "filter": "[f0] != NULL"
+        }
+      ]
+    },
+    {
+      "key": "s023",
+      "type": "Select",
+      "inputs": [
+        "s022"
+      ],
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "f0"
+          ],
+          "filter": "[f0] != NULL"
+        }
+      ]
+    },
+    {
+      "key": "s024",
+      "type": "Select",
+      "inputs": [
+        "s023"
+      ],
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "f0"
+          ],
+          "filter": "[f0] != NULL"
+        }
+      ]
+    },
+    {
+      "key": "s025",
+      "type": "Select",
+      "inputs": [
+        "s024"
+      ],
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "f0"
+          ],
+          "filter": "[f0] != NULL"
+        }
+      ]
+    },
+    {
+      "key": "s026",
+      "type": "Select",
+      "inputs": [
+        "s025"
+      ],
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "f0"
+          ],
+          "filter": "[f0] != NULL"
+        }
+      ]
+    },
+    {
+      "key": "s027",
+      "type": "Select",
+      "inputs": [
+        "s026"
+      ],
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "f0"
+          ],
+          "filter": "[f0] != NULL"
+        }
+      ]
+    },
+    {
+      "key": "s028",
+      "type": "Select",
+      "inputs": [
+        "s027"
+      ],
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "f0"
+          ],
+          "filter": "[f0] != NULL"
+        }
+      ]
+    },
+    {
+      "key": "s029",
+      "type": "Select",
+      "inputs": [
+        "s028"
+      ],
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "f0"
+          ],
+          "filter": "[f0] != NULL"
+        }
+      ]
+    },
+    {
+      "key": "s030",
+      "type": "Select",
+      "inputs": [
+        "s029"
+      ],
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "f0"
+          ],
+          "filter": "[f0] != NULL"
+        }
+      ]
+    },
+    {
+      "key": "s031",
+      "type": "Select",
+      "inputs": [
+        "s030"
+      ],
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "f0"
+          ],
+          "filter": "[f0] != NULL"
+        }
+      ]
+    },
+    {
+      "key": "s032",
+      "type": "Select",
+      "inputs": [
+        "s031"
+      ],
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "f0"
+          ],
+          "filter": "[f0] != NULL"
+        }
+      ]
+    },
+    {
+      "key": "s033",
+      "type": "Select",
+      "inputs": [
+        "s032"
+      ],
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "f0"
+          ],
+          "filter": "[f0] != NULL"
+        }
+      ]
+    },
+    {
+      "key": "s034",
+      "type": "Select",
+      "inputs": [
+        "s033"
+      ],
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "f0"
+          ],
+          "filter": "[f0] != NULL"
+        }
+      ]
+    },
+    {
+      "key": "s035",
+      "type": "Select",
+      "inputs": [
+        "s034"
+      ],
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "f0"
+          ],
+          "filter": "[f0] != NULL"
+        }
+      ]
+    },
+    {
+      "key": "s036",
+      "type": "Select",
+      "inputs": [
+        "s035"
+      ],
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "f0"
+          ],
+          "filter": "[f0] != NULL"
+        }
+      ]
+    },
+    {
+      "key": "s037",
+      "type": "Select",
+      "inputs": [
+        "s036"
+      ],
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "f0"
+          ],
+          "filter": "[f0] != NULL"
+        }
+      ]
+    },
+    {
+      "key": "s038",
+      "type": "Select",
+      "inputs": [
+        "s037"
+      ],
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "f0"
+          ],
+          "filter": "[f0] != NULL"
+        }
+      ]
+    },
+    {
+      "key": "s039",
+      "type": "Select",
+      "inputs": [
+        "s038"
+      ],
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "f0"
+          ],
+          "filter": "[f0] != NULL"
+        }
+      ]
+    },
+    {
+      "key": "s040",
+      "type": "Select",
+      "inputs": [
+        "s039"
+      ],
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "f0"
+          ],
+          "filter": "[f0] != NULL"
+        }
+      ]
+    },
+    {
+      "key": "s041",
+      "type": "Select",
+      "inputs": [
+        "s040"
+      ],
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "f0"
+          ],
+          "filter": "[f0] != NULL"
+        }
+      ]
+    },
+    {
+      "key": "s042",
+      "type": "Select",
+      "inputs": [
+        "s041"
+      ],
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "f0"
+          ],
+          "filter": "[f0] != NULL"
+        }
+      ]
+    },
+    {
+      "key": "s043",
+      "type": "Select",
+      "inputs": [
+        "s042"
+      ],
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "f0"
+          ],
+          "filter": "[f0] != NULL"
+        }
+      ]
+    },
+    {
+      "key": "s044",
+      "type": "Select",
+      "inputs": [
+        "s043"
+      ],
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "f0"
+          ],
+          "filter": "[f0] != NULL"
+        }
+      ]
+    },
+    {
+      "key": "s045",
+      "type": "Select",
+      "inputs": [
+        "s044"
+      ],
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "f0"
+          ],
+          "filter": "[f0] != NULL"
+        }
+      ]
+    },
+    {
+      "key": "s046",
+      "type": "Select",
+      "inputs": [
+        "s045"
+      ],
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "f0"
+          ],
+          "filter": "[f0] != NULL"
+        }
+      ]
+    },
+    {
+      "key": "s047",
+      "type": "Select",
+      "inputs": [
+        "s046"
+      ],
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "f0"
+          ],
+          "filter": "[f0] != NULL"
+        }
+      ]
+    },
+    {
+      "key": "s048",
+      "type": "Select",
+      "inputs": [
+        "s047"
+      ],
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "f0"
+          ],
+          "filter": "[f0] != NULL"
+        }
+      ]
+    },
+    {
+      "key": "s049",
+      "type": "Select",
+      "inputs": [
+        "s048"
+      ],
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "f0"
+          ],
+          "filter": "[f0] != NULL"
+        }
+      ]
+    },
+    {
+      "key": "s050",
+      "type": "Select",
+      "inputs": [
+        "s049"
+      ],
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "f0"
+          ],
+          "filter": "[f0] != NULL"
+        }
+      ]
+    },
+    {
+      "key": "s051",
+      "type": "Select",
+      "inputs": [
+        "s050"
+      ],
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "f0"
+          ],
+          "filter": "[f0] != NULL"
+        }
+      ]
+    },
+    {
+      "key": "s052",
+      "type": "Select",
+      "inputs": [
+        "s051"
+      ],
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "f0"
+          ],
+          "filter": "[f0] != NULL"
+        }
+      ]
+    },
+    {
+      "key": "s053",
+      "type": "Select",
+      "inputs": [
+        "s052"
+      ],
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "f0"
+          ],
+          "filter": "[f0] != NULL"
+        }
+      ]
+    },
+    {
+      "key": "s054",
+      "type": "Select",
+      "inputs": [
+        "s053"
+      ],
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "f0"
+          ],
+          "filter": "[f0] != NULL"
+        }
+      ]
+    },
+    {
+      "key": "s055",
+      "type": "Select",
+      "inputs": [
+        "s054"
+      ],
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "f0"
+          ],
+          "filter": "[f0] != NULL"
+        }
+      ]
+    },
+    {
+      "key": "s056",
+      "type": "Select",
+      "inputs": [
+        "s055"
+      ],
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "f0"
+          ],
+          "filter": "[f0] != NULL"
+        }
+      ]
+    },
+    {
+      "key": "s057",
+      "type": "Select",
+      "inputs": [
+        "s056"
+      ],
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "f0"
+          ],
+          "filter": "[f0] != NULL"
+        }
+      ]
+    },
+    {
+      "key": "s058",
+      "type": "Select",
+      "inputs": [
+        "s057"
+      ],
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "f0"
+          ],
+          "filter": "[f0] != NULL"
+        }
+      ]
+    },
+    {
+      "key": "s059",
+      "type": "Select",
+      "inputs": [
+        "s058"
+      ],
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "f0"
+          ],
+          "filter": "[f0] != NULL"
+        }
+      ]
+    },
+    {
+      "key": "s060",
+      "type": "Select",
+      "inputs": [
+        "s059"
+      ],
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "f0"
+          ],
+          "filter": "[f0] != NULL"
+        }
+      ]
+    },
+    {
+      "key": "s061",
+      "type": "Select",
+      "inputs": [
+        "s060"
+      ],
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "f0"
+          ],
+          "filter": "[f0] != NULL"
+        }
+      ]
+    },
+    {
+      "key": "s062",
+      "type": "Select",
+      "inputs": [
+        "s061"
+      ],
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "f0"
+          ],
+          "filter": "[f0] != NULL"
+        }
+      ]
+    },
+    {
+      "key": "s063",
+      "type": "Select",
+      "inputs": [
+        "s062"
+      ],
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "f0"
+          ],
+          "filter": "[f0] != NULL"
+        }
+      ]
+    },
+    {
+      "key": "out",
+      "type": "Output",
+      "inputs": [
+        "s063"
+      ]
+    }
+  ]
+}

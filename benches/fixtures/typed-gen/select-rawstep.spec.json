@@ -1,0 +1,189 @@
+{
+  "format": 1,
+  "version": "4.19.0",
+  "properties": {
+    "datasource": "defdw",
+    "extractDataEnabled": false
+  },
+  "nodes": [
+    {
+      "key": "src",
+      "type": "FileInput",
+      "alias": "src",
+      "config": {
+        "fileName": "rawstep.xlsx#S"
+      },
+      "fields": [
+        {
+          "name": "dim_0",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "meas_0",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_1",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "note",
+          "dataType": "C",
+          "isDimension": true
+        }
+      ]
+    },
+    {
+      "key": "s_raw_mid",
+      "type": "Select",
+      "inputs": [
+        "src"
+      ],
+      "fields": [
+        {
+          "name": "dim_0",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "amount_0",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_1",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "calc_y",
+          "dataType": "N",
+          "isDimension": false
+        }
+      ],
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "dim_0"
+          ],
+          "filter": "[dim_0] != NULL"
+        },
+        {
+          "type": "Refactor",
+          "fields": [
+            "meas_0"
+          ],
+          "refactor": {
+            "rename": "amount_0"
+          }
+        },
+        {
+          "rawStep": {
+            "type": "SplitField",
+            "fields": [
+              "note"
+            ]
+          }
+        },
+        {
+          "type": "AddField",
+          "fields": [
+            "calc_y"
+          ],
+          "addField": {
+            "name": "calc_y",
+            "dataType": "N",
+            "isDimension": false,
+            "exp": "[amount_0]"
+          }
+        },
+        {
+          "type": "TransformToCalculatedField",
+          "fields": [
+            "calc_y"
+          ],
+          "transformFieldInfo": {
+            "exp": "[amount_0] * 2",
+            "dataType": "N"
+          }
+        }
+      ]
+    },
+    {
+      "key": "s_raw_first",
+      "type": "Select",
+      "inputs": [
+        "s_raw_mid"
+      ],
+      "fields": [
+        {
+          "name": "dim_0",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "amount_0",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "measure_1",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "calc_y",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "total_x",
+          "dataType": "N",
+          "isDimension": false
+        }
+      ],
+      "steps": [
+        {
+          "rawStep": {
+            "type": "SplitField",
+            "fields": [
+              "meas_1"
+            ]
+          }
+        },
+        {
+          "type": "AddField",
+          "fields": [
+            "total_x"
+          ],
+          "addField": {
+            "name": "total_x",
+            "dataType": "N",
+            "isDimension": false,
+            "exp": "[amount_0]"
+          }
+        },
+        {
+          "type": "Refactor",
+          "fields": [
+            "meas_1"
+          ],
+          "refactor": {
+            "rename": "measure_1"
+          }
+        }
+      ]
+    },
+    {
+      "key": "out",
+      "type": "Output",
+      "inputs": [
+        "s_raw_first"
+      ]
+    }
+  ]
+}

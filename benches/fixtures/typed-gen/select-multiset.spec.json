@@ -1,0 +1,2596 @@
+{
+  "format": 1,
+  "version": "4.19.0",
+  "properties": {
+    "datasource": "defdw",
+    "extractDataEnabled": false
+  },
+  "nodes": [
+    {
+      "key": "src",
+      "type": "FileInput",
+      "alias": "src",
+      "config": {
+        "fileName": "multiset.xlsx#S"
+      },
+      "fields": [
+        {
+          "name": "m000",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m001",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m002",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m003",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m004",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m005",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m006",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m007",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m008",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m009",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m010",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m011",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m012",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m013",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m014",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m015",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m016",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m017",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m018",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m019",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m020",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m021",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m022",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m023",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m024",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m025",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m026",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m027",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m028",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m029",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m030",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m031",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m032",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m033",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m034",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m035",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m036",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m037",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m038",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m039",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m040",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m041",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m042",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m043",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m044",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m045",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m046",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m047",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m048",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m049",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m050",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m051",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m052",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m053",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m054",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m055",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m056",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m057",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m058",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m059",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m060",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m061",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m062",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m063",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m064",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m065",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m066",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m067",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m068",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m069",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m070",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m071",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m072",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m073",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m074",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m075",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m076",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m077",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m078",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m079",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m080",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m081",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m082",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m083",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m084",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m085",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m086",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m087",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m088",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m089",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m090",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m091",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m092",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m093",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m094",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m095",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m096",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m097",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m098",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m099",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m100",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m101",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m102",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m103",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m104",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m105",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m106",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m107",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m108",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m109",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m110",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m111",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m112",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m113",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m114",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m115",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m116",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m117",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m118",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m119",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m120",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m121",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m122",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m123",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m124",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m125",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m126",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m127",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m128",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m129",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m130",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m131",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m132",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m133",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m134",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m135",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m136",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m137",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m138",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m139",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m140",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m141",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m142",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m143",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m144",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m145",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m146",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m147",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m148",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m149",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m150",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m151",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m152",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m153",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m154",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m155",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m156",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m157",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m158",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m159",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m160",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m161",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m162",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m163",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m164",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m165",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m166",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m167",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m168",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m169",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m170",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m171",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m172",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m173",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m174",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m175",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m176",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m177",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m178",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m179",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m180",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m181",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m182",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m183",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m184",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m185",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m186",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m187",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m188",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m189",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m190",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m191",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m192",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m193",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m194",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m195",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m196",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m197",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m198",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m199",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m200",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m201",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m202",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m203",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m204",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m205",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m206",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m207",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m208",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m209",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m210",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m211",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m212",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m213",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m214",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m215",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m216",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m217",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m218",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m219",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m220",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m221",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m222",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m223",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m224",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m225",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m226",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m227",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m228",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m229",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m230",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m231",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m232",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m233",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m234",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m235",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m236",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m237",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m238",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m239",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m240",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m241",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m242",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m243",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m244",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m245",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m246",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m247",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m248",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m249",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m250",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m251",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m252",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "Straße",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "Ångström",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "中文",
+          "dataType": "C",
+          "isDimension": true
+        }
+      ]
+    },
+    {
+      "key": "sel",
+      "type": "Select",
+      "inputs": [
+        "src"
+      ],
+      "fields": [
+        {
+          "name": "中文",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "ångström",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "STRASSE",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m252",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M251",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m250",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M249",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m248",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M247",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m246",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M245",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m244",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M243",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m242",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M241",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m240",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M239",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m238",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M237",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m236",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M235",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m234",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M233",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m232",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M231",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m230",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M229",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m228",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M227",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m226",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M225",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m224",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M223",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m222",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M221",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m220",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M219",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m218",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M217",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m216",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M215",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m214",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M213",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m212",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M211",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m210",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M209",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m208",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M207",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m206",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M205",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m204",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M203",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m202",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M201",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m200",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M199",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m198",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M197",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m196",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M195",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m194",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M193",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m192",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M191",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m190",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M189",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m188",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M187",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m186",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M185",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m184",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M183",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m182",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M181",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m180",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M179",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m178",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M177",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m176",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M175",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m174",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M173",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m172",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M171",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m170",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M169",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m168",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M167",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m166",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M165",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m164",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M163",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m162",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M161",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m160",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M159",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m158",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M157",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m156",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M155",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m154",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M153",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m152",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M151",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m150",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M149",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m148",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M147",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m146",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M145",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m144",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M143",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m142",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M141",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m140",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M139",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m138",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M137",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m136",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M135",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m134",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M133",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m132",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M131",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m130",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M129",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m128",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M127",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m126",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M125",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m124",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M123",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m122",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M121",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m120",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M119",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m118",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M117",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m116",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M115",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m114",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M113",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m112",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M111",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m110",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M109",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m108",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M107",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m106",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M105",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m104",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M103",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m102",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M101",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m100",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M099",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m098",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M097",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m096",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M095",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m094",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M093",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m092",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M091",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m090",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M089",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m088",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M087",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m086",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M085",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m084",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M083",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m082",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M081",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m080",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M079",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m078",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M077",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m076",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M075",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m074",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M073",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m072",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M071",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m070",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M069",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m068",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M067",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m066",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M065",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m064",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M063",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m062",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M061",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m060",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M059",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m058",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M057",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m056",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M055",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m054",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M053",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m052",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M051",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m050",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M049",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m048",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M047",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m046",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M045",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m044",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M043",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m042",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M041",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m040",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M039",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m038",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M037",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m036",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M035",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m034",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M033",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m032",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M031",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m030",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M029",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m028",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M027",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m026",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M025",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m024",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M023",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m022",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M021",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m020",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M019",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m018",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M017",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m016",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M015",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m014",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M013",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m012",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M011",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m010",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M009",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m008",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M007",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m006",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M005",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m004",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M003",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m002",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "M001",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "m000",
+          "dataType": "C",
+          "isDimension": true
+        }
+      ]
+    },
+    {
+      "key": "out",
+      "type": "Output",
+      "inputs": [
+        "sel"
+      ]
+    }
+  ]
+}

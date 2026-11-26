@@ -1,0 +1,78 @@
+{
+  "schema": "tblgen-g2-verify/v1",
+  "comparison": "byte-identical generate_with_diagnostics payload {wire,diags} for base and candidate",
+  "cases": [
+    {
+      "case": "deep",
+      "wire_present": true,
+      "diag_count": 0,
+      "hard_diag_count": 0
+    },
+    {
+      "case": "error-dense",
+      "wire_present": false,
+      "diag_count": 192,
+      "hard_diag_count": 192
+    },
+    {
+      "case": "experiment",
+      "wire_present": true,
+      "diag_count": 10,
+      "hard_diag_count": 0
+    },
+    {
+      "case": "fan-in",
+      "wire_present": true,
+      "diag_count": 0,
+      "hard_diag_count": 0
+    },
+    {
+      "case": "fan-out",
+      "wire_present": true,
+      "diag_count": 0,
+      "hard_diag_count": 0
+    },
+    {
+      "case": "select-explicit-small",
+      "wire_present": true,
+      "diag_count": 0,
+      "hard_diag_count": 0
+    },
+    {
+      "case": "select-heavy",
+      "wire_present": true,
+      "diag_count": 0,
+      "hard_diag_count": 0
+    },
+    {
+      "case": "select-multiset",
+      "wire_present": true,
+      "diag_count": 0,
+      "hard_diag_count": 0
+    },
+    {
+      "case": "select-rawstep",
+      "wire_present": true,
+      "diag_count": 0,
+      "hard_diag_count": 0
+    },
+    {
+      "case": "small",
+      "wire_present": true,
+      "diag_count": 0,
+      "hard_diag_count": 0
+    },
+    {
+      "case": "union-map",
+      "wire_present": true,
+      "diag_count": 0,
+      "hard_diag_count": 0
+    },
+    {
+      "case": "wide",
+      "wire_present": true,
+      "diag_count": 0,
+      "hard_diag_count": 0
+    }
+  ]
+}
