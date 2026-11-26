@@ -5,7 +5,8 @@
 //! under `<name>.app/`, which is not a project). References between models are
 //! resolved with the rules of `MetaUtils#resolveReferencePath`.
 
-use std::path::{Path, PathBuf};
+use std::io;
+use std::path::{Component, Path, PathBuf};
 
 /// A file located inside a project directory.
 #[derive(Debug, Clone)]
@@ -24,8 +25,94 @@ pub fn locate(file: &Path) -> Option<Located> {
 
 /// Like `locate`, for a file that may not exist yet (its directory must).
 pub fn locate_new(file: &Path) -> Option<Located> {
-    let dir = file.parent().filter(|d| !d.as_os_str().is_empty()).unwrap_or(Path::new("."));
-    locate_abs(std::fs::canonicalize(dir).ok()?.join(file.file_name()?))
+    let abs = normalized_new_path(file).ok()?;
+    locate_abs(abs.clone()).or_else(|| prospective_locate(&abs))
+}
+
+/// Locate a project for a path whose directories do not exist yet: the
+/// nearest lexical ancestor literally named `data` with a non-`.app`
+/// parent is treated as the prospective `<project>/data` root, matching
+/// what `locate_abs` would find after the directories are created.
+fn prospective_locate(abs: &Path) -> Option<Located> {
+    for anc in abs.ancestors() {
+        if anc.file_name()?.to_string_lossy() != "data" {
+            continue;
+        }
+        let root = anc.parent()?;
+        let name = root.file_name()?.to_string_lossy();
+        if name.ends_with(".app") || name.is_empty() {
+            continue;
+        }
+        let rel = abs.strip_prefix(root).ok()?;
+        if rel.as_os_str().is_empty() {
+            continue;
+        }
+        let rel: Vec<String> = rel
+            .iter()
+            .map(|s| s.to_string_lossy().into_owned())
+            .collect();
+        return Some(Located {
+            projects_root: root.parent()?.to_path_buf(),
+            platform_path: format!("/{}/{}", name, rel.join("/")),
+        });
+    }
+    None
+}
+
+/// Normalize a not-yet-existing write destination to an absolute path:
+/// canonicalize every existing component (resolving symlink and case
+/// aliases in parents), fold `.`/`..` across components that may not exist
+/// yet, preserve non-UTF8 segments, and fail when an existing component is
+/// a dangling symlink or otherwise unresolvable. The result is safe to
+/// compare for duplicates and to create exclusively.
+pub fn normalized_new_path(path: &Path) -> io::Result<PathBuf> {
+    let abs = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        std::env::current_dir()?.join(path)
+    };
+    let mut resolved = PathBuf::new();
+    // literal tail of not-yet-created components (no symlinks inside)
+    let mut tail: Vec<std::ffi::OsString> = Vec::new();
+    for comp in abs.components() {
+        match comp {
+            Component::Prefix(_) | Component::RootDir => resolved.push(comp.as_os_str()),
+            Component::CurDir => {}
+            Component::ParentDir => {
+                if tail.pop().is_none() {
+                    // `resolved` is canonical: popping its last component is
+                    // the true parent (root pop is a no-op)
+                    resolved.pop();
+                }
+            }
+            Component::Normal(seg) => {
+                if !tail.is_empty() {
+                    tail.push(seg.to_os_string());
+                    continue;
+                }
+                let cand = resolved.join(seg);
+                match std::fs::canonicalize(&cand) {
+                    Ok(c) => resolved = c,
+                    Err(_) => {
+                        // something exists here but cannot be resolved
+                        // (dangling symlink, unreadable parent): hard error
+                        if std::fs::symlink_metadata(&cand).is_ok() {
+                            return Err(io::Error::new(
+                                io::ErrorKind::NotFound,
+                                format!("cannot resolve path component {}", cand.display()),
+                            ));
+                        }
+                        tail.push(seg.to_os_string());
+                    }
+                }
+            }
+        }
+    }
+    let mut out = resolved;
+    for seg in tail {
+        out.push(seg);
+    }
+    Ok(out)
 }
 
 fn locate_abs(abs: PathBuf) -> Option<Located> {
@@ -140,5 +227,30 @@ mod tests {
         assert_eq!(resolve_reference(from, "/Q/data/tables/y.tbl").unwrap(), "/Q/data/tables/y.tbl");
         let in_app = "/P/app/s.app/data/x.tbl";
         assert_eq!(resolve_reference(in_app, "$TAPP:/data/y.tbl").unwrap(), "/P/app/s.app/data/y.tbl");
+    }
+
+    #[test]
+    fn normalized_new_path_folds_and_resolves() {
+        let dir = std::env::temp_dir().join(format!("tblgen-proj-{}", std::process::id()));
+        let real = dir.join("real");
+        std::fs::create_dir_all(&real).unwrap();
+        // ./ and .. spellings of the same not-yet-created target normalize equal
+        let a = normalized_new_path(&dir.join("real/../real/x.tbl")).unwrap();
+        let b = normalized_new_path(&dir.join("./real/x.tbl")).unwrap();
+        assert_eq!(a, b);
+        // a symlinked parent resolves to the canonical target
+        #[cfg(unix)]
+        {
+            let link = dir.join("link");
+            std::os::unix::fs::symlink(&real, &link).unwrap();
+            let c = normalized_new_path(&link.join("y.tbl")).unwrap();
+            let real_c = std::fs::canonicalize(&real).unwrap();
+            assert_eq!(c, real_c.join("y.tbl"));
+            // dangling symlink component -> hard error
+            let dangling = dir.join("dangling");
+            std::os::unix::fs::symlink(dir.join("missing"), &dangling).unwrap();
+            assert!(normalized_new_path(&dangling.join("z.tbl")).is_err());
+        }
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

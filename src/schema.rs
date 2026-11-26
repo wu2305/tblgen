@@ -82,6 +82,22 @@ fn field_def() -> Value {
     obj(Value::Object(fp), &["name", "dataType", "isDimension"])
 }
 
+/// Join `fields` entries are name-only references (I-16): a closed field
+/// object requiring just `name` — dataType/isDimension are NOT required
+/// (they are resolved from the predecessor at build time).
+fn join_field_def() -> Value {
+    let mut fp = Map::new();
+    for k in FIELD_KEYS {
+        let v = match *k {
+            "isDimension" | "extractable" | "hidden" => bool_s(),
+            "length" | "decimal" => num_s(),
+            _ => str_s(),
+        };
+        fp.insert((*k).to_string(), v);
+    }
+    obj(Value::Object(fp), &["name"])
+}
+
 /// ColToRow valuesArray cell that is a field reference (not a constant).
 fn col_to_row_cell_def() -> Value {
     let mut fp = Map::new();
@@ -225,15 +241,19 @@ fn config_payload_defs() -> Value {
     let mut d = Map::new();
 
     // joinConditions[]: {leftTable,rightTable,joinType?,exp?,clauses?[...]}
-    let clause = obj(
+    let mut clause = obj(
         props(&[
             ("leftExp", str_s()),
             ("rightExp", str_s()),
             ("operator", str_s()),
             ("exp", str_s()),
         ]),
-        &["leftExp", "rightExp"],
+        &[],
     );
+    clause["anyOf"] = json!([
+        {"required": ["exp"], "properties": {"exp": {"pattern": "\\S"}}},
+        {"required": ["leftExp", "rightExp"]}
+    ]);
     let cond = obj(
         props(&[
             ("leftTable", str_s()),
@@ -277,10 +297,32 @@ fn config_payload_defs() -> Value {
         ),
     );
 
+    // groupFields: [string]
+    d.insert("groupFields".into(), strarr());
+
     // groupFieldsMap: {string:string}
     d.insert(
         "groupFieldsMap".into(),
         json!({"type": "object", "additionalProperties": str_s()}),
+    );
+
+    // filter (Agg condition): {matchAll?,enabled?,clauses?:[object]}
+    d.insert(
+        "filter".into(),
+        obj(
+            props(&[
+                ("matchAll", bool_s()),
+                ("enabled", bool_s()),
+                ("clauses", json!({"type": "array", "items": any_obj()})),
+            ]),
+            &[],
+        ),
+    );
+
+    // incrementRange (DbOutput): clause objects with arbitrary loader keys
+    d.insert(
+        "incrementRange".into(),
+        json!({"type": "array", "items": any_obj()}),
     );
 
     // distinctSorts[]: {exp,type}
@@ -423,9 +465,14 @@ fn node_typed_schema(ty: &str) -> Value {
     np.insert("alias".into(), str_s());
     np.insert("id".into(), str_s());
     np.insert("inputs".into(), json!({"type": "array", "items": str_s()}));
+    let field_items = if ty == "Join" {
+        join_field_def()
+    } else {
+        field_ref_schema()
+    };
     np.insert(
         "fields".into(),
-        json!({"type": "array", "items": field_ref_schema()}),
+        json!({"type": "array", "items": field_items}),
     );
     np.insert(
         "originalFields".into(),
@@ -703,7 +750,13 @@ fn node_examples() -> Vec<Value> {
                         "operator": "=", "exp": "[left].[k] = [right].[k]",
                     }],
                 }]},
-                "fields": [fld("k", "C", true), fld("v", "N", false), fld("w", "N", false)],
+                "fields": [
+                    // "k" exists on both inputs: name it via inputNode;
+                    // "v"/"w" are unique across inputs and resolve by name
+                    json!({"name": "k", "dataType": "C", "isDimension": true, "inputNode": "left"}),
+                    fld("v", "N", false),
+                    fld("w", "N", false),
+                ],
             }),
             output_node("out", &["j"]),
         ]),
@@ -719,7 +772,12 @@ fn node_examples() -> Vec<Value> {
                 "key": "u", "type": "Union", "alias": "u", "inputs": ["a", "b"],
                 "config": {
                     "unionType": "UnionAll",
-                    "unionMapArray": [{"visible": true, "values": ["property", "m01"]}],
+                    // one visible row per declared output field; identical
+                    // input schemas map each column to the same-named field
+                    "unionMapArray": [
+                        {"visible": true, "values": ["property", "property"]},
+                        {"visible": true, "values": ["m01", "m01"]},
+                    ],
                 },
                 "fields": [fld("property", "C", true), fld("m01", "N", false)],
             }),
@@ -1081,10 +1139,18 @@ fn step_examples() -> Vec<Value> {
     add(
         "typed",
         "TransformToCalculatedField",
-        step_spec(
-            json!({"type": "TransformToCalculatedField", "fields": ["m01"], "transformFieldInfo": {"exp": "[m01] * 2", "dataType": "N"}}),
-            true,
-        ),
+        // names are preserved by the step, so explicit fields must use the
+        // real source names — not the opaque-shape x_dim/x_meas placeholders
+        wrap(vec![
+            fileinput("src"),
+            select_node(
+                "sel",
+                "src",
+                json!([{"type": "TransformToCalculatedField", "fields": ["m01"], "transformFieldInfo": {"exp": "[m01] * 2", "dataType": "N"}}]),
+                Some(src_fields()),
+            ),
+            output_node("out", &["sel"]),
+        ]),
     );
 
     // ---- rawOnly step examples (6 unsupported) ----
@@ -1148,7 +1214,12 @@ fn examples() -> Value {
     let archive_spec = json!({
         "format": 1,
         "archive": {
-            "top": {"properties": {"modelDataType": "DataFlow"}},
+            "top": {
+                "properties": {"modelDataType": "DataFlow"},
+                // top-level partition mirrors the default Output's fields
+                "dimensions": [fld("property", "C", true)],
+                "measures": [fld("m01", "N", false), fld("m02", "N", false)],
+            },
             "flow": {},
             "nodes": [
                 {"id": "n1", "body": {

@@ -1,0 +1,194 @@
+{
+  "dataFlow": {
+    "nodes": {
+      "default": {
+        "alias": "out",
+        "dimensions": [
+          {
+            "dataType": "C",
+            "inputField": "ID",
+            "inputNode": "j",
+            "isDimension": true,
+            "name": "ID",
+            "originalField": "ID",
+            "originalNode": "j"
+          }
+        ],
+        "fields": [
+          {
+            "dataType": "C",
+            "inputField": "ID",
+            "inputNode": "j",
+            "isDimension": true,
+            "name": "ID",
+            "originalField": "ID",
+            "originalNode": "j"
+          }
+        ],
+        "id": "default",
+        "inputNodes": [
+          "j"
+        ],
+        "measures": [],
+        "type": "Output"
+      },
+      "j": {
+        "alias": "j",
+        "dimensions": [
+          {
+            "dataType": "C",
+            "inputField": "ID",
+            "inputNode": "left",
+            "isDimension": true,
+            "name": "ID"
+          }
+        ],
+        "fields": [
+          {
+            "dataType": "C",
+            "inputField": "ID",
+            "inputNode": "left",
+            "isDimension": true,
+            "name": "ID"
+          }
+        ],
+        "id": "j",
+        "inputNodes": [
+          "l",
+          "r"
+        ],
+        "joinConditions": [
+          {
+            "clauses": [
+              {
+                "leftExp": "[l].[ID]",
+                "operator": "=",
+                "rightExp": "[r].[ID]"
+              }
+            ],
+            "joinType": "LeftJoin",
+            "leftTable": "l",
+            "rightTable": "r"
+          }
+        ],
+        "measures": [],
+        "type": "Join"
+      },
+      "l": {
+        "alias": "left",
+        "dimensions": [
+          {
+            "dataType": "C",
+            "inputField": "ID",
+            "isDimension": true,
+            "name": "ID"
+          },
+          {
+            "dataType": "C",
+            "inputField": "SKU",
+            "isDimension": true,
+            "name": "SKU"
+          }
+        ],
+        "fields": [
+          {
+            "dataType": "C",
+            "inputField": "ID",
+            "isDimension": true,
+            "name": "ID"
+          },
+          {
+            "dataType": "C",
+            "inputField": "SKU",
+            "isDimension": true,
+            "name": "SKU"
+          }
+        ],
+        "fileName": "d.xlsx#S",
+        "id": "l",
+        "measures": [],
+        "originalFields": [
+          {
+            "dataType": "C",
+            "inputField": "ID",
+            "isDimension": true,
+            "name": "ID"
+          },
+          {
+            "dataType": "C",
+            "inputField": "SKU",
+            "isDimension": true,
+            "name": "SKU"
+          }
+        ],
+        "type": "FileInput"
+      },
+      "r": {
+        "alias": "right",
+        "dimensions": [
+          {
+            "dataType": "C",
+            "inputField": "ID",
+            "isDimension": true,
+            "name": "ID"
+          },
+          {
+            "dataType": "C",
+            "inputField": "SKU",
+            "isDimension": true,
+            "name": "SKU"
+          }
+        ],
+        "fields": [
+          {
+            "dataType": "C",
+            "inputField": "ID",
+            "isDimension": true,
+            "name": "ID"
+          },
+          {
+            "dataType": "C",
+            "inputField": "SKU",
+            "isDimension": true,
+            "name": "SKU"
+          }
+        ],
+        "fileName": "d.xlsx#S",
+        "id": "r",
+        "measures": [],
+        "originalFields": [
+          {
+            "dataType": "C",
+            "inputField": "ID",
+            "isDimension": true,
+            "name": "ID"
+          },
+          {
+            "dataType": "C",
+            "inputField": "SKU",
+            "isDimension": true,
+            "name": "SKU"
+          }
+        ],
+        "type": "FileInput"
+      }
+    }
+  },
+  "dimensions": [
+    {
+      "dataType": "C",
+      "inputField": "ID",
+      "inputNode": "j",
+      "isDimension": true,
+      "name": "ID",
+      "originalField": "ID",
+      "originalNode": "j"
+    }
+  ],
+  "measures": [],
+  "properties": {
+    "extractDataEnabled": false,
+    "modelDataType": "DataFlow"
+  },
+  "version": "4.19.0"
+}

@@ -1,0 +1,93 @@
+{
+  "dataFlow": {
+    "nodes": {
+      "default": {
+        "alias": "out",
+        "dimensions": [
+          {
+            "dataType": "C",
+            "inputField": "ID",
+            "inputNode": "src",
+            "isDimension": true,
+            "name": "ID",
+            "originalField": "ID",
+            "originalNode": "src"
+          },
+          {
+            "dataType": "C",
+            "inputField": "SKU",
+            "inputNode": "src",
+            "isDimension": true,
+            "name": "SKU",
+            "originalField": "SKU",
+            "originalNode": "src"
+          }
+        ],
+        "fields": [
+          {
+            "dataType": "C",
+            "inputField": "ID",
+            "inputNode": "src",
+            "isDimension": true,
+            "name": "ID",
+            "originalField": "ID",
+            "originalNode": "src"
+          },
+          {
+            "dataType": "C",
+            "inputField": "SKU",
+            "inputNode": "src",
+            "isDimension": true,
+            "name": "SKU",
+            "originalField": "SKU",
+            "originalNode": "src"
+          }
+        ],
+        "id": "default",
+        "inputNodes": [
+          "shared"
+        ],
+        "measures": [],
+        "type": "Output"
+      },
+      "shared": {
+        "alias": "shared",
+        "fields": [
+          {
+            "dataType": "C",
+            "name": "OTHER"
+          }
+        ],
+        "id": "shared",
+        "moduleTablePath": "other.tbl",
+        "type": "ModelTable"
+      }
+    }
+  },
+  "dimensions": [
+    {
+      "dataType": "C",
+      "inputField": "ID",
+      "inputNode": "src",
+      "isDimension": true,
+      "name": "ID",
+      "originalField": "ID",
+      "originalNode": "src"
+    },
+    {
+      "dataType": "C",
+      "inputField": "SKU",
+      "inputNode": "src",
+      "isDimension": true,
+      "name": "SKU",
+      "originalField": "SKU",
+      "originalNode": "src"
+    }
+  ],
+  "measures": [],
+  "properties": {
+    "extractDataEnabled": false,
+    "modelDataType": "DataFlow"
+  },
+  "version": "4.19.0"
+}

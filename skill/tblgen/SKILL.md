@@ -60,9 +60,9 @@ python3 "$RUN" <命令> [参数]
 python3 "$RUN" new script --table ods_demo --schema ods --extract true \
   --fields "统计年月=stat_month:C:7,公司编码=corp_code:C:20,金额=amount:N:18.2:m" -o <项目>/data/tables/ods/ods_demo.tbl
 
-# 声明式：引用已有模型 →（Join）→ 列加工 → 输出；字段只写名字，定义取自上游
+# 声明式：引用已有模型 →（Join）→ 列加工 → 输出；字段写名字（名=物理列 只改本模型输出列），定义取自上游
 python3 "$RUN" new dsl --table dwd_demo --schema dwd --extract true \
-  --input ../ods/ods_demo.tbl --input '$DATA:/dim/dim_corp.tbl' --join-on corp_code \
+  --input ../ods/ods_demo.tbl --input '$DATA:/dim/dim_corp.tbl' --join-on 公司编码 \
   --fields "统计年月,公司编码,金额" -o <项目>/data/tables/dwd/dwd_demo.tbl
 ```
 

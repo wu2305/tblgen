@@ -23,7 +23,7 @@ tblgen new script --table ods_demo --schema ods --extract true \
 tblgen check projects/P
 ```
 
-`schema` 返回完整规格和节点、步骤示例。不应把 `archive` 或 `rawTable` 归档的保真往返当作字段推导。`new` 生成脚本型或声明式（ModelTable →（Join）→ Select → Output）模型，`--extract` 决定提取（ETL，写入 `--table`）还是查询逻辑。`check` 接受目录：在项目目录（含 `data/`）内会按平台规则解析模型引用和脚本路径，核对字段沿袭和 Script 节点与脚本 `fieldsInfo` 的字段名，并检查 `.action.ts` 脚本规则。它只做离线校验，不验证数据库或 SQL 的实际执行。
+`schema` 返回完整规格和节点、步骤示例。不应把 `archive` 或 `rawTable` 归档的保真往返当作字段推导。`new` 生成脚本型或声明式（ModelTable →（Join）→ Select → Output）模型，`--extract` 决定提取（ETL，写入 `--table`）还是查询逻辑；spec 未写 `version` 时默认平台保存版本 `4.19.0`，`new dsl --fields` 的 `name=dbfield` 只覆盖输出列的物理名（dbfield，须 ASCII），上游字段定义保持原样。`check` 接受目录：在项目目录（含 `data/`）内会按平台规则解析模型引用和脚本路径，核对字段沿袭和 Script 节点与脚本 `fieldsInfo` 的字段名，并检查 `.action.ts` 脚本规则。它只做离线校验，不验证数据库或 SQL 的实际执行。
 
 ### Agent 技能包
 

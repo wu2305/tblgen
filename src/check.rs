@@ -13,6 +13,9 @@ use serde_json::Value;
 
 use crate::model::*;
 
+mod lineage;
+mod output;
+
 const ERR_ARITY: &str = "err.dataflow.node.input";
 
 /// Per-file check result for the `check` CLI report.
@@ -263,6 +266,7 @@ pub fn check(tbl: &Value) -> Vec<Diag> {
 
         check_fields(&mut diags, node, &base, "fields", true);
         check_fields(&mut diags, node, &base, "originalFields", false);
+        check_node_condition_keys(&mut diags, node, &base);
 
         let field_names = node.get("fields").and_then(Value::as_array).map(|arr| {
             arr.iter()
@@ -316,7 +320,7 @@ pub fn check(tbl: &Value) -> Vec<Diag> {
         .map(|a| {
             a.iter()
                 .filter_map(|p| p.get("name").and_then(Value::as_str))
-                .map(|n| n.to_lowercase())
+                .map(|n| n.to_uppercase())
                 .collect()
         })
         .unwrap_or_default();
@@ -324,16 +328,15 @@ pub fn check(tbl: &Value) -> Vec<Diag> {
 
     // light top-level checks
     check_top_level(&mut diags, tbl, nodes_obj, &infos);
-    check_lineage(&mut diags, nodes_obj);
+    lineage::check_lineage(&mut diags, nodes_obj);
     diags
 }
 
 fn check_fields(diags: &mut Vec<Diag>, node: &Value, base: &str, key: &str, filtered: bool) {
     let Some(v) = node.get(key) else { return };
-    let path = format!("{}/{}", base, key);
     let Some(arr) = v.as_array() else {
         diags.push(err(
-            path,
+            format!("{base}/{key}"),
             "structure.fields",
             &src(cite::NODE_IMPL, "692", "DataFlowNodeImpl#loadField"),
             format!("{} must be an array of field objects", key),
@@ -341,10 +344,9 @@ fn check_fields(diags: &mut Vec<Diag>, node: &Value, base: &str, key: &str, filt
         return;
     };
     for (i, f) in arr.iter().enumerate() {
-        let fpath = format!("{}/{}", path, i);
         if !f.is_object() {
             diags.push(err(
-                fpath,
+                format!("{base}/{key}/{i}"),
                 "structure.field",
                 &src(cite::NODE_IMPL, "692", "DataFlowNodeImpl#loadField"),
                 "field must be an object",
@@ -358,7 +360,7 @@ fn check_fields(diags: &mut Vec<Diag>, node: &Value, base: &str, key: &str, filt
             .unwrap_or(false);
         if !name_ok {
             diags.push(err(
-                format!("{}/name", fpath),
+                format!("{base}/{key}/{i}/name"),
                 "field.name",
                 &src(cite::NODE_IMPL, "692", "DataFlowNodeImpl#loadField"),
                 "field.name must be a non-empty string",
@@ -381,7 +383,7 @@ fn check_fields(diags: &mut Vec<Diag>, node: &Value, base: &str, key: &str, filt
                 .unwrap_or(false);
             if !dt_ok {
                 diags.push(err(
-                    format!("{}/dataType", fpath),
+                    format!("{base}/{key}/{i}/dataType"),
                     "field.dataType",
                     &src(cite::NODE_IMPL, "696", "DataFlowNodeImpl#loadField"),
                     "field.dataType must be a non-empty string (type charAt(0))",
@@ -505,9 +507,21 @@ fn check_arity_and_type_rules(
                         "Union requires at least 1 input branch",
                     ));
                 }
-                check_union(diags, node, &base, n);
+                check_union(diags, node, &base, infos, n);
             }
-            "Agg" | "Distinct" | "RowToCol" | "ColToRow" | "Snapshot" | "Update" => {
+            "Agg" | "Distinct" => {
+                // contributors read the FIRST input only — extra inputs
+                // would be silently ignored
+                if n != 1 {
+                    diags.push(err(
+                        format!("{}/inputNodes", base),
+                        ERR_ARITY,
+                        &arity_src,
+                        format!("{} requires exactly 1 input, found {}", ty, n),
+                    ));
+                }
+            }
+            "RowToCol" | "ColToRow" | "Snapshot" | "Update" => {
                 if n == 0 {
                     diags.push(warn(
                         format!("{}/inputNodes", base),
@@ -781,10 +795,7 @@ fn check_join_conditions(
         }
         for side in ["leftTable", "rightTable"] {
             if let Some(t) = c.get(side).and_then(Value::as_str) {
-                if !t.is_empty()
-                    && !aliases.is_empty()
-                    && !aliases.iter().any(|a| a.eq_ignore_ascii_case(t))
-                {
+                if !t.is_empty() && !aliases.is_empty() && !aliases.iter().any(|a| field_eq(a, t)) {
                     diags.push(err(
                         format!("{}/{}", ipath, side),
                         "join.condition.alias",
@@ -794,10 +805,51 @@ fn check_join_conditions(
                 }
             }
         }
+        // clause expressions qualify fields as [alias].[field]; the
+        // qualifier must be one of THIS join's input aliases — a node id or
+        // spec key is not resolvable at run time.
+        if !aliases.is_empty() {
+            for (ci, clause) in c
+                .get("clauses")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+                .enumerate()
+            {
+                for (ek, expv) in [
+                    ("leftExp", clause.get("leftExp")),
+                    ("rightExp", clause.get("rightExp")),
+                    ("exp", clause.get("exp")),
+                ] {
+                    let Some(e) = expv.and_then(Value::as_str) else {
+                        continue;
+                    };
+                    for q in exp_table_qualifiers(e) {
+                        if !aliases.iter().any(|a| field_eq(a, &q)) {
+                            diags.push(err(
+                                format!("{}/clauses/{}/{}", ipath, ci, ek),
+                                "join.condition.qualifier",
+                                &src(cite::JOIN_REL, "320", "JoinRelationImpl#loadJsonMap"),
+                                format!(
+                                    "expression qualifier {:?} is not an input alias {:?}",
+                                    q, aliases
+                                ),
+                            ));
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
-fn check_union(diags: &mut Vec<Diag>, node: &Value, base: &str, n_inputs: usize) {
+fn check_union(
+    diags: &mut Vec<Diag>,
+    node: &Value,
+    base: &str,
+    infos: &HashMap<String, NodeInfo>,
+    n_inputs: usize,
+) {
     if let Some(ut) = node.get("unionType") {
         match ut {
             Value::String(s)
@@ -816,28 +868,209 @@ fn check_union(diags: &mut Vec<Diag>, node: &Value, base: &str, n_inputs: usize)
             )),
         }
     }
-    if let Some(map) = node.get("unionMapArray") {
-        if let Some(arr) = map.as_array() {
-            for (i, item) in arr.iter().enumerate() {
-                if let Some(vals) = item.get("values").and_then(Value::as_array) {
-                    if vals.len() != n_inputs {
-                        diags.push(warn(
-                            format!("{}/unionMapArray/{}/values", base, i),
-                            "warn.union.maplen",
-                            &src(
-                                cite::UNION_NODE,
-                                "56",
-                                "DwDataFlowNodeContributor_union#loadUnionMap",
-                            ),
-                            format!(
-                                "unionMapArray[{}].values length {} != input count {}",
-                                i,
-                                vals.len(),
-                                n_inputs
-                            ),
-                        ));
+    // absent or explicit null = legacy name resolution; a present array
+    // (even empty or all-hidden rows) still gates runtime field lookups
+    let Some(map) = node.get("unionMapArray").filter(|m| !m.is_null()) else {
+        return;
+    };
+    let Some(arr) = map.as_array() else {
+        diags.push(err(
+            format!("{}/unionMapArray", base),
+            "structure.unionMap",
+            &src(
+                cite::UNION_NODE,
+                "56",
+                "DwDataFlowNodeContributor_union#loadUnionMap",
+            ),
+            "unionMapArray must be an array of row objects",
+        ));
+        return;
+    };
+    // input aliases in inputNodes order: loadUnionMap keys each row on the
+    // FIRST non-empty value, qualified by that input's alias.
+    let input_keys: Vec<String> = node
+        .get("inputNodes")
+        .and_then(Value::as_array)
+        .map(|a| {
+            a.iter()
+                .filter_map(|v| v.as_str().map(str::to_string))
+                .collect()
+        })
+        .unwrap_or_default();
+    let aliases: Vec<String> = input_keys
+        .iter()
+        .map(|k| {
+            infos
+                .get(k)
+                .and_then(|i| i.alias.clone())
+                .unwrap_or_else(|| k.clone())
+        })
+        .collect();
+    let mut keys: HashSet<String> = HashSet::new();
+    for (i, item) in arr.iter().enumerate() {
+        let ipath = format!("{}/unionMapArray/{}", base, i);
+        let Some(row) = item.as_object() else {
+            diags.push(err(
+                ipath,
+                "structure.unionMap.row",
+                &src(
+                    cite::UNION_NODE,
+                    "56",
+                    "DwDataFlowNodeContributor_union#loadUnionMap",
+                ),
+                "unionMapArray rows must be objects",
+            ));
+            continue;
+        };
+        // ignored rows are skipped before any value validation
+        if row.get("visible").and_then(Value::as_bool) == Some(false) {
+            continue;
+        }
+        let values = match row.get("values").and_then(Value::as_array) {
+            Some(v) => v,
+            None => {
+                diags.push(err(
+                    format!("{}/values", ipath),
+                    "structure.unionMap.values",
+                    &src(
+                        cite::UNION_NODE,
+                        "56",
+                        "DwDataFlowNodeContributor_union#loadUnionMap",
+                    ),
+                    "unionMapArray row requires a values array",
+                ));
+                continue;
+            }
+        };
+        if values.len() != n_inputs {
+            diags.push(err(
+                format!("{}/values", ipath),
+                "union.mapkey",
+                &src(
+                    cite::UNION_NODE,
+                    "56",
+                    "DwDataFlowNodeContributor_union#loadUnionMap",
+                ),
+                format!(
+                    "unionMapArray[{}].values width {} != input count {}",
+                    i,
+                    values.len(),
+                    n_inputs
+                ),
+            ));
+        }
+        let mut anchor: Option<(usize, String)> = None;
+        for (vi, v) in values.iter().enumerate() {
+            match v {
+                Value::String(s) => {
+                    if !s.is_empty() && anchor.is_none() {
+                        anchor = Some((vi, s.clone()));
                     }
                 }
+                Value::Null => {}
+                _ => diags.push(err(
+                    format!("{}/values/{}", ipath, vi),
+                    "structure.unionMap.values",
+                    &src(
+                        cite::UNION_NODE,
+                        "56",
+                        "DwDataFlowNodeContributor_union#loadUnionMap",
+                    ),
+                    "unionMapArray values must be strings or null",
+                )),
+            }
+        }
+        if let Some((vi, val)) = anchor {
+            let a = aliases.get(vi).cloned().unwrap_or_default();
+            let key =
+                format!("[{}].[{}]", a.replace(']', "]]"), val.replace(']', "]]")).to_uppercase();
+            if !keys.insert(key.clone()) {
+                diags.push(err(
+                    format!("{}/unionMapArray/{}", base, i),
+                    "union.mapkey",
+                    &src(
+                        cite::UNION_NODE,
+                        "56",
+                        "DwDataFlowNodeContributor_union#loadUnionMap",
+                    ),
+                    format!("duplicate union map key {:?}", key),
+                ));
+            }
+        }
+    }
+    // every runtime-read field must resolve to a map key: computed fields
+    // only when they carry a non-empty inputField (Java skips the rest);
+    // hidden/invalid-declared fields are skipped like Select tracking.
+    // Java blank semantics apply to inputField/inputNode/exp fallbacks.
+    let nonblank = |v: Option<&Value>| {
+        v.and_then(Value::as_str)
+            .map(|s| !s.trim().is_empty())
+            .unwrap_or(false)
+    };
+    let mut claimed: HashSet<String> = HashSet::new();
+    if let Some(farr) = node.get("fields").and_then(Value::as_array) {
+        for (fi, f) in farr.iter().enumerate() {
+            if f.get("hidden").and_then(Value::as_bool) == Some(true) {
+                continue;
+            }
+            if skipped_field(f) {
+                continue;
+            }
+            let computed = nonblank(f.get("exp"));
+            let input_field = f
+                .get("inputField")
+                .and_then(Value::as_str)
+                .filter(|s| !s.trim().is_empty());
+            if computed && input_field.is_none() {
+                continue;
+            }
+            let eff = match input_field {
+                Some(s) => s.to_string(),
+                None => match f.get("name").and_then(Value::as_str) {
+                    Some(n) if !n.trim().is_empty() => n.to_string(),
+                    _ => continue,
+                },
+            };
+            let candidate = match f.get("inputNode").and_then(Value::as_str) {
+                Some(in_) if !in_.trim().is_empty() => {
+                    format!("[{}].[{}]", in_.replace(']', "]]"), eff.replace(']', "]]"))
+                        .to_uppercase()
+                }
+                _ => eff.to_uppercase(),
+            };
+            if !keys.contains(&candidate) {
+                diags.push(err(
+                    format!("{}/fields/{}/inputField", base, fi),
+                    "union.mapkey",
+                    &src(
+                        cite::UNION_NODE,
+                        "56",
+                        "DwDataFlowNodeContributor_union#loadUnionMap",
+                    ),
+                    format!(
+                        "union field {:?} inputFieldExp {:?} matches no unionMapArray key",
+                        f.get("name").and_then(Value::as_str).unwrap_or(""),
+                        candidate
+                    ),
+                ));
+                continue;
+            }
+            // two visible noncomputed fields resolving to the same map key
+            // would ambiguously project one runtime column
+            if !computed && !claimed.insert(candidate.clone()) {
+                diags.push(err(
+                    format!("{}/fields/{}/inputField", base, fi),
+                    "union.mapkey",
+                    &src(
+                        cite::UNION_NODE,
+                        "56",
+                        "DwDataFlowNodeContributor_union#loadUnionMap",
+                    ),
+                    format!(
+                        "union fields share map key {:?} (ambiguous projection)",
+                        candidate
+                    ),
+                ));
             }
         }
     }
@@ -958,7 +1191,7 @@ fn check_col_to_row(
                         // pivot source refs must exist in the predecessor's
                         // declared field set when that set is known
                         // (case-insensitive per QueryImpl#getField).
-                        if !names.is_empty() && !names.iter().any(|p| p.eq_ignore_ascii_case(nm)) {
+                        if !names.is_empty() && !names.iter().any(|p| field_eq(p, nm)) {
                             diags.push(err(
                                 format!("{}/{}/{}", rpath, c, "name"),
                                 "field.notfound",
@@ -1070,6 +1303,90 @@ fn check_select_node_meta(diags: &mut Vec<Diag>, node: &Value, base: &str) {
     }
 }
 
+/// `filter` and `incrementRange` are read on EVERY node type by the
+/// loaders: `filter` is cast to Map unconditionally
+/// (DataFlowNodeImpl#loadFilter) and `incrementRange` items are cast to
+/// clause maps — wrong shapes are hard ClassCastExceptions.
+fn check_node_condition_keys(diags: &mut Vec<Diag>, node: &Value, base: &str) {
+    if let Some(fv) = node.get("filter") {
+        if !fv.is_null() {
+            match fv.as_object() {
+                Some(o) => {
+                    for k in o.keys() {
+                        if !["matchAll", "enabled", "clauses"].contains(&k.as_str()) {
+                            diags.push(warn(
+                                format!("{}/filter/{}", base, ptr_escape(k)),
+                                "structure.node.filter",
+                                &src(cite::NODE_IMPL, "758", "DataFlowNodeImpl#loadFilter"),
+                                format!("unexpected filter key {:?}", k),
+                            ));
+                        }
+                    }
+                    if let Some(cl) = o.get("clauses") {
+                        if let Some(arr) = cl.as_array() {
+                            for (i, item) in arr.iter().enumerate() {
+                                if !item.is_object() {
+                                    diags.push(err(
+                                        format!("{}/filter/clauses/{}", base, i),
+                                        "structure.node.filter",
+                                        &src(
+                                            cite::NODE_IMPL,
+                                            "758",
+                                            "DataFlowNodeImpl#loadFilter",
+                                        ),
+                                        "filter.clauses entries must be objects (loadJsonMap casts each)",
+                                    ));
+                                }
+                            }
+                        } else {
+                            diags.push(err(
+                                format!("{}/filter/clauses", base),
+                                "structure.node.filter",
+                                &src(cite::NODE_IMPL, "758", "DataFlowNodeImpl#loadFilter"),
+                                "filter.clauses must be an array",
+                            ));
+                        }
+                    }
+                }
+                None => diags.push(err(
+                    format!("{}/filter", base),
+                    "structure.node.filter",
+                    &src(cite::NODE_IMPL, "758", "DataFlowNodeImpl#loadFilter"),
+                    "filter must be an object (loader casts to Map)",
+                )),
+            }
+        }
+    }
+    if let Some(iv) = node.get("incrementRange") {
+        if !iv.is_null() {
+            match iv.as_array() {
+                Some(arr) => {
+                    for (i, item) in arr.iter().enumerate() {
+                        if !item.is_object() {
+                            diags.push(err(
+                                format!("{}/incrementRange/{}", base, i),
+                                "structure.node.incrementRange",
+                                &src(
+                                    cite::NODE_IMPL,
+                                    "485",
+                                    "DataFlowNodeImpl#loadNodeInfo",
+                                ),
+                                "incrementRange entries must be clause objects (loadJsonMap casts each)",
+                            ));
+                        }
+                    }
+                }
+                None => diags.push(err(
+                    format!("{}/incrementRange", base),
+                    "structure.node.incrementRange",
+                    &src(cite::NODE_IMPL, "485", "DataFlowNodeImpl#loadNodeInfo"),
+                    "incrementRange must be an array of clause objects",
+                )),
+            }
+        }
+    }
+}
+
 /// Select step field-existence tracking across earlier transformations.
 /// The pre-step field set comes from the *input node's* declared `fields`
 /// output — never from the Select's own final `fields`. When the set cannot
@@ -1100,6 +1417,10 @@ fn check_select_steps(
             .get(pred_key)
             .and_then(|i| i.field_names.clone())
             .filter(|n| !n.is_empty());
+        // names provably removed by a step and not reintroduced — used to
+        // flag stale declared fields without requiring full projection
+        // equality on real-world wires
+        let mut removed: Vec<String> = Vec::new();
 
         for (si, step) in steps.iter().enumerate() {
             let spath = format!("{}/steps/{}", base, si);
@@ -1183,6 +1504,24 @@ fn check_select_steps(
                         &src(cite::STEP_IMPL, "96", "DataFlowSelectNodeStepImpl#<init>"),
                         "step.fields must be an array of field names",
                     )),
+                }
+            }
+            // AddField always reads its fields operand — an absent or empty
+            // array means the step cannot name its target (the generator
+            // synthesizes [addField.name]; the wire must carry it).
+            if ty == "AddField" {
+                let ok = step_obj
+                    .get("fields")
+                    .and_then(Value::as_array)
+                    .map(|a| !a.is_empty())
+                    .unwrap_or(false);
+                if !ok {
+                    diags.push(err(
+                        format!("{}/fields", spath),
+                        "structure.step.fields",
+                        &src(cite::STEP_IMPL, "96", "DataFlowSelectNodeStepImpl#<init>"),
+                        "AddField step requires a non-empty fields operand",
+                    ));
                 }
             }
             // closed payload member keys (warn — wire may carry loader-tolerated extras)
@@ -1328,7 +1667,7 @@ fn check_select_steps(
                     .unwrap_or(true));
             if operated {
                 for (fi, name) in step_fields.iter().enumerate() {
-                    if ty != "RemoveField" && !cur.iter().any(|c| c.eq_ignore_ascii_case(name)) {
+                    if ty != "RemoveField" && !cur.iter().any(|c| field_eq(c, name)) {
                         diags.push(err(
                             format!("{}/fields/{}", spath, fi),
                             "err.dataflow.stepField.notfound",
@@ -1365,9 +1704,9 @@ fn check_select_steps(
                     if qualified || name.is_empty() {
                         continue;
                     }
-                    let lower = name.to_lowercase();
-                    let known = cur.iter().any(|c| c.to_lowercase() == lower)
-                        || param_names.contains(&lower);
+                    let upper = name.to_uppercase();
+                    let known =
+                        cur.iter().any(|c| field_eq(c, &name)) || param_names.contains(&upper);
                     if !known {
                         diags.push(warn(
                             format!("{}/{}", spath, epath),
@@ -1386,48 +1725,130 @@ fn check_select_steps(
                 }
             }
 
-            // evolve the tracked set (names only, case-insensitive lookup)
-            match ty {
-                "RemoveField" => {
-                    cur.retain(|n| !step_fields.iter().any(|f| f.eq_ignore_ascii_case(n)));
-                }
-                "AddField" => {
-                    if let Some(nm) = step_obj
-                        .get("addField")
-                        .and_then(|a| a.get("name"))
-                        .and_then(Value::as_str)
-                    {
-                        cur.push(nm.to_string());
+            // evolve the tracked set through the shared Unicode-aware name
+            // semantics; `removed` remembers names a step took away so a
+            // stale declared field can be flagged without requiring full
+            // projection equality (opaque shapes drop all tracking).
+            let before = cur.clone();
+            match evolve_names(cur, step) {
+                Ok(true) => match ty {
+                    "RemoveField" => {
+                        for b in before {
+                            if !cur.iter().any(|c| field_eq(c, &b)) {
+                                removed.push(b);
+                            }
+                        }
                     }
-                }
-                "Refactor" => {
-                    // Java: rename is a STRING applied to the single selected
-                    // field's current name (contributor_select renames the
-                    // fields entry). MapUtils.getString on a non-string
-                    // yields null -> no rename.
-                    if let Some(rn) = step_obj
-                        .get("refactor")
-                        .and_then(|r| r.get("rename"))
-                        .and_then(Value::as_str)
-                    {
-                        if !rn.is_empty() {
-                            if let Some(sel) = step_fields.first() {
-                                if let Some(pos) =
-                                    cur.iter().position(|c| c.eq_ignore_ascii_case(sel))
-                                {
-                                    cur[pos] = rn.to_string();
+                    "Refactor" => {
+                        if let Some(rn) = step_obj
+                            .get("refactor")
+                            .and_then(|r| r.get("rename"))
+                            .and_then(Value::as_str)
+                        {
+                            if !rn.is_empty() {
+                                if let Some(sel) = step_fields.first() {
+                                    if let Some(old) =
+                                        before.iter().find(|c| field_eq(c, sel)).cloned()
+                                    {
+                                        // case-only self rename keeps the
+                                        // name alive; a real rename removes
+                                        // the old name and reintroduces rn
+                                        if !field_eq(&old, rn) {
+                                            removed.push(old);
+                                        }
+                                        removed.retain(|r| !field_eq(r, rn));
+                                    }
                                 }
                             }
                         }
                     }
-                }
-                "Filter" | "ToUppercase" | "ToLowercase" | "Trim" | "DeleteNumbers"
-                | "DeleteLetters" | "DeleteSpechars" | "DeletePunctuations" | "ExcludeEmpty"
-                | "ExtractNumber" | "SubString" | "Replace" | "Distinct" => {}
-                _ => {
-                    // SplitField / Text2Id / TransformToCalculatedField and the
-                    // unverified steps reshape fields unpredictably.
+                    "AddField" => {
+                        if let Some(nm) = step_obj
+                            .get("addField")
+                            .and_then(|a| a.get("name"))
+                            .and_then(Value::as_str)
+                        {
+                            if !nm.is_empty() {
+                                removed.retain(|r| !field_eq(r, nm));
+                            }
+                        }
+                    }
+                    _ => {}
+                },
+                Ok(false) => {
                     current = None;
+                    removed.clear();
+                }
+                Err(tag) => {
+                    diags.push(err(
+                        format!("{}/{}", spath, tag),
+                        "field.duplicate",
+                        &src(cite::QUERY_IMPL, "740", "QueryImpl#getField"),
+                        format!("step {} creates a duplicate field name", ty),
+                    ));
+                    current = None;
+                    removed.clear();
+                }
+            }
+        }
+
+        // a declared live, ordinary field that a step provably removed and
+        // nothing reintroduced is stale metadata — flag it. Fields the
+        // loader skips (hidden/invalid) or computed fields (exp) are exempt.
+        // Declared names absent from the provable set are tolerated (steps
+        // can produce shapes the projection does not model); names PRESENT
+        // in the set may not be declared more times than the steps produce.
+        if current.is_some() {
+            let mut budget: HashMap<String, usize> = HashMap::new();
+            for n in current.iter().flatten() {
+                *budget.entry(n.to_uppercase()).or_insert(0) += 1;
+            }
+            if let Some(farr) = node.get("fields").and_then(Value::as_array) {
+                for (fi, f) in farr.iter().enumerate() {
+                    if f.get("hidden").and_then(Value::as_bool) == Some(true) {
+                        continue;
+                    }
+                    if skipped_field(f) {
+                        continue;
+                    }
+                    if f.get("exp")
+                        .and_then(Value::as_str)
+                        .map(|e| !e.is_empty())
+                        .unwrap_or(false)
+                    {
+                        continue;
+                    }
+                    let Some(nm) = f.get("name").and_then(Value::as_str) else {
+                        continue;
+                    };
+                    if removed.iter().any(|r| field_eq(r, nm)) {
+                        diags.push(err(
+                            format!("{}/fields/{}/name", base, fi),
+                            "field.mismatch",
+                            &src(cite::QUERY_IMPL, "740", "QueryImpl#getField"),
+                            format!(
+                                "field {:?} was removed by a step and never reintroduced",
+                                nm
+                            ),
+                        ));
+                        continue;
+                    }
+                    let key = nm.to_uppercase();
+                    if let Some(left) = budget.get_mut(&key) {
+                        if *left == 0 {
+                            diags.push(err(
+                                format!("{}/fields/{}/name", base, fi),
+                                "field.mismatch",
+                                &src(cite::QUERY_IMPL, "740", "QueryImpl#getField"),
+                                format!(
+                                    "field {:?} is declared more times than the steps produce",
+                                    nm
+                                ),
+                            ));
+                        } else {
+                            *left -= 1;
+                        }
+                    }
                 }
             }
         }
@@ -1568,6 +1989,8 @@ fn check_top_level(
             "node \"default\" is not an Output node; the loader takes it as the model output",
         ));
     }
+    output::check_output_partition(diags, tbl, nodes_obj);
+    output::check_extract_dbfields(diags, tbl);
     let _ = infos;
 }
 
@@ -1659,69 +2082,4 @@ pub fn check_references(tbl: &Value, at: &crate::project::Located) -> Vec<Diag> 
         }
     }
     diags
-}
-
-/// Field lineage: a field's `inputField` must name a field of the node it
-/// reads from (its `inputNode`, or the only input). The runner matches
-/// lineage by name, case-insensitively (DwDataFlowContext). Nodes that define
-/// their own fields (sources, scripts) or remap them (Join, Union, row/column
-/// transforms, Agg) are not checked; computed fields (`exp`) have no input.
-fn check_lineage(diags: &mut Vec<Diag>, nodes: &serde_json::Map<String, Value>) {
-    const NOT_DERIVED: [&str; 12] = [
-        "Join", "Union", "ColToRow", "RowToCol", "Agg", "SubProcess",
-        "Script", "DbTable", "Sql", "Extend", "FileInput", "ModelTable",
-    ];
-    let by_alias: HashMap<&str, &str> = nodes
-        .iter()
-        .filter_map(|(k, n)| n.get("alias").and_then(Value::as_str).map(|a| (a, k.as_str())))
-        .collect();
-    let names_of = |n: &Value| -> HashSet<String> {
-        n.get("fields")
-            .and_then(Value::as_array)
-            .into_iter()
-            .flatten()
-            .filter_map(|f| f.get("name").and_then(Value::as_str).map(str::to_uppercase))
-            .collect()
-    };
-    for (id, node) in nodes {
-        let ty = node.get("type").and_then(Value::as_str).unwrap_or("");
-        if NOT_DERIVED.contains(&ty) {
-            continue;
-        }
-        let inputs: Vec<&str> = node
-            .get("inputNodes")
-            .and_then(Value::as_array)
-            .map(|a| a.iter().filter_map(Value::as_str).collect())
-            .unwrap_or_default();
-        for (i, f) in node.get("fields").and_then(Value::as_array).into_iter().flatten().enumerate() {
-            let Some(input_field) = f.get("inputField").and_then(Value::as_str).filter(|s| !s.is_empty()) else {
-                continue;
-            };
-            if f.get("exp").and_then(Value::as_str).is_some_and(|e| !e.is_empty()) {
-                continue;
-            }
-            let src_key = match f.get("inputNode").and_then(Value::as_str) {
-                Some(n) => by_alias.get(n).copied().or(Some(n)),
-                None if inputs.len() == 1 => Some(inputs[0]),
-                None => None,
-            };
-            let Some(src_node) = src_key.and_then(|k| nodes.get(k)) else {
-                continue;
-            };
-            let names = names_of(src_node);
-            if !names.is_empty() && !names.contains(&input_field.to_uppercase()) {
-                diags.push(err(
-                    format!("/dataFlow/nodes/{}/fields/{}/inputField", ptr_escape(id), i),
-                    "field.inputField.missing",
-                    &src(cite::DATAFLOW_CTX, "207", "DwDataFlowContext#initNodeFields"),
-                    format!(
-                        "field {:?} reads {:?}, which node {:?} does not have",
-                        f.get("name").and_then(Value::as_str).unwrap_or(""),
-                        input_field,
-                        src_key.unwrap_or("")
-                    ),
-                ));
-            }
-        }
-    }
 }

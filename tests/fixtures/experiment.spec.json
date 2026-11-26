@@ -1,0 +1,2420 @@
+{
+  "format": 1,
+  "version": "4.19.0",
+  "properties": {
+    "modelDataType": "DataFlow",
+    "datasource": "defdw",
+    "dbSchema": "ads",
+    "dbTableName": "ads_owner_repair_history",
+    "extractDataEnabled": true,
+    "modifyDbTableEnabled": [
+      "field",
+      "index",
+      "constraint"
+    ],
+    "rebuildIndexAndKey": true,
+    "rollbackEnabled": false,
+    "raw": {
+      "desc": "车主历史养修清单：凭非技术文字重建，桩引用待真实上游替换"
+    }
+  },
+  "nodes": [
+    {
+      "key": "src_main",
+      "type": "ModelTable",
+      "alias": "src_main",
+      "config": {
+        "moduleTablePath": "./stub_main_order.tbl",
+        "comment": "进店主单（桩引用）"
+      },
+      "fields": [
+        {
+          "name": "维修工单号",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 100
+        },
+        {
+          "name": "车辆VIN",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 50
+        },
+        {
+          "name": "门店",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 100
+        },
+        {
+          "name": "结算确认日期",
+          "dataType": "D",
+          "isDimension": true
+        },
+        {
+          "name": "应收金额",
+          "dataType": "N",
+          "isDimension": false,
+          "length": 18,
+          "decimal": 2
+        },
+        {
+          "name": "实收金额",
+          "dataType": "N",
+          "isDimension": false,
+          "length": 18,
+          "decimal": 2
+        },
+        {
+          "name": "是否红冲",
+          "dataType": "I",
+          "isDimension": true
+        },
+        {
+          "name": "维修状态",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 20
+        }
+      ]
+    },
+    {
+      "key": "src_labor",
+      "type": "ModelTable",
+      "alias": "src_labor",
+      "config": {
+        "moduleTablePath": "./stub_labor_detail.tbl",
+        "comment": "人工明细（桩引用）"
+      },
+      "fields": [
+        {
+          "name": "工单号",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 100
+        },
+        {
+          "name": "是否删除",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 10
+        },
+        {
+          "name": "维修类型",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 50
+        },
+        {
+          "name": "商品四级分类",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 100
+        },
+        {
+          "name": "销售类型",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 20
+        },
+        {
+          "name": "费用类别",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 50
+        },
+        {
+          "name": "品牌",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 50
+        }
+      ]
+    },
+    {
+      "key": "src_parts",
+      "type": "ModelTable",
+      "alias": "src_parts",
+      "config": {
+        "moduleTablePath": "./stub_parts_detail.tbl",
+        "comment": "零件明细（桩引用）"
+      },
+      "fields": [
+        {
+          "name": "工单号",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 100
+        },
+        {
+          "name": "是否删除",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 10
+        },
+        {
+          "name": "维修类型",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 50
+        },
+        {
+          "name": "商品四级分类",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 100
+        },
+        {
+          "name": "销售类型",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 20
+        },
+        {
+          "name": "费用类别",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 50
+        },
+        {
+          "name": "品牌",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 50
+        }
+      ]
+    },
+    {
+      "key": "src_person",
+      "type": "ModelTable",
+      "alias": "src_person",
+      "config": {
+        "moduleTablePath": "./stub_person_vehicle.tbl",
+        "comment": "人车对应（桩引用）"
+      },
+      "fields": [
+        {
+          "name": "人车关系编码",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 100
+        },
+        {
+          "name": "关系类型",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 20
+        },
+        {
+          "name": "是否展示",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 10
+        },
+        {
+          "name": "粉丝ID",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 100
+        },
+        {
+          "name": "车辆VIN",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 50
+        }
+      ]
+    },
+    {
+      "key": "src_supp",
+      "type": "ModelTable",
+      "alias": "src_supp",
+      "config": {
+        "moduleTablePath": "./stub_supplement_user.tbl",
+        "comment": "补充使用人资料（桩引用）"
+      },
+      "fields": [
+        {
+          "name": "关系ID",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 100
+        },
+        {
+          "name": "使用人账号",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 100
+        }
+      ]
+    },
+    {
+      "key": "src_list",
+      "type": "ModelTable",
+      "alias": "src_list",
+      "config": {
+        "moduleTablePath": "./stub_owner_vehicle_list.tbl",
+        "comment": "车主自有车辆清单（桩引用）"
+      },
+      "fields": [
+        {
+          "name": "车架号",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 50
+        },
+        {
+          "name": "车牌号",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 20
+        }
+      ]
+    },
+    {
+      "key": "flt_main",
+      "type": "Select",
+      "alias": "flt_main",
+      "inputs": [
+        "src_main"
+      ],
+      "config": {
+        "comment": "主单四条件：结算确认日期不为空、应收>0、未红冲、已结算"
+      },
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "结算确认日期",
+            "应收金额",
+            "是否红冲",
+            "维修状态"
+          ],
+          "filter": "[结算确认日期] != NULL AND [应收金额] > 0 AND [是否红冲] = 0 AND [维修状态] = '已结算'"
+        },
+        {
+          "type": "RemoveField",
+          "fields": [
+            "是否红冲",
+            "维修状态"
+          ]
+        }
+      ]
+    },
+    {
+      "key": "flt_labor",
+      "type": "Select",
+      "alias": "flt_labor",
+      "inputs": [
+        "src_labor"
+      ],
+      "config": {
+        "comment": "明细剔删除行并加前缀避免双明细同名字段冲突"
+      },
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "是否删除"
+          ],
+          "filter": "[是否删除] = 'false'"
+        },
+        {
+          "type": "Refactor",
+          "fields": [
+            "工单号"
+          ],
+          "refactor": {
+            "rename": "人工工单号"
+          }
+        },
+        {
+          "type": "Refactor",
+          "fields": [
+            "维修类型"
+          ],
+          "refactor": {
+            "rename": "人工维修类型"
+          }
+        },
+        {
+          "type": "Refactor",
+          "fields": [
+            "商品四级分类"
+          ],
+          "refactor": {
+            "rename": "人工商品四级分类"
+          }
+        },
+        {
+          "type": "Refactor",
+          "fields": [
+            "销售类型"
+          ],
+          "refactor": {
+            "rename": "人工销售类型"
+          }
+        },
+        {
+          "type": "Refactor",
+          "fields": [
+            "费用类别"
+          ],
+          "refactor": {
+            "rename": "人工费用类别"
+          }
+        },
+        {
+          "type": "Refactor",
+          "fields": [
+            "品牌"
+          ],
+          "refactor": {
+            "rename": "人工品牌"
+          }
+        },
+        {
+          "type": "RemoveField",
+          "fields": [
+            "是否删除"
+          ]
+        }
+      ]
+    },
+    {
+      "key": "flt_parts",
+      "type": "Select",
+      "alias": "flt_parts",
+      "inputs": [
+        "src_parts"
+      ],
+      "config": {
+        "comment": "明细剔删除行并加前缀避免双明细同名字段冲突"
+      },
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "是否删除"
+          ],
+          "filter": "[是否删除] = 'false'"
+        },
+        {
+          "type": "Refactor",
+          "fields": [
+            "工单号"
+          ],
+          "refactor": {
+            "rename": "零件工单号"
+          }
+        },
+        {
+          "type": "Refactor",
+          "fields": [
+            "维修类型"
+          ],
+          "refactor": {
+            "rename": "零件维修类型"
+          }
+        },
+        {
+          "type": "Refactor",
+          "fields": [
+            "商品四级分类"
+          ],
+          "refactor": {
+            "rename": "零件商品四级分类"
+          }
+        },
+        {
+          "type": "Refactor",
+          "fields": [
+            "销售类型"
+          ],
+          "refactor": {
+            "rename": "零件销售类型"
+          }
+        },
+        {
+          "type": "Refactor",
+          "fields": [
+            "费用类别"
+          ],
+          "refactor": {
+            "rename": "零件费用类别"
+          }
+        },
+        {
+          "type": "Refactor",
+          "fields": [
+            "品牌"
+          ],
+          "refactor": {
+            "rename": "零件品牌"
+          }
+        },
+        {
+          "type": "RemoveField",
+          "fields": [
+            "是否删除"
+          ]
+        }
+      ]
+    },
+    {
+      "key": "join_labor",
+      "type": "Join",
+      "alias": "join_labor",
+      "inputs": [
+        "flt_main",
+        "flt_labor"
+      ],
+      "config": {
+        "comment": "主单左关联人工明细：主单全保留一对多展开",
+        "joinConditions": [
+          {
+            "leftTable": "flt_main",
+            "rightTable": "flt_labor",
+            "joinType": "LeftJoin",
+            "clauses": [
+              {
+                "leftExp": "[flt_main].[维修工单号]",
+                "operator": "=",
+                "rightExp": "[flt_labor].[人工工单号]",
+                "exp": "[flt_main].[维修工单号] = [flt_labor].[人工工单号]"
+              }
+            ]
+          }
+        ]
+      },
+      "fields": [
+        {
+          "name": "维修工单号",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 100,
+          "inputNode": "flt_main",
+          "inputField": "维修工单号",
+          "originalNode": "flt_main",
+          "originalField": "维修工单号"
+        },
+        {
+          "name": "车辆VIN",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 50,
+          "inputNode": "flt_main",
+          "inputField": "车辆VIN",
+          "originalNode": "flt_main",
+          "originalField": "车辆VIN"
+        },
+        {
+          "name": "门店",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 100,
+          "inputNode": "flt_main",
+          "inputField": "门店",
+          "originalNode": "flt_main",
+          "originalField": "门店"
+        },
+        {
+          "name": "结算确认日期",
+          "dataType": "D",
+          "isDimension": true,
+          "inputNode": "flt_main",
+          "inputField": "结算确认日期",
+          "originalNode": "flt_main",
+          "originalField": "结算确认日期"
+        },
+        {
+          "name": "应收金额",
+          "dataType": "N",
+          "isDimension": false,
+          "length": 18,
+          "decimal": 2,
+          "inputNode": "flt_main",
+          "inputField": "应收金额",
+          "originalNode": "flt_main",
+          "originalField": "应收金额"
+        },
+        {
+          "name": "实收金额",
+          "dataType": "N",
+          "isDimension": false,
+          "length": 18,
+          "decimal": 2,
+          "inputNode": "flt_main",
+          "inputField": "实收金额",
+          "originalNode": "flt_main",
+          "originalField": "实收金额"
+        },
+        {
+          "name": "人工工单号",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 100,
+          "inputNode": "flt_labor",
+          "inputField": "人工工单号",
+          "originalNode": "flt_labor",
+          "originalField": "人工工单号"
+        },
+        {
+          "name": "人工维修类型",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 50,
+          "inputNode": "flt_labor",
+          "inputField": "人工维修类型",
+          "originalNode": "flt_labor",
+          "originalField": "人工维修类型"
+        },
+        {
+          "name": "人工商品四级分类",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 100,
+          "inputNode": "flt_labor",
+          "inputField": "人工商品四级分类",
+          "originalNode": "flt_labor",
+          "originalField": "人工商品四级分类"
+        },
+        {
+          "name": "人工销售类型",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 20,
+          "inputNode": "flt_labor",
+          "inputField": "人工销售类型",
+          "originalNode": "flt_labor",
+          "originalField": "人工销售类型"
+        },
+        {
+          "name": "人工费用类别",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 50,
+          "inputNode": "flt_labor",
+          "inputField": "人工费用类别",
+          "originalNode": "flt_labor",
+          "originalField": "人工费用类别"
+        },
+        {
+          "name": "人工品牌",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 50,
+          "inputNode": "flt_labor",
+          "inputField": "人工品牌",
+          "originalNode": "flt_labor",
+          "originalField": "人工品牌"
+        }
+      ]
+    },
+    {
+      "key": "join_parts",
+      "type": "Join",
+      "alias": "join_parts",
+      "inputs": [
+        "join_labor",
+        "flt_parts"
+      ],
+      "config": {
+        "comment": "再左关联零件明细：主单全保留一对多展开，无明细侧字段为空",
+        "joinConditions": [
+          {
+            "leftTable": "join_labor",
+            "rightTable": "flt_parts",
+            "joinType": "LeftJoin",
+            "clauses": [
+              {
+                "leftExp": "[join_labor].[维修工单号]",
+                "operator": "=",
+                "rightExp": "[flt_parts].[零件工单号]",
+                "exp": "[join_labor].[维修工单号] = [flt_parts].[零件工单号]"
+              }
+            ]
+          }
+        ]
+      },
+      "fields": [
+        {
+          "name": "维修工单号",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 100,
+          "inputNode": "join_labor",
+          "inputField": "维修工单号",
+          "originalNode": "join_labor",
+          "originalField": "维修工单号"
+        },
+        {
+          "name": "车辆VIN",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 50,
+          "inputNode": "join_labor",
+          "inputField": "车辆VIN",
+          "originalNode": "join_labor",
+          "originalField": "车辆VIN"
+        },
+        {
+          "name": "门店",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 100,
+          "inputNode": "join_labor",
+          "inputField": "门店",
+          "originalNode": "join_labor",
+          "originalField": "门店"
+        },
+        {
+          "name": "结算确认日期",
+          "dataType": "D",
+          "isDimension": true,
+          "inputNode": "join_labor",
+          "inputField": "结算确认日期",
+          "originalNode": "join_labor",
+          "originalField": "结算确认日期"
+        },
+        {
+          "name": "应收金额",
+          "dataType": "N",
+          "isDimension": false,
+          "length": 18,
+          "decimal": 2,
+          "inputNode": "join_labor",
+          "inputField": "应收金额",
+          "originalNode": "join_labor",
+          "originalField": "应收金额"
+        },
+        {
+          "name": "实收金额",
+          "dataType": "N",
+          "isDimension": false,
+          "length": 18,
+          "decimal": 2,
+          "inputNode": "join_labor",
+          "inputField": "实收金额",
+          "originalNode": "join_labor",
+          "originalField": "实收金额"
+        },
+        {
+          "name": "人工工单号",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 100,
+          "inputNode": "join_labor",
+          "inputField": "人工工单号",
+          "originalNode": "join_labor",
+          "originalField": "人工工单号"
+        },
+        {
+          "name": "人工维修类型",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 50,
+          "inputNode": "join_labor",
+          "inputField": "人工维修类型",
+          "originalNode": "join_labor",
+          "originalField": "人工维修类型"
+        },
+        {
+          "name": "人工商品四级分类",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 100,
+          "inputNode": "join_labor",
+          "inputField": "人工商品四级分类",
+          "originalNode": "join_labor",
+          "originalField": "人工商品四级分类"
+        },
+        {
+          "name": "人工销售类型",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 20,
+          "inputNode": "join_labor",
+          "inputField": "人工销售类型",
+          "originalNode": "join_labor",
+          "originalField": "人工销售类型"
+        },
+        {
+          "name": "人工费用类别",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 50,
+          "inputNode": "join_labor",
+          "inputField": "人工费用类别",
+          "originalNode": "join_labor",
+          "originalField": "人工费用类别"
+        },
+        {
+          "name": "人工品牌",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 50,
+          "inputNode": "join_labor",
+          "inputField": "人工品牌",
+          "originalNode": "join_labor",
+          "originalField": "人工品牌"
+        },
+        {
+          "name": "零件工单号",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 100,
+          "inputNode": "flt_parts",
+          "inputField": "零件工单号",
+          "originalNode": "flt_parts",
+          "originalField": "零件工单号"
+        },
+        {
+          "name": "零件维修类型",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 50,
+          "inputNode": "flt_parts",
+          "inputField": "零件维修类型",
+          "originalNode": "flt_parts",
+          "originalField": "零件维修类型"
+        },
+        {
+          "name": "零件商品四级分类",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 100,
+          "inputNode": "flt_parts",
+          "inputField": "零件商品四级分类",
+          "originalNode": "flt_parts",
+          "originalField": "零件商品四级分类"
+        },
+        {
+          "name": "零件销售类型",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 20,
+          "inputNode": "flt_parts",
+          "inputField": "零件销售类型",
+          "originalNode": "flt_parts",
+          "originalField": "零件销售类型"
+        },
+        {
+          "name": "零件费用类别",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 50,
+          "inputNode": "flt_parts",
+          "inputField": "零件费用类别",
+          "originalNode": "flt_parts",
+          "originalField": "零件费用类别"
+        },
+        {
+          "name": "零件品牌",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 50,
+          "inputNode": "flt_parts",
+          "inputField": "零件品牌",
+          "originalNode": "flt_parts",
+          "originalField": "零件品牌"
+        }
+      ]
+    },
+    {
+      "key": "route1_sel",
+      "type": "Select",
+      "alias": "route1_sel",
+      "inputs": [
+        "join_parts"
+      ],
+      "config": {
+        "comment": "路1 一般维修+有滤清器+销售"
+      },
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "人工维修类型",
+            "零件维修类型",
+            "人工商品四级分类",
+            "零件商品四级分类",
+            "人工销售类型",
+            "零件销售类型",
+            "人工费用类别",
+            "零件费用类别",
+            "人工品牌",
+            "零件品牌"
+          ],
+          "filter": "([人工维修类型] = '一般维修' OR [零件维修类型] = '一般维修') AND ([人工商品四级分类] = '柴油机滤' OR [人工商品四级分类] = '汽油机滤' OR [零件商品四级分类] = '柴油机滤' OR [零件商品四级分类] = '汽油机滤') AND ([人工销售类型] = '销售' OR [零件销售类型] = '销售')"
+        },
+        {
+          "type": "AddField",
+          "addField": {
+            "name": "养修归类",
+            "dataType": "C",
+            "length": 50,
+            "isDimension": true,
+            "exp": "'保养及机电维修'"
+          }
+        },
+        {
+          "type": "RemoveField",
+          "fields": [
+            "人工工单号",
+            "人工维修类型",
+            "人工商品四级分类",
+            "人工销售类型",
+            "人工费用类别",
+            "人工品牌",
+            "零件工单号",
+            "零件维修类型",
+            "零件商品四级分类",
+            "零件销售类型",
+            "零件费用类别",
+            "零件品牌"
+          ]
+        }
+      ]
+    },
+    {
+      "key": "route1_dist",
+      "type": "Distinct",
+      "alias": "route1_dist",
+      "inputs": [
+        "route1_sel"
+      ],
+      "config": {
+        "comment": "每路按单据去重只留一条",
+        "distinctFields": [
+          "维修工单号",
+          "车辆VIN",
+          "门店",
+          "结算确认日期",
+          "应收金额",
+          "实收金额",
+          "养修归类"
+        ]
+      },
+      "fields": [
+        {
+          "name": "维修工单号",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 100
+        },
+        {
+          "name": "车辆VIN",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 50
+        },
+        {
+          "name": "门店",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 100
+        },
+        {
+          "name": "结算确认日期",
+          "dataType": "D",
+          "isDimension": true
+        },
+        {
+          "name": "应收金额",
+          "dataType": "N",
+          "isDimension": false,
+          "length": 18,
+          "decimal": 2
+        },
+        {
+          "name": "实收金额",
+          "dataType": "N",
+          "isDimension": false,
+          "length": 18,
+          "decimal": 2
+        },
+        {
+          "name": "养修归类",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 50
+        }
+      ]
+    },
+    {
+      "key": "route2_sel",
+      "type": "Select",
+      "alias": "route2_sel",
+      "inputs": [
+        "join_parts"
+      ],
+      "config": {
+        "comment": "路2 定期保养或奔驰保修索赔+有滤清器+销售"
+      },
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "人工维修类型",
+            "零件维修类型",
+            "人工商品四级分类",
+            "零件商品四级分类",
+            "人工销售类型",
+            "零件销售类型",
+            "人工费用类别",
+            "零件费用类别",
+            "人工品牌",
+            "零件品牌"
+          ],
+          "filter": "(([人工维修类型] = '定期保养' OR [零件维修类型] = '定期保养') OR (([人工品牌] LIKE '%奔驰%' OR [零件品牌] LIKE '%奔驰%') AND ([人工维修类型] = '保修索赔' OR [零件维修类型] = '保修索赔'))) AND ([人工商品四级分类] = '柴油机滤' OR [人工商品四级分类] = '汽油机滤' OR [零件商品四级分类] = '柴油机滤' OR [零件商品四级分类] = '汽油机滤') AND ([人工销售类型] = '销售' OR [零件销售类型] = '销售')"
+        },
+        {
+          "type": "AddField",
+          "addField": {
+            "name": "养修归类",
+            "dataType": "C",
+            "length": 50,
+            "isDimension": true,
+            "exp": "'常规保养'"
+          }
+        },
+        {
+          "type": "RemoveField",
+          "fields": [
+            "人工工单号",
+            "人工维修类型",
+            "人工商品四级分类",
+            "人工销售类型",
+            "人工费用类别",
+            "人工品牌",
+            "零件工单号",
+            "零件维修类型",
+            "零件商品四级分类",
+            "零件销售类型",
+            "零件费用类别",
+            "零件品牌"
+          ]
+        }
+      ]
+    },
+    {
+      "key": "route2_dist",
+      "type": "Distinct",
+      "alias": "route2_dist",
+      "inputs": [
+        "route2_sel"
+      ],
+      "config": {
+        "comment": "每路按单据去重只留一条",
+        "distinctFields": [
+          "维修工单号",
+          "车辆VIN",
+          "门店",
+          "结算确认日期",
+          "应收金额",
+          "实收金额",
+          "养修归类"
+        ]
+      },
+      "fields": [
+        {
+          "name": "维修工单号",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 100
+        },
+        {
+          "name": "车辆VIN",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 50
+        },
+        {
+          "name": "门店",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 100
+        },
+        {
+          "name": "结算确认日期",
+          "dataType": "D",
+          "isDimension": true
+        },
+        {
+          "name": "应收金额",
+          "dataType": "N",
+          "isDimension": false,
+          "length": 18,
+          "decimal": 2
+        },
+        {
+          "name": "实收金额",
+          "dataType": "N",
+          "isDimension": false,
+          "length": 18,
+          "decimal": 2
+        },
+        {
+          "name": "养修归类",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 50
+        }
+      ]
+    },
+    {
+      "key": "route3_sel",
+      "type": "Select",
+      "alias": "route3_sel",
+      "inputs": [
+        "join_parts"
+      ],
+      "config": {
+        "comment": "路3 一般维修+双侧无滤清器+销售"
+      },
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "人工维修类型",
+            "零件维修类型",
+            "人工商品四级分类",
+            "零件商品四级分类",
+            "人工销售类型",
+            "零件销售类型",
+            "人工费用类别",
+            "零件费用类别",
+            "人工品牌",
+            "零件品牌"
+          ],
+          "filter": "([人工维修类型] = '一般维修' OR [零件维修类型] = '一般维修') AND (([人工商品四级分类] = NULL OR ([人工商品四级分类] != '柴油机滤' AND [人工商品四级分类] != '汽油机滤')) AND ([零件商品四级分类] = NULL OR ([零件商品四级分类] != '柴油机滤' AND [零件商品四级分类] != '汽油机滤'))) AND ([人工销售类型] = '销售' OR [零件销售类型] = '销售')"
+        },
+        {
+          "type": "AddField",
+          "addField": {
+            "name": "养修归类",
+            "dataType": "C",
+            "length": 50,
+            "isDimension": true,
+            "exp": "'机电维修'"
+          }
+        },
+        {
+          "type": "RemoveField",
+          "fields": [
+            "人工工单号",
+            "人工维修类型",
+            "人工商品四级分类",
+            "人工销售类型",
+            "人工费用类别",
+            "人工品牌",
+            "零件工单号",
+            "零件维修类型",
+            "零件商品四级分类",
+            "零件销售类型",
+            "零件费用类别",
+            "零件品牌"
+          ]
+        }
+      ]
+    },
+    {
+      "key": "route3_dist",
+      "type": "Distinct",
+      "alias": "route3_dist",
+      "inputs": [
+        "route3_sel"
+      ],
+      "config": {
+        "comment": "每路按单据去重只留一条",
+        "distinctFields": [
+          "维修工单号",
+          "车辆VIN",
+          "门店",
+          "结算确认日期",
+          "应收金额",
+          "实收金额",
+          "养修归类"
+        ]
+      },
+      "fields": [
+        {
+          "name": "维修工单号",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 100
+        },
+        {
+          "name": "车辆VIN",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 50
+        },
+        {
+          "name": "门店",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 100
+        },
+        {
+          "name": "结算确认日期",
+          "dataType": "D",
+          "isDimension": true
+        },
+        {
+          "name": "应收金额",
+          "dataType": "N",
+          "isDimension": false,
+          "length": 18,
+          "decimal": 2
+        },
+        {
+          "name": "实收金额",
+          "dataType": "N",
+          "isDimension": false,
+          "length": 18,
+          "decimal": 2
+        },
+        {
+          "name": "养修归类",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 50
+        }
+      ]
+    },
+    {
+      "key": "route4_sel",
+      "type": "Select",
+      "alias": "route4_sel",
+      "inputs": [
+        "join_parts"
+      ],
+      "config": {
+        "comment": "路4 事故维修+销售"
+      },
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "人工维修类型",
+            "零件维修类型",
+            "人工商品四级分类",
+            "零件商品四级分类",
+            "人工销售类型",
+            "零件销售类型",
+            "人工费用类别",
+            "零件费用类别",
+            "人工品牌",
+            "零件品牌"
+          ],
+          "filter": "([人工维修类型] = '事故维修' OR [零件维修类型] = '事故维修') AND ([人工销售类型] = '销售' OR [零件销售类型] = '销售')"
+        },
+        {
+          "type": "AddField",
+          "addField": {
+            "name": "养修归类",
+            "dataType": "C",
+            "length": 50,
+            "isDimension": true,
+            "exp": "'事故维修'"
+          }
+        },
+        {
+          "type": "RemoveField",
+          "fields": [
+            "人工工单号",
+            "人工维修类型",
+            "人工商品四级分类",
+            "人工销售类型",
+            "人工费用类别",
+            "人工品牌",
+            "零件工单号",
+            "零件维修类型",
+            "零件商品四级分类",
+            "零件销售类型",
+            "零件费用类别",
+            "零件品牌"
+          ]
+        }
+      ]
+    },
+    {
+      "key": "route4_dist",
+      "type": "Distinct",
+      "alias": "route4_dist",
+      "inputs": [
+        "route4_sel"
+      ],
+      "config": {
+        "comment": "每路按单据去重只留一条",
+        "distinctFields": [
+          "维修工单号",
+          "车辆VIN",
+          "门店",
+          "结算确认日期",
+          "应收金额",
+          "实收金额",
+          "养修归类"
+        ]
+      },
+      "fields": [
+        {
+          "name": "维修工单号",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 100
+        },
+        {
+          "name": "车辆VIN",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 50
+        },
+        {
+          "name": "门店",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 100
+        },
+        {
+          "name": "结算确认日期",
+          "dataType": "D",
+          "isDimension": true
+        },
+        {
+          "name": "应收金额",
+          "dataType": "N",
+          "isDimension": false,
+          "length": 18,
+          "decimal": 2
+        },
+        {
+          "name": "实收金额",
+          "dataType": "N",
+          "isDimension": false,
+          "length": 18,
+          "decimal": 2
+        },
+        {
+          "name": "养修归类",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 50
+        }
+      ]
+    },
+    {
+      "key": "route5_sel",
+      "type": "Select",
+      "alias": "route5_sel",
+      "inputs": [
+        "join_parts"
+      ],
+      "config": {
+        "comment": "路5 延保索赔+销售"
+      },
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "人工维修类型",
+            "零件维修类型",
+            "人工商品四级分类",
+            "零件商品四级分类",
+            "人工销售类型",
+            "零件销售类型",
+            "人工费用类别",
+            "零件费用类别",
+            "人工品牌",
+            "零件品牌"
+          ],
+          "filter": "([人工维修类型] = '延保索赔' OR [零件维修类型] = '延保索赔') AND ([人工销售类型] = '销售' OR [零件销售类型] = '销售')"
+        },
+        {
+          "type": "AddField",
+          "addField": {
+            "name": "养修归类",
+            "dataType": "C",
+            "length": 50,
+            "isDimension": true,
+            "exp": "'延保维修'"
+          }
+        },
+        {
+          "type": "RemoveField",
+          "fields": [
+            "人工工单号",
+            "人工维修类型",
+            "人工商品四级分类",
+            "人工销售类型",
+            "人工费用类别",
+            "人工品牌",
+            "零件工单号",
+            "零件维修类型",
+            "零件商品四级分类",
+            "零件销售类型",
+            "零件费用类别",
+            "零件品牌"
+          ]
+        }
+      ]
+    },
+    {
+      "key": "route5_dist",
+      "type": "Distinct",
+      "alias": "route5_dist",
+      "inputs": [
+        "route5_sel"
+      ],
+      "config": {
+        "comment": "每路按单据去重只留一条",
+        "distinctFields": [
+          "维修工单号",
+          "车辆VIN",
+          "门店",
+          "结算确认日期",
+          "应收金额",
+          "实收金额",
+          "养修归类"
+        ]
+      },
+      "fields": [
+        {
+          "name": "维修工单号",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 100
+        },
+        {
+          "name": "车辆VIN",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 50
+        },
+        {
+          "name": "门店",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 100
+        },
+        {
+          "name": "结算确认日期",
+          "dataType": "D",
+          "isDimension": true
+        },
+        {
+          "name": "应收金额",
+          "dataType": "N",
+          "isDimension": false,
+          "length": 18,
+          "decimal": 2
+        },
+        {
+          "name": "实收金额",
+          "dataType": "N",
+          "isDimension": false,
+          "length": 18,
+          "decimal": 2
+        },
+        {
+          "name": "养修归类",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 50
+        }
+      ]
+    },
+    {
+      "key": "route6_sel",
+      "type": "Select",
+      "alias": "route6_sel",
+      "inputs": [
+        "join_parts"
+      ],
+      "config": {
+        "comment": "路6 保修索赔+销售+厂家付费，奔驰另需双侧无滤清器"
+      },
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "人工维修类型",
+            "零件维修类型",
+            "人工商品四级分类",
+            "零件商品四级分类",
+            "人工销售类型",
+            "零件销售类型",
+            "人工费用类别",
+            "零件费用类别",
+            "人工品牌",
+            "零件品牌"
+          ],
+          "filter": "([人工维修类型] = '保修索赔' OR [零件维修类型] = '保修索赔') AND ([人工销售类型] = '销售' OR [零件销售类型] = '销售') AND ([人工费用类别] = '厂家付费' OR [零件费用类别] = '厂家付费') AND ((([人工品牌] = NULL OR [人工品牌] NOT LIKE '%奔驰%') AND ([零件品牌] = NULL OR [零件品牌] NOT LIKE '%奔驰%')) OR (([人工商品四级分类] = NULL OR ([人工商品四级分类] != '柴油机滤' AND [人工商品四级分类] != '汽油机滤')) AND ([零件商品四级分类] = NULL OR ([零件商品四级分类] != '柴油机滤' AND [零件商品四级分类] != '汽油机滤'))))"
+        },
+        {
+          "type": "AddField",
+          "addField": {
+            "name": "养修归类",
+            "dataType": "C",
+            "length": 50,
+            "isDimension": true,
+            "exp": "'保修维修'"
+          }
+        },
+        {
+          "type": "RemoveField",
+          "fields": [
+            "人工工单号",
+            "人工维修类型",
+            "人工商品四级分类",
+            "人工销售类型",
+            "人工费用类别",
+            "人工品牌",
+            "零件工单号",
+            "零件维修类型",
+            "零件商品四级分类",
+            "零件销售类型",
+            "零件费用类别",
+            "零件品牌"
+          ]
+        }
+      ]
+    },
+    {
+      "key": "route6_dist",
+      "type": "Distinct",
+      "alias": "route6_dist",
+      "inputs": [
+        "route6_sel"
+      ],
+      "config": {
+        "comment": "每路按单据去重只留一条",
+        "distinctFields": [
+          "维修工单号",
+          "车辆VIN",
+          "门店",
+          "结算确认日期",
+          "应收金额",
+          "实收金额",
+          "养修归类"
+        ]
+      },
+      "fields": [
+        {
+          "name": "维修工单号",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 100
+        },
+        {
+          "name": "车辆VIN",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 50
+        },
+        {
+          "name": "门店",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 100
+        },
+        {
+          "name": "结算确认日期",
+          "dataType": "D",
+          "isDimension": true
+        },
+        {
+          "name": "应收金额",
+          "dataType": "N",
+          "isDimension": false,
+          "length": 18,
+          "decimal": 2
+        },
+        {
+          "name": "实收金额",
+          "dataType": "N",
+          "isDimension": false,
+          "length": 18,
+          "decimal": 2
+        },
+        {
+          "name": "养修归类",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 50
+        }
+      ]
+    },
+    {
+      "key": "route7_sel",
+      "type": "Select",
+      "alias": "route7_sel",
+      "inputs": [
+        "join_parts"
+      ],
+      "config": {
+        "comment": "路7 定期保养+双侧无滤清器+销售+厂家付费"
+      },
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "人工维修类型",
+            "零件维修类型",
+            "人工商品四级分类",
+            "零件商品四级分类",
+            "人工销售类型",
+            "零件销售类型",
+            "人工费用类别",
+            "零件费用类别",
+            "人工品牌",
+            "零件品牌"
+          ],
+          "filter": "([人工维修类型] = '定期保养' OR [零件维修类型] = '定期保养') AND (([人工商品四级分类] = NULL OR ([人工商品四级分类] != '柴油机滤' AND [人工商品四级分类] != '汽油机滤')) AND ([零件商品四级分类] = NULL OR ([零件商品四级分类] != '柴油机滤' AND [零件商品四级分类] != '汽油机滤'))) AND ([人工销售类型] = '销售' OR [零件销售类型] = '销售') AND ([人工费用类别] = '厂家付费' OR [零件费用类别] = '厂家付费')"
+        },
+        {
+          "type": "AddField",
+          "addField": {
+            "name": "养修归类",
+            "dataType": "C",
+            "length": 50,
+            "isDimension": true,
+            "exp": "'机电维修'"
+          }
+        },
+        {
+          "type": "RemoveField",
+          "fields": [
+            "人工工单号",
+            "人工维修类型",
+            "人工商品四级分类",
+            "人工销售类型",
+            "人工费用类别",
+            "人工品牌",
+            "零件工单号",
+            "零件维修类型",
+            "零件商品四级分类",
+            "零件销售类型",
+            "零件费用类别",
+            "零件品牌"
+          ]
+        }
+      ]
+    },
+    {
+      "key": "route7_dist",
+      "type": "Distinct",
+      "alias": "route7_dist",
+      "inputs": [
+        "route7_sel"
+      ],
+      "config": {
+        "comment": "每路按单据去重只留一条",
+        "distinctFields": [
+          "维修工单号",
+          "车辆VIN",
+          "门店",
+          "结算确认日期",
+          "应收金额",
+          "实收金额",
+          "养修归类"
+        ]
+      },
+      "fields": [
+        {
+          "name": "维修工单号",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 100
+        },
+        {
+          "name": "车辆VIN",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 50
+        },
+        {
+          "name": "门店",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 100
+        },
+        {
+          "name": "结算确认日期",
+          "dataType": "D",
+          "isDimension": true
+        },
+        {
+          "name": "应收金额",
+          "dataType": "N",
+          "isDimension": false,
+          "length": 18,
+          "decimal": 2
+        },
+        {
+          "name": "实收金额",
+          "dataType": "N",
+          "isDimension": false,
+          "length": 18,
+          "decimal": 2
+        },
+        {
+          "name": "养修归类",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 50
+        }
+      ]
+    },
+    {
+      "key": "union_routes",
+      "type": "Union",
+      "alias": "union_routes",
+      "inputs": [
+        "route1_dist",
+        "route2_dist",
+        "route3_dist",
+        "route4_dist",
+        "route5_dist",
+        "route6_dist",
+        "route7_dist"
+      ],
+      "config": {
+        "comment": "七路上下合并",
+        "unionType": "UnionAll",
+        "unionMapArray": [
+          {
+            "values": [
+              "维修工单号",
+              "维修工单号",
+              "维修工单号",
+              "维修工单号",
+              "维修工单号",
+              "维修工单号",
+              "维修工单号"
+            ],
+            "visible": true
+          },
+          {
+            "values": [
+              "车辆VIN",
+              "车辆VIN",
+              "车辆VIN",
+              "车辆VIN",
+              "车辆VIN",
+              "车辆VIN",
+              "车辆VIN"
+            ],
+            "visible": true
+          },
+          {
+            "values": [
+              "门店",
+              "门店",
+              "门店",
+              "门店",
+              "门店",
+              "门店",
+              "门店"
+            ],
+            "visible": true
+          },
+          {
+            "values": [
+              "结算确认日期",
+              "结算确认日期",
+              "结算确认日期",
+              "结算确认日期",
+              "结算确认日期",
+              "结算确认日期",
+              "结算确认日期"
+            ],
+            "visible": true
+          },
+          {
+            "values": [
+              "应收金额",
+              "应收金额",
+              "应收金额",
+              "应收金额",
+              "应收金额",
+              "应收金额",
+              "应收金额"
+            ],
+            "visible": true
+          },
+          {
+            "values": [
+              "实收金额",
+              "实收金额",
+              "实收金额",
+              "实收金额",
+              "实收金额",
+              "实收金额",
+              "实收金额"
+            ],
+            "visible": true
+          },
+          {
+            "values": [
+              "养修归类",
+              "养修归类",
+              "养修归类",
+              "养修归类",
+              "养修归类",
+              "养修归类",
+              "养修归类"
+            ],
+            "visible": true
+          }
+        ]
+      },
+      "fields": [
+        {
+          "name": "维修工单号",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 100
+        },
+        {
+          "name": "车辆VIN",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 50
+        },
+        {
+          "name": "门店",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 100
+        },
+        {
+          "name": "结算确认日期",
+          "dataType": "D",
+          "isDimension": true
+        },
+        {
+          "name": "应收金额",
+          "dataType": "N",
+          "isDimension": false,
+          "length": 18,
+          "decimal": 2
+        },
+        {
+          "name": "实收金额",
+          "dataType": "N",
+          "isDimension": false,
+          "length": 18,
+          "decimal": 2
+        },
+        {
+          "name": "养修归类",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 50
+        }
+      ]
+    },
+    {
+      "key": "dist_routes",
+      "type": "Distinct",
+      "alias": "dist_routes",
+      "inputs": [
+        "union_routes"
+      ],
+      "config": {
+        "comment": "全字段相同只留一条：同单同归类一条，不同归类各一条",
+        "distinctFields": [
+          "维修工单号",
+          "车辆VIN",
+          "门店",
+          "结算确认日期",
+          "应收金额",
+          "实收金额",
+          "养修归类"
+        ]
+      },
+      "fields": [
+        {
+          "name": "维修工单号",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 100
+        },
+        {
+          "name": "车辆VIN",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 50
+        },
+        {
+          "name": "门店",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 100
+        },
+        {
+          "name": "结算确认日期",
+          "dataType": "D",
+          "isDimension": true
+        },
+        {
+          "name": "应收金额",
+          "dataType": "N",
+          "isDimension": false,
+          "length": 18,
+          "decimal": 2
+        },
+        {
+          "name": "实收金额",
+          "dataType": "N",
+          "isDimension": false,
+          "length": 18,
+          "decimal": 2
+        },
+        {
+          "name": "养修归类",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 50
+        }
+      ]
+    },
+    {
+      "key": "flt_person",
+      "type": "Select",
+      "alias": "flt_person",
+      "inputs": [
+        "src_person"
+      ],
+      "config": {
+        "comment": "人车只取车主本人且愿意对外显示"
+      },
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "关系类型",
+            "是否展示"
+          ],
+          "filter": "[关系类型] = '车主关系' AND [是否展示] = '1'"
+        }
+      ]
+    },
+    {
+      "key": "branch_direct",
+      "type": "Select",
+      "alias": "branch_direct",
+      "inputs": [
+        "flt_person"
+      ],
+      "config": {
+        "comment": "直留支：已留手机账号且非空直接保留"
+      },
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "粉丝ID"
+          ],
+          "filter": "[粉丝ID] != NULL AND [粉丝ID] != ''"
+        },
+        {
+          "type": "RemoveField",
+          "fields": [
+            "关系类型",
+            "是否展示"
+          ]
+        }
+      ]
+    },
+    {
+      "key": "branch_missing",
+      "type": "Select",
+      "alias": "branch_missing",
+      "inputs": [
+        "flt_person"
+      ],
+      "config": {
+        "comment": "缺账号支：待补充资料补齐"
+      },
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "粉丝ID"
+          ],
+          "filter": "[粉丝ID] = NULL OR [粉丝ID] = ''"
+        },
+        {
+          "type": "RemoveField",
+          "fields": [
+            "关系类型",
+            "是否展示"
+          ]
+        }
+      ]
+    },
+    {
+      "key": "dist_supp",
+      "type": "Distinct",
+      "alias": "dist_supp",
+      "inputs": [
+        "src_supp"
+      ],
+      "config": {
+        "comment": "补充资料按对应编号加使用人账号去重",
+        "distinctFields": [
+          "关系ID",
+          "使用人账号"
+        ]
+      },
+      "fields": [
+        {
+          "name": "关系ID",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 100
+        },
+        {
+          "name": "使用人账号",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 100
+        }
+      ]
+    },
+    {
+      "key": "join_supp",
+      "type": "Join",
+      "alias": "join_supp",
+      "inputs": [
+        "branch_missing",
+        "dist_supp"
+      ],
+      "config": {
+        "comment": "按对应编号内关联补齐：只保留两边都对上的",
+        "joinConditions": [
+          {
+            "leftTable": "branch_missing",
+            "rightTable": "dist_supp",
+            "joinType": "InnerJoin",
+            "clauses": [
+              {
+                "leftExp": "[branch_missing].[人车关系编码]",
+                "operator": "=",
+                "rightExp": "[dist_supp].[关系ID]",
+                "exp": "[branch_missing].[人车关系编码] = [dist_supp].[关系ID]"
+              }
+            ]
+          }
+        ]
+      },
+      "fields": [
+        {
+          "name": "人车关系编码",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 100,
+          "inputNode": "branch_missing",
+          "inputField": "人车关系编码",
+          "originalNode": "branch_missing",
+          "originalField": "人车关系编码"
+        },
+        {
+          "name": "车辆VIN",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 50,
+          "inputNode": "branch_missing",
+          "inputField": "车辆VIN",
+          "originalNode": "branch_missing",
+          "originalField": "车辆VIN"
+        },
+        {
+          "name": "使用人账号",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 100,
+          "inputNode": "dist_supp",
+          "inputField": "使用人账号",
+          "originalNode": "dist_supp",
+          "originalField": "使用人账号"
+        }
+      ]
+    },
+    {
+      "key": "fill_account",
+      "type": "Select",
+      "alias": "fill_account",
+      "inputs": [
+        "join_supp"
+      ],
+      "config": {
+        "comment": "补齐账号统一为粉丝ID"
+      },
+      "steps": [
+        {
+          "type": "Refactor",
+          "fields": [
+            "使用人账号"
+          ],
+          "refactor": {
+            "rename": "粉丝ID"
+          }
+        }
+      ]
+    },
+    {
+      "key": "union_person",
+      "type": "Union",
+      "alias": "union_person",
+      "inputs": [
+        "branch_direct",
+        "fill_account"
+      ],
+      "config": {
+        "comment": "两支上下拼不去重",
+        "unionType": "UnionAll",
+        "unionMapArray": [
+          {
+            "values": [
+              "人车关系编码",
+              "人车关系编码"
+            ],
+            "visible": true
+          },
+          {
+            "values": [
+              "车辆VIN",
+              "车辆VIN"
+            ],
+            "visible": true
+          },
+          {
+            "values": [
+              "粉丝ID",
+              "粉丝ID"
+            ],
+            "visible": true
+          }
+        ]
+      },
+      "fields": [
+        {
+          "name": "人车关系编码",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 100
+        },
+        {
+          "name": "车辆VIN",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 50
+        },
+        {
+          "name": "粉丝ID",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 100
+        }
+      ]
+    },
+    {
+      "key": "join_list",
+      "type": "Join",
+      "alias": "join_list",
+      "inputs": [
+        "union_person",
+        "src_list"
+      ],
+      "config": {
+        "comment": "按车辆唯一编号只保留在车主清单里的车辆，牌照以清单为准",
+        "joinConditions": [
+          {
+            "leftTable": "union_person",
+            "rightTable": "src_list",
+            "joinType": "InnerJoin",
+            "clauses": [
+              {
+                "leftExp": "[union_person].[车辆VIN]",
+                "operator": "=",
+                "rightExp": "[src_list].[车架号]",
+                "exp": "[union_person].[车辆VIN] = [src_list].[车架号]"
+              }
+            ]
+          }
+        ]
+      },
+      "fields": [
+        {
+          "name": "人车关系编码",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 100,
+          "inputNode": "union_person",
+          "inputField": "人车关系编码",
+          "originalNode": "union_person",
+          "originalField": "人车关系编码"
+        },
+        {
+          "name": "粉丝ID",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 100,
+          "inputNode": "union_person",
+          "inputField": "粉丝ID",
+          "originalNode": "union_person",
+          "originalField": "粉丝ID"
+        },
+        {
+          "name": "车辆VIN",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 50,
+          "inputNode": "union_person",
+          "inputField": "车辆VIN",
+          "originalNode": "union_person",
+          "originalField": "车辆VIN"
+        },
+        {
+          "name": "车牌号",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 20,
+          "inputNode": "src_list",
+          "inputField": "车牌号",
+          "originalNode": "src_list",
+          "originalField": "车牌号"
+        }
+      ]
+    },
+    {
+      "key": "join_final",
+      "type": "Join",
+      "alias": "join_final",
+      "inputs": [
+        "dist_routes",
+        "join_list"
+      ],
+      "config": {
+        "comment": "养修与人车按车辆唯一编号内关联：无账号进店不入清单，一车两人同次各一条",
+        "joinConditions": [
+          {
+            "leftTable": "dist_routes",
+            "rightTable": "join_list",
+            "joinType": "InnerJoin",
+            "clauses": [
+              {
+                "leftExp": "[dist_routes].[车辆VIN]",
+                "operator": "=",
+                "rightExp": "[join_list].[车辆VIN]",
+                "exp": "[dist_routes].[车辆VIN] = [join_list].[车辆VIN]"
+              }
+            ]
+          }
+        ]
+      },
+      "fields": [
+        {
+          "name": "粉丝ID",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 100,
+          "inputNode": "join_list",
+          "inputField": "粉丝ID",
+          "originalNode": "join_list",
+          "originalField": "粉丝ID"
+        },
+        {
+          "name": "车辆VIN",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 50,
+          "inputNode": "dist_routes",
+          "inputField": "车辆VIN",
+          "originalNode": "dist_routes",
+          "originalField": "车辆VIN"
+        },
+        {
+          "name": "车牌号",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 20,
+          "inputNode": "join_list",
+          "inputField": "车牌号",
+          "originalNode": "join_list",
+          "originalField": "车牌号"
+        },
+        {
+          "name": "门店",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 100,
+          "inputNode": "dist_routes",
+          "inputField": "门店",
+          "originalNode": "dist_routes",
+          "originalField": "门店"
+        },
+        {
+          "name": "结算确认日期",
+          "dataType": "D",
+          "isDimension": true,
+          "inputNode": "dist_routes",
+          "inputField": "结算确认日期",
+          "originalNode": "dist_routes",
+          "originalField": "结算确认日期"
+        },
+        {
+          "name": "维修工单号",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 100,
+          "inputNode": "dist_routes",
+          "inputField": "维修工单号",
+          "originalNode": "dist_routes",
+          "originalField": "维修工单号"
+        },
+        {
+          "name": "养修归类",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 50,
+          "inputNode": "dist_routes",
+          "inputField": "养修归类",
+          "originalNode": "dist_routes",
+          "originalField": "养修归类"
+        },
+        {
+          "name": "应收金额",
+          "dataType": "N",
+          "isDimension": false,
+          "length": 18,
+          "decimal": 2,
+          "inputNode": "dist_routes",
+          "inputField": "应收金额",
+          "originalNode": "dist_routes",
+          "originalField": "应收金额"
+        },
+        {
+          "name": "实收金额",
+          "dataType": "N",
+          "isDimension": false,
+          "length": 18,
+          "decimal": 2,
+          "inputNode": "dist_routes",
+          "inputField": "实收金额",
+          "originalNode": "dist_routes",
+          "originalField": "实收金额"
+        }
+      ]
+    },
+    {
+      "key": "final_sel",
+      "type": "Select",
+      "alias": "final_sel",
+      "inputs": [
+        "join_final"
+      ],
+      "config": {
+        "comment": "收尾：每条全新不重复编号，实收为空补零，应收原样，牌照用清单牌照"
+      },
+      "fields": [
+        {
+          "name": "编号",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 100
+        },
+        {
+          "name": "粉丝ID",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 100
+        },
+        {
+          "name": "车辆VIN",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 50
+        },
+        {
+          "name": "车牌号",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 20
+        },
+        {
+          "name": "门店",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 100
+        },
+        {
+          "name": "结算确认日期",
+          "dataType": "D",
+          "isDimension": true
+        },
+        {
+          "name": "维修工单号",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 100
+        },
+        {
+          "name": "养修归类",
+          "dataType": "C",
+          "isDimension": true,
+          "length": 50
+        },
+        {
+          "name": "应收金额",
+          "dataType": "N",
+          "isDimension": false,
+          "length": 18,
+          "decimal": 2
+        },
+        {
+          "name": "实收金额",
+          "dataType": "N",
+          "isDimension": false,
+          "length": 18,
+          "decimal": 2
+        }
+      ],
+      "steps": [
+        {
+          "type": "AddField",
+          "addField": {
+            "name": "编号",
+            "dataType": "C",
+            "length": 100,
+            "isDimension": true,
+            "exp": "UUID()"
+          }
+        },
+        {
+          "type": "TransformToCalculatedField",
+          "fields": [
+            "实收金额"
+          ],
+          "transformFieldInfo": {
+            "dataType": "N",
+            "exp": "CASE WHEN [实收金额] = NULL THEN 0 ELSE [实收金额] END"
+          }
+        }
+      ]
+    },
+    {
+      "key": "out",
+      "type": "Output",
+      "alias": "模型输出",
+      "inputs": [
+        "final_sel"
+      ]
+    }
+  ]
+}

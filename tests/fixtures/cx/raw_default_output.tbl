@@ -1,0 +1,78 @@
+{
+  "dataFlow": {
+    "nodes": {
+      "default": {
+        "alias": "out",
+        "fields": [
+          {
+            "dataType": "C",
+            "inputField": "ID",
+            "isDimension": true,
+            "name": "ID"
+          }
+        ],
+        "id": "default",
+        "inputNodes": [
+          "src"
+        ],
+        "type": "Output"
+      },
+      "src": {
+        "alias": "src",
+        "dimensions": [
+          {
+            "dataType": "C",
+            "inputField": "ID",
+            "isDimension": true,
+            "name": "ID"
+          },
+          {
+            "dataType": "C",
+            "inputField": "SKU",
+            "isDimension": true,
+            "name": "SKU"
+          }
+        ],
+        "fields": [
+          {
+            "dataType": "C",
+            "inputField": "ID",
+            "isDimension": true,
+            "name": "ID"
+          },
+          {
+            "dataType": "C",
+            "inputField": "SKU",
+            "isDimension": true,
+            "name": "SKU"
+          }
+        ],
+        "fileName": "d.xlsx#S",
+        "id": "src",
+        "measures": [],
+        "originalFields": [
+          {
+            "dataType": "C",
+            "inputField": "ID",
+            "isDimension": true,
+            "name": "ID"
+          },
+          {
+            "dataType": "C",
+            "inputField": "SKU",
+            "isDimension": true,
+            "name": "SKU"
+          }
+        ],
+        "type": "FileInput"
+      }
+    }
+  },
+  "dimensions": [],
+  "measures": [],
+  "properties": {
+    "extractDataEnabled": false,
+    "modelDataType": "DataFlow"
+  },
+  "version": "4.19.0"
+}

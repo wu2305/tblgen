@@ -1,0 +1,88 @@
+{
+	"version": "4.0.0",
+	"properties": {
+		"modelDataType": "DataFlow",
+		"extractDataEnabled": false,
+		"datasource": "defdw",
+		"dbTableName": ""
+	},
+	"dimensions": [{
+		"inputField": "YEARMONTH",
+		"dbfield": "YEARMONTH",
+		"dataType": "C",
+		"name": "YEARMONTH",
+		"length": 12,
+		"isDimension": true,
+		"originalField": "YEARMONTH",
+		"originalNode": "sql节点"
+	}, {
+		"inputField": "ORG",
+		"dbfield": "ORG",
+		"dataType": "C",
+		"name": "ORG",
+		"length": 50,
+		"isDimension": true,
+		"originalField": "ORG",
+		"originalNode": "sql节点"
+	}],
+	"measures": [],
+	"errors": [],
+	"dataFlow": {
+		"nodes": {
+			"2mpdvt3rbjrmqundt4v95wy4k": {
+				"fields": [{
+					"inputField": "YEARMONTH",
+					"dbfield": "YEARMONTH",
+					"dataType": "C",
+					"name": "YEARMONTH",
+					"length": 12,
+					"isDimension": true
+				}, {
+					"inputField": "ORG",
+					"dbfield": "ORG",
+					"dataType": "C",
+					"name": "ORG",
+					"length": 50,
+					"isDimension": true
+				}],
+				"id": "2mpdvt3rbjrmqundt4v95wy4k",
+				"type": "Sql",
+				"datasource": "defdw",
+				"sql": "SELECT yearmonth,\n\t\t org\nFROM f_cpcl",
+				"alias": "sql节点",
+				"sqlInfo": {
+					"isMultiSqls": false,
+					"resultType": "Data",
+					"needAlert": false
+				},
+				"lastModifyTime": 1559009258237
+			},
+			"default": {
+				"id": "default",
+				"type": "Output",
+				"alias": "表输出1",
+				"inputNodes": ["2mpdvt3rbjrmqundt4v95wy4k"],
+				"fields": [{
+					"inputField": "YEARMONTH",
+					"dbfield": "YEARMONTH",
+					"dataType": "C",
+					"name": "YEARMONTH",
+					"length": 12,
+					"isDimension": true,
+					"originalField": "YEARMONTH",
+					"originalNode": "sql节点"
+				}, {
+					"inputField": "ORG",
+					"dbfield": "ORG",
+					"dataType": "C",
+					"name": "ORG",
+					"length": 50,
+					"isDimension": true,
+					"originalField": "ORG",
+					"originalNode": "sql节点"
+				}],
+				"lastModifyTime": 1559009258237
+			}
+		}
+	}
+}

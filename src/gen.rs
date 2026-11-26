@@ -15,44 +15,84 @@ use crate::model::*;
 // Public API
 // ---------------------------------------------------------------------------
 
-/// Compile a spec document to a `.tbl` wire `Value`.
-pub fn generate(spec: &Value) -> Result<Value, Diag> {
+/// Compile a spec document, returning the wire value (when compilation
+/// succeeds) plus ALL diagnostics — warnings included. Single entry for
+/// the `gen`/`new` CLI so validation and emission share one compile pass.
+pub fn generate_with_diagnostics(spec: &Value) -> (Option<Value>, Vec<Diag>) {
+    let mut diags = Vec::new();
     if !spec.is_object() {
-        return Err(Diag::spec(
+        diags.push(Diag::spec(
             "",
             "structure.spec",
             "spec must be a JSON object",
         ));
+        return (None, diags);
     }
     match spec.get("format") {
         Some(v) if v.as_u64() == Some(1) => {}
         _ => {
-            return Err(Diag::spec(
+            diags.push(Diag::spec(
                 "/format",
                 "structure.format",
                 "spec.format must be 1",
-            ))
+            ));
+            return (None, diags);
         }
     }
-
     let has_archive = spec.get("archive").is_some();
     let has_rawtable = spec.get("rawTable").is_some();
     let has_nodes = spec.get("nodes").is_some();
     match (has_archive, has_rawtable, has_nodes) {
-        (true, false, false) => build_archive(spec),
-        (false, true, false) => build_rawtable(spec),
-        (false, false, true) => {
-            let diags = validate_spec(spec);
-            if let Some(d) = diags.into_iter().find(|d| !d.is_warning()) {
-                return Err(d);
+        (true, false, false) => {
+            validate_archive(spec, &mut diags);
+            if diags.iter().any(|d| !d.is_warning()) {
+                return (None, diags);
             }
-            build_generated(spec)
+            match build_archive(spec) {
+                Ok(tbl) => (Some(tbl), diags),
+                Err(d) => {
+                    diags.push(d);
+                    (None, diags)
+                }
+            }
         }
-        _ => Err(Diag::spec(
-            "",
-            "structure.form",
-            "spec must contain exactly one of: nodes (generated), archive, rawTable",
-        )),
+        (false, true, false) => {
+            validate_rawtable(spec, &mut diags);
+            if diags.iter().any(|d| !d.is_warning()) {
+                return (None, diags);
+            }
+            match build_rawtable(spec) {
+                Ok(tbl) => (Some(tbl), diags),
+                Err(d) => {
+                    diags.push(d);
+                    (None, diags)
+                }
+            }
+        }
+        (false, false, true) => {
+            let wire = compile_generated(spec, &mut diags);
+            (wire, diags)
+        }
+        _ => {
+            diags.push(Diag::spec(
+                "",
+                "structure.form",
+                "spec must contain exactly one of: nodes (generated), archive, rawTable",
+            ));
+            (None, diags)
+        }
+    }
+}
+
+/// Compile a spec document to a `.tbl` wire `Value`.
+pub fn generate(spec: &Value) -> Result<Value, Diag> {
+    let (wire, diags) = generate_with_diagnostics(spec);
+    match wire {
+        Some(w) => Ok(w),
+        None => Err(diags
+            .into_iter()
+            .find(|d| !d.is_warning())
+            .unwrap_or_else(|| Diag::spec("", "structure.spec", "spec failed to compile"))),
     }
 }
 
@@ -81,7 +121,9 @@ pub fn validate_spec(spec: &Value) -> Vec<Diag> {
     match (has_archive, has_rawtable, has_nodes) {
         (true, false, false) => validate_archive(spec, &mut d),
         (false, true, false) => validate_rawtable(spec, &mut d),
-        (false, false, true) => validate_generated(spec, &mut d),
+        (false, false, true) => {
+            compile_generated(spec, &mut d);
+        }
         _ => d.push(Diag::spec(
             "",
             "structure.form",
@@ -91,6 +133,145 @@ pub fn validate_spec(spec: &Value) -> Vec<Diag> {
     d
 }
 
+/// Single compile path for the generated form: structural/semantic
+/// validation, one build pass collecting diagnostics, then the pure wire
+/// `check` so errors only visible on the wire (rawNode bodies, emitted step
+/// payloads, top-level partition) surface with spec paths. Returns the wire
+/// document when no hard diagnostic was produced.
+fn compile_generated(spec: &Value, diags: &mut Vec<Diag>) -> Option<Value> {
+    // one prepare pass shared by validation, build and wire-diag mapping
+    let descs = validate_generated(spec, diags);
+    if diags.iter().any(|d| !d.is_warning()) {
+        return None;
+    }
+    let (wire, descs) = build_generated_collect(spec, descs, diags);
+    let Some(wire) = wire else {
+        return None;
+    };
+    // wire invariants: pure check, no filesystem, no recursion into generate
+    let wire_diags = crate::check::check(&wire);
+    if wire_diags.is_empty() {
+        return Some(wire);
+    }
+    for wd in wire_diags {
+        // warnings the spec side already reports with better paths
+        if matches!(
+            wd.rule.as_str(),
+            "warn.properties.runMode.unset"
+                | "warn.properties.runMode.noTable"
+                | "warn.extract.dbfield"
+        ) {
+            continue;
+        }
+        diags.push(map_wire_diag(wd, &descs));
+    }
+    if diags.iter().any(|d| !d.is_warning()) {
+        None
+    } else {
+        Some(wire)
+    }
+}
+
+/// Translate a wire `.tbl` diagnostic path into the spec path that produced
+/// it. Node bodies map by wire map key; generated keys keep their tail,
+/// config keys route under `/config`, everything else under `/raw` (or
+/// `/rawNode` for rawNode entries whose body is verbatim).
+fn map_wire_diag(wd: Diag, descs: &[NodeDesc]) -> Diag {
+    let p = wd.path;
+    let remap = |path: String| Diag {
+        path,
+        rule: wd.rule.clone(),
+        source: wd.source.clone(),
+        message: wd.message.clone(),
+    };
+    if let Some(rest) = p.strip_prefix("/dataFlow/nodes/") {
+        let (wk, tail) = match rest.split_once('/') {
+            Some((a, b)) => (a, Some(b)),
+            None => (rest, None),
+        };
+        // wk is the escaped path segment from the wire pointer
+        if let Some(d) = descs.iter().find(|d| ptr_escape(&d.wire_key) == wk) {
+            let base = format!("/nodes/{}", d.idx);
+            let spec_path = if d.raw_body.is_some() {
+                match tail {
+                    None => base,
+                    Some(t) => format!("{}/rawNode/{}", base, t),
+                }
+            } else {
+                match tail {
+                    None => base,
+                    Some(t) => {
+                        let seg = t.split('/').next().unwrap_or("");
+                        if GENERATED_NODE_KEYS.contains(&seg) {
+                            // a wire step that decompiles to rawStep lives
+                            // under steps/N/rawStep in the spec
+                            if let Some((n, rest)) =
+                                t.strip_prefix("steps/").and_then(|r| r.split_once('/'))
+                            {
+                                if let Ok(si) = n.parse::<usize>() {
+                                    let is_raw = d
+                                        .spec
+                                        .and_then(|s| s.get("steps"))
+                                        .and_then(Value::as_array)
+                                        .and_then(|a| a.get(si))
+                                        .map(|s| s.get("rawStep").is_some())
+                                        .unwrap_or(false);
+                                    if is_raw {
+                                        return remap(format!(
+                                            "{}/steps/{}/rawStep/{}",
+                                            base, si, rest
+                                        ));
+                                    }
+                                }
+                            }
+                            format!("{}/{}", base, t)
+                        } else if seg == "inputNodes" {
+                            format!("{}/inputs/{}", base, &t["inputNodes/".len()..])
+                        } else {
+                            // route by where the spec actually put the key:
+                            // config first, then raw, then the type whitelist
+                            let in_cfg = d
+                                .spec
+                                .and_then(|s| s.get("config"))
+                                .and_then(Value::as_object)
+                                .map(|c| c.contains_key(seg))
+                                .unwrap_or(false);
+                            let in_raw = d
+                                .spec
+                                .and_then(|s| s.get("raw"))
+                                .and_then(Value::as_object)
+                                .map(|r| r.contains_key(seg))
+                                .unwrap_or(false);
+                            if in_cfg
+                                || (!in_raw
+                                    && config_key_allowed(d.ty.as_deref().unwrap_or(""), seg))
+                            {
+                                format!("{}/config/{}", base, t)
+                            } else {
+                                format!("{}/raw/{}", base, t)
+                            }
+                        }
+                    }
+                }
+            };
+            return remap(spec_path);
+        }
+        return remap("/nodes".to_string());
+    }
+    if let Some(tail) = p.strip_prefix("/dataFlow/subProcesses") {
+        return remap(format!("/subProcesses{}", tail));
+    }
+    if p.starts_with("/dataFlow") {
+        return remap("/nodes".to_string());
+    }
+    // top-level dimensions/measures have no spec counterpart: they derive
+    // from the default Output — point at the node list.
+    if p.starts_with("/dimensions") || p.starts_with("/measures") {
+        return remap("/nodes".to_string());
+    }
+    remap(p)
+}
+
 // ---------------------------------------------------------------------------
 // Node preparation: keys, ids, topo
 // ---------------------------------------------------------------------------
@@ -98,7 +279,10 @@ pub fn validate_spec(spec: &Value) -> Vec<Diag> {
 struct NodeDesc<'a> {
     idx: usize,
     key: String,
-    /// resolved wire map key / node id (typed nodes); for rawNode = spec key
+    /// resolved wire map key / node id (typed nodes); for rawNode = spec key.
+    /// `DwTableLoader` routes `inputNodes` through the nodes-map key, so this
+    /// is the only identifier consumers may reference — a rawNode body's own
+    /// `id` is verbatim payload reserved for duplicate detection only.
     wire_key: String,
     /// spec node object (typed) — None for rawNode entries
     spec: Option<&'a Value>,
@@ -106,11 +290,14 @@ struct NodeDesc<'a> {
     raw_body: Option<&'a Value>,
     ty: Option<String>,
     inputs: Vec<String>,
-    /// resolved wire node ids for `inputs` (key -> wire_key), filled post-resolution
+    /// resolved wire node ids for `inputs`, filled post-resolution
     inputs_wire: Vec<String>,
     alias: Option<String>,
     /// computed output fields (wire-shaped), filled during build
     out_fields: Option<Vec<Value>>,
+    /// per-step `originFieldInfo` hints for typed Refactor renames,
+    /// parallel to the spec `steps` array (Select only)
+    step_hints: Vec<Option<Value>>,
 }
 
 fn node_ty(spec_node: &Value) -> Option<String> {
@@ -129,7 +316,6 @@ fn prepare_nodes<'a>(spec: &'a Value, diags: &mut Vec<Diag>) -> Vec<NodeDesc<'a>
         .unwrap_or(&[]);
     let mut descs: Vec<NodeDesc> = Vec::new();
     let mut keys: HashSet<String> = HashSet::new();
-    let mut ids: HashSet<String> = HashSet::new();
 
     // first pass: keys
     for (i, n) in nodes.iter().enumerate() {
@@ -172,11 +358,25 @@ fn prepare_nodes<'a>(spec: &'a Value, diags: &mut Vec<Diag>) -> Vec<NodeDesc<'a>
                 Some(n)
             },
             raw_body: n.get("rawNode"),
-            ty: node_ty(n),
+            ty: node_ty(n).or_else(|| {
+                n.get("rawNode")
+                    .and_then(|b| b.get("type"))
+                    .and_then(Value::as_str)
+                    .map(str::to_string)
+            }),
             inputs: Vec::new(),
             inputs_wire: Vec::new(),
-            alias: n.get("alias").and_then(Value::as_str).map(str::to_string),
+            alias: n
+                .get("alias")
+                .and_then(Value::as_str)
+                .or_else(|| {
+                    n.get("rawNode")
+                        .and_then(|b| b.get("alias"))
+                        .and_then(Value::as_str)
+                })
+                .map(str::to_string),
             out_fields: None,
+            step_hints: Vec::new(),
         });
     }
 
@@ -186,6 +386,23 @@ fn prepare_nodes<'a>(spec: &'a Value, diags: &mut Vec<Diag>) -> Vec<NodeDesc<'a>
     let first_output_idx = descs
         .iter()
         .position(|d| d.spec.is_some() && d.ty.as_deref() == Some("Output"));
+    // single owner map over every wire-visible identifier: typed resolved
+    // ids, rawNode spec keys (nodes map keys) and rawNode body ids. The same
+    // owner may claim the same identifier twice (e.g. key == body.id).
+    let mut owners: HashMap<String, usize> = HashMap::new();
+    let mut claim = |id: &str, owner: usize, path: String, diags: &mut Vec<Diag>| {
+        if let Some(&prev) = owners.get(id) {
+            if prev != owner {
+                diags.push(Diag::spec(
+                    path,
+                    "structure.node.id.duplicate",
+                    format!("wire node id {:?} already owned by node {}", id, prev),
+                ));
+            }
+        } else {
+            owners.insert(id.to_string(), owner);
+        }
+    };
 
     for d in descs.iter_mut() {
         if let Some(sn) = d.spec {
@@ -219,21 +436,29 @@ fn prepare_nodes<'a>(spec: &'a Value, diags: &mut Vec<Diag>) -> Vec<NodeDesc<'a>
                 } else {
                     explicit_id.unwrap_or_else(|| d.key.clone())
                 };
-            if !ids.insert(resolved.clone()) {
-                diags.push(Diag::spec(
-                    format!("/nodes/{}/id", d.idx),
-                    "structure.node.id.duplicate",
-                    format!("duplicate resolved node id {:?}", resolved),
-                ));
-            }
-            d.wire_key = resolved;
+            d.wire_key = resolved.clone();
+            claim(&resolved, d.idx, format!("/nodes/{}/id", d.idx), diags);
         } else {
-            // rawNode: wire map key = spec key, body untouched
+            // rawNode: wire map key = spec key, body untouched. The body's
+            // own `id` is reserved for the duplicate-owners check only —
+            // consumers route through the map key, never through body.id.
             d.wire_key = d.key.clone();
+            let body_id = d
+                .raw_body
+                .and_then(|b| b.get("id"))
+                .and_then(Value::as_str)
+                .filter(|s| !s.is_empty())
+                .map(str::to_string);
+            claim(&d.key, d.idx, format!("/nodes/{}/key", d.idx), diags);
+            if let Some(bid) = body_id {
+                if bid != d.key {
+                    claim(&bid, d.idx, format!("/nodes/{}/rawNode/id", d.idx), diags);
+                }
+            }
         }
     }
 
-    // resolve input keys -> wire keys now that every wire_key is known
+    // resolve input keys -> wire map keys now that every wire_key is known
     {
         let key_to_wire: HashMap<String, String> = descs
             .iter()
@@ -320,6 +545,7 @@ impl<'a> NodeDesc<'a> {
             inputs_wire: self.inputs_wire.clone(),
             alias: self.alias.clone(),
             out_fields: self.out_fields.clone(),
+            step_hints: self.step_hints.clone(),
         }
     }
 }
@@ -328,7 +554,10 @@ impl<'a> NodeDesc<'a> {
 // Spec validation
 // ---------------------------------------------------------------------------
 
-fn validate_generated(spec: &Value, diags: &mut Vec<Diag>) {
+/// Validate the generated form, returning the prepared node descriptors
+/// (topo-sorted, wire keys resolved) for reuse by build + diag mapping.
+/// Empty when structural validation failed before preparation.
+fn validate_generated<'a>(spec: &'a Value, diags: &mut Vec<Diag>) -> Vec<NodeDesc<'a>> {
     // closed top-level keys for generated form
     const ALLOWED_TOP: [&str; 7] = [
         "format",
@@ -375,7 +604,7 @@ fn validate_generated(spec: &Value, diags: &mut Vec<Diag>) {
             "structure.nodes",
             "nodes must be an array",
         ));
-        return;
+        return Vec::new();
     };
 
     // per-node structural validation
@@ -388,6 +617,7 @@ fn validate_generated(spec: &Value, diags: &mut Vec<Diag>) {
     let descs = prepare_nodes(spec, &mut graph_diags);
     diags.extend(graph_diags);
     validate_graph_semantics(spec, &descs, diags);
+    descs
 }
 
 fn validate_node_entry(n: &Value, i: usize, diags: &mut Vec<Diag>) {
@@ -472,10 +702,13 @@ fn validate_node_entry(n: &Value, i: usize, diags: &mut Vec<Diag>) {
         validate_str_array(v, &format!("{}/inputs", path), "inputs", diags);
     }
     if let Some(v) = n.get("fields") {
-        validate_field_array(v, &format!("{}/fields", path), diags);
+        // Join fields may be name-only references resolved against the
+        // inputs at build time (metadata is merged from the predecessor);
+        // every other node type declares complete fields.
+        validate_field_array(v, &format!("{}/fields", path), ty == "Join", diags);
     }
     if let Some(v) = n.get("originalFields") {
-        validate_field_array(v, &format!("{}/originalFields", path), diags);
+        validate_field_array(v, &format!("{}/originalFields", path), false, diags);
     }
     if let Some(v) = n.get("config") {
         validate_config(v, ty, &format!("{}/config", path), diags);
@@ -523,7 +756,7 @@ fn validate_str_array(v: &Value, path: &str, what: &str, diags: &mut Vec<Diag>) 
     }
 }
 
-fn validate_field_array(v: &Value, path: &str, diags: &mut Vec<Diag>) {
+fn validate_field_array(v: &Value, path: &str, partial: bool, diags: &mut Vec<Diag>) {
     let Some(arr) = v.as_array() else {
         diags.push(Diag::spec(
             path,
@@ -533,11 +766,11 @@ fn validate_field_array(v: &Value, path: &str, diags: &mut Vec<Diag>) {
         return;
     };
     for (i, f) in arr.iter().enumerate() {
-        validate_field(f, &format!("{}/{}", path, i), diags);
+        validate_field(f, &format!("{}/{}", path, i), partial, diags);
     }
 }
 
-fn validate_field(f: &Value, path: &str, diags: &mut Vec<Diag>) {
+fn validate_field(f: &Value, path: &str, partial: bool, diags: &mut Vec<Diag>) {
     let Some(obj) = f.as_object() else {
         diags.push(Diag::spec(
             path,
@@ -556,6 +789,11 @@ fn validate_field(f: &Value, path: &str, diags: &mut Vec<Diag>) {
         }
     }
     for k in ["name", "dataType"] {
+        // partial declarations (Join field refs) require only `name`;
+        // dataType/isDimension merge from the resolved predecessor.
+        if partial && k == "dataType" {
+            continue;
+        }
         match f.get(k).and_then(Value::as_str) {
             Some(s) if !s.is_empty() => {}
             _ => diags.push(Diag::spec(
@@ -683,7 +921,7 @@ fn validate_config(v: &Value, ty: &str, path: &str, diags: &mut Vec<Diag>) {
             }
             continue;
         }
-        // closed object/array payloads
+        // closed object/array payloads (per-type only)
         if let Some((_, kind)) = config_closed_keys(ty)
             .iter()
             .find(|(ck, _)| *ck == k.as_str())
@@ -861,7 +1099,20 @@ fn validate_closed_config(v: &Value, kind: ClosedKind, path: &str, diags: &mut V
                                     "structure.config.key",
                                     "unexpected clause key",
                                 ));
+                            } else if !co[k].is_string() {
+                                diags.push(Diag::spec(
+                                    format!("{}/{}", cp, k),
+                                    "structure.config.type",
+                                    format!("clause.{} must be a string", k),
+                                ));
                             }
+                        }
+                        if co
+                            .get("exp")
+                            .and_then(Value::as_str)
+                            .is_some_and(|s| !s.trim().is_empty())
+                        {
+                            continue;
                         }
                         for k in ["leftExp", "rightExp"] {
                             if co
@@ -878,6 +1129,80 @@ fn validate_closed_config(v: &Value, kind: ClosedKind, path: &str, diags: &mut V
                             }
                         }
                     }
+                }
+            }
+        }
+        ClosedKind::Clauses => {
+            // incrementRange[]: clause objects; the loader accepts arbitrary
+            // keys per clause (ClauseFilterImpl.loadJsonMap). Typed specs
+            // reject null — only the wire tolerates it as absence.
+            let Some(arr) = v.as_array() else {
+                diags.push(Diag::spec(
+                    path,
+                    "structure.config",
+                    "incrementRange must be an array of clause objects",
+                ));
+                return;
+            };
+            for (i, item) in arr.iter().enumerate() {
+                if !item.is_object() {
+                    diags.push(Diag::spec(
+                        format!("{}/{}", path, i),
+                        "structure.config",
+                        "incrementRange entries must be objects",
+                    ));
+                }
+            }
+        }
+        ClosedKind::Condition => {
+            // filter object: {matchAll?,enabled?,clauses?:[object]}.
+            // Typed specs reject null — only the wire tolerates it.
+            let Some(o) = v.as_object() else {
+                diags.push(Diag::spec(
+                    path,
+                    "structure.config",
+                    "filter must be an object",
+                ));
+                return;
+            };
+            for k in o.keys() {
+                if !["matchAll", "enabled", "clauses"].contains(&k.as_str()) {
+                    diags.push(Diag::spec(
+                        format!("{}/{}", path, ptr_escape(k)),
+                        "structure.config.key",
+                        "unexpected filter key",
+                    ));
+                }
+            }
+            for k in ["matchAll", "enabled"] {
+                if let Some(x) = o.get(k) {
+                    if !x.is_boolean() {
+                        diags.push(Diag::spec(
+                            format!("{}/{}", path, k),
+                            "structure.config.type",
+                            format!("filter.{} must be a boolean", k),
+                        ));
+                    }
+                }
+            }
+            if let Some(cl) = o.get("clauses") {
+                match cl.as_array() {
+                    Some(arr) => {
+                        for (i, item) in arr.iter().enumerate() {
+                            if !item.is_object() {
+                                diags.push(Diag::spec(
+                                    format!("{}/clauses/{}", path, i),
+                                    "structure.config",
+                                    "filter.clauses entries must be objects",
+                                ));
+                            }
+                        }
+                    }
+                    None => diags.push(Diag::spec(
+                        format!("{}/clauses", path),
+                        "structure.config",
+                        "filter.clauses must be an array",
+                    )),
                 }
             }
         }
@@ -1139,7 +1464,7 @@ fn validate_step(s: &Value, path: &str, diags: &mut Vec<Diag>) {
             for (i, e) in arr.iter().enumerate() {
                 match e.as_str() {
                     Some(s) if !s.is_empty() => {
-                        if !seen.insert(s.to_lowercase()) {
+                        if !seen.insert(s.to_uppercase()) {
                             diags.push(Diag::spec(
                                 format!("{}/fields/{}", path, i),
                                 "structure.step.fields",
@@ -1431,22 +1756,16 @@ fn validate_step_prereqs(obj: &Value, ty: &str, path: &str, diags: &mut Vec<Diag
             }
         }
         "AddField" => {
-            let name = obj
-                .pointer("/addField/name")
-                .and_then(Value::as_str)
-                .unwrap_or("")
-                .to_string();
-            if !name.is_empty() {
-                if fields.is_empty() {
-                    // synthesized as [addField.name] — fine
-                } else if fields.len() != 1 || !fields[0].eq_ignore_ascii_case(&name) {
+            // fields is the platform's own operand selection: omitted is
+            // synthesized as [addField.name] at emission; an explicit
+            // non-empty array is preserved verbatim (it may legitimately
+            // differ — the wire checker only requires it be non-empty).
+            if let Some(Value::Array(a)) = obj.get("fields") {
+                if a.is_empty() {
                     diags.push(Diag::spec(
                         format!("{}/fields", path),
-                        "structure.step.fields",
-                        format!(
-                            "AddField.fields must be exactly [addField.name] ({:?}), got {:?}",
-                            name, fields
-                        ),
+                        "field.required",
+                        "AddField.fields must be non-empty when present",
                     ));
                 }
             }
@@ -1740,7 +2059,7 @@ fn validate_graph_semantics(spec: &Value, descs: &[NodeDesc], diags: &mut Vec<Di
         .map(|a| {
             a.iter()
                 .filter_map(|p| p.get("name").and_then(Value::as_str))
-                .map(|n| n.to_lowercase())
+                .map(|n| n.to_uppercase())
                 .collect()
         })
         .unwrap_or_default();
@@ -1779,7 +2098,18 @@ fn validate_graph_semantics(spec: &Value, descs: &[NodeDesc], diags: &mut Vec<Di
                     ));
                 }
             }
-            "Agg" | "Distinct" | "RowToCol" | "ColToRow" | "Snapshot" | "Update" => {
+            "Agg" | "Distinct" => {
+                // the contributors read the FIRST input only — extra inputs
+                // would be silently ignored
+                if n != 1 {
+                    diags.push(Diag::spec(
+                        arity_path,
+                        "err.dataflow.node.input",
+                        format!("{} requires exactly 1 input, found {}", ty, n),
+                    ));
+                }
+            }
+            "RowToCol" | "ColToRow" | "Snapshot" | "Update" => {
                 if n == 0 {
                     diags.push(Diag::spec(
                         arity_path,
@@ -1920,14 +2250,22 @@ fn validate_graph_semantics(spec: &Value, descs: &[NodeDesc], diags: &mut Vec<Di
                 ));
             }
         }
-        // raw collision with generated keys (early check; build re-checks)
+        // raw collision with generated keys AND config keys: both are
+        // emitted onto the same wire object, so an overlap would silently
+        // overwrite regardless of whether the values agree.
         if let Some(raw) = sn.get("raw").and_then(Value::as_object) {
+            let cfg = sn.get("config").and_then(Value::as_object);
             for k in raw.keys() {
-                if GENERATED_NODE_KEYS.contains(&k.as_str()) {
+                if GENERATED_NODE_KEYS.contains(&k.as_str())
+                    || cfg.is_some_and(|c| c.contains_key(k))
+                {
                     diags.push(Diag::spec(
                         format!("/nodes/{}/raw/{}", d.idx, ptr_escape(k)),
                         "structure.node.raw.collision",
-                        format!("raw key {:?} collides with a generated node key", k),
+                        format!(
+                            "raw key {:?} collides with a generated node or config key",
+                            k
+                        ),
                     ));
                 }
             }
@@ -1952,6 +2290,15 @@ fn validate_graph_semantics(spec: &Value, descs: &[NodeDesc], diags: &mut Vec<Di
                 "raw.dataFlow is forbidden: DataFlow has no whole-document raw bypass",
             ));
         }
+    }
+
+    // a runnable flow needs a default Output (typed or rawNode)
+    if !descs.iter().any(is_default_output) {
+        diags.push(Diag::spec(
+            "/nodes",
+            "flow.noDefaultOutput",
+            "no node resolves to the default Output (id \"default\")",
+        ));
     }
 }
 
@@ -1992,7 +2339,7 @@ fn check_select_derivable(sn: &Value, idx: usize, diags: &mut Vec<Diag>) {
             continue;
         }
         let ty = s.get("type").and_then(Value::as_str).unwrap_or("");
-        if matches!(ty, "SplitField" | "Text2Id" | "TransformToCalculatedField") {
+        if matches!(ty, "SplitField" | "Text2Id") {
             diags.push(Diag::spec(
                 format!("/nodes/{}/fields", idx),
                 "field.required",
@@ -2022,58 +2369,19 @@ fn field_names_of(fields: &Value) -> Vec<String> {
         .unwrap_or_default()
 }
 
-/// Evolve a name list through one typed step (names only). Returns false when
-/// the step reshapes fields unpredictably.
+/// Evolve a name list through one typed step (names only). Delegates to the
+/// shared `evolve_names`; `Err` means a step-time name collision (reported
+/// separately by the caller), `Ok(false)` means the shape is unprovable.
 fn step_evolve_names(names: &mut Vec<String>, step: &Value) -> bool {
-    if step.get("rawStep").is_some() {
-        return false;
-    }
-    let ty = step.get("type").and_then(Value::as_str).unwrap_or("");
-    let step_fields: Vec<String> = step
-        .get("fields")
-        .and_then(Value::as_array)
-        .map(|a| {
-            a.iter()
-                .filter_map(|v| v.as_str().map(str::to_string))
-                .collect()
-        })
-        .unwrap_or_default();
-    match ty {
-        "Filter" | "ToUppercase" | "ToLowercase" | "Trim" | "DeleteNumbers" | "DeleteLetters"
-        | "DeleteSpechars" | "DeletePunctuations" | "ExcludeEmpty" | "ExtractNumber"
-        | "SubString" | "Replace" => true,
-        "RemoveField" => {
-            names.retain(|n| !step_fields.iter().any(|f| f.eq_ignore_ascii_case(n)));
-            true
-        }
-        "Refactor" => {
-            // rename is a string applied to the single selected field
-            if let Some(rn) = step.pointer("/refactor/rename").and_then(Value::as_str) {
-                if !rn.is_empty() {
-                    if let Some(pos) = names.iter().position(|n| {
-                        step_fields
-                            .first()
-                            .map(|f| f.eq_ignore_ascii_case(n))
-                            .unwrap_or(false)
-                    }) {
-                        names[pos] = rn.to_string();
-                    }
-                }
-            }
-            true
-        }
-        "AddField" => {
-            if let Some(nm) = step.pointer("/addField/name").and_then(Value::as_str) {
-                names.push(nm.to_string());
-            }
-            true
-        }
+    match evolve_names(names, step) {
+        Ok(true) => true,
         _ => false,
     }
 }
 
 /// Resolve a node's output field names when provable (explicit fields,
-/// Output identity clone, or Select step simulation). None = unknown.
+/// Output identity clone, or Select step simulation; a rawNode contributes
+/// its verbatim body's `fields` when present). None = unknown.
 fn resolve_field_names(
     descs: &[NodeDesc],
     key_to_idx: &HashMap<String, usize>,
@@ -2102,7 +2410,10 @@ fn resolve_field_names_inner(
 ) -> Option<Vec<String>> {
     let &i = key_to_idx.get(key)?;
     let d = &descs[i];
-    let sn = d.spec?; // rawNode: shape unknown
+    let Some(sn) = d.spec else {
+        // rawNode: the verbatim body's fields are the only provable names
+        return d.raw_body.and_then(|b| b.get("fields")).map(field_names_of);
+    };
     if let Some(f) = sn.get("fields") {
         return Some(field_names_of(f));
     }
@@ -2187,9 +2498,7 @@ fn check_select_step_fields(
             if let Some(fl) = st.get("fields").and_then(Value::as_array) {
                 for (fi, fv) in fl.iter().enumerate() {
                     if let Some(name) = fv.as_str() {
-                        if ty != "RemoveField"
-                            && !current.iter().any(|c| c.eq_ignore_ascii_case(name))
-                        {
+                        if ty != "RemoveField" && !current.iter().any(|c| field_eq(c, name)) {
                             diags.push(Diag::spec(
                                 format!("/nodes/{}/steps/{}/fields/{}", d.idx, si, fi),
                                 "err.dataflow.stepField.notfound",
@@ -2220,9 +2529,9 @@ fn check_select_step_fields(
                 if qualified || name.is_empty() {
                     continue;
                 }
-                let lower = name.to_lowercase();
-                let known = current.iter().any(|c| c.to_lowercase() == lower)
-                    || param_names.contains(&lower);
+                let upper = name.to_uppercase();
+                let known =
+                    current.iter().any(|c| field_eq(c, &name)) || param_names.contains(&upper);
                 if !known {
                     diags.push(Diag::spec(
                         format!("/nodes/{}/steps/{}/{}", d.idx, si, epath),
@@ -2235,8 +2544,19 @@ fn check_select_step_fields(
                 }
             }
         }
-        if !step_evolve_names(&mut current, st) {
-            break; // tracking lost
+        match evolve_names(&mut current, st) {
+            Ok(true) => {}
+            Ok(false) => break, // tracking lost
+            Err(tag) => {
+                // step-time name collision (AddField/Refactor rename): the
+                // platform would produce two fields with the same name
+                diags.push(Diag::spec(
+                    format!("/nodes/{}/steps/{}/{}", d.idx, si, tag),
+                    "field.duplicate",
+                    format!("step {} creates a duplicate field name", ty),
+                ));
+                break;
+            }
         }
     }
 }
@@ -2266,9 +2586,12 @@ fn check_select_explicit_vs_derived(
         Some(steps) => {
             let mut ok = true;
             for st in steps {
-                if !step_evolve_names(&mut names, st) {
-                    ok = false;
-                    break;
+                match evolve_names(&mut names, st) {
+                    Ok(true) => {}
+                    _ => {
+                        ok = false;
+                        break;
+                    }
                 }
             }
             ok
@@ -2278,16 +2601,25 @@ fn check_select_explicit_vs_derived(
     if !derivable {
         return;
     }
+    // multiset comparison, order-insensitive, Unicode-aware field_eq —
+    // mirrors QueryImpl name semantics (toUpperCase)
     let exp_names: Vec<String> = explicit
         .iter()
         .filter_map(|f| f.get("name").and_then(Value::as_str).map(str::to_string))
         .collect();
-    if names.len() != exp_names.len()
-        || !names
-            .iter()
-            .zip(exp_names.iter())
-            .all(|(a, b)| a.eq_ignore_ascii_case(b))
-    {
+    let mut remaining = names.clone();
+    let mut matched = true;
+    'outer: for en in &exp_names {
+        for (i, dn) in remaining.iter().enumerate() {
+            if field_eq(en, dn) {
+                remaining.remove(i);
+                continue 'outer;
+            }
+        }
+        matched = false;
+        break;
+    }
+    if !matched || !remaining.is_empty() {
         diags.push(Diag::spec(
             format!("/nodes/{}/fields", d.idx),
             "field.mismatch",
@@ -2333,7 +2665,7 @@ fn check_col_to_row_refs(
         for (ci, cell) in rarr.iter().enumerate() {
             if let Some(co) = cell.as_object() {
                 if let Some(nm) = co.get("name").and_then(Value::as_str) {
-                    if !pred_names.iter().any(|p| p.eq_ignore_ascii_case(nm)) {
+                    if !pred_names.iter().any(|p| field_eq(p, nm)) {
                         diags.push(Diag::spec(
                             format!(
                                 "/nodes/{}/config/colToRowInfo/valuesArray/{}/{}",
@@ -2385,23 +2717,68 @@ fn check_spec_join_conditions(
             ),
         ));
     }
-    // alias set from input nodes (alias defaults to key)
+    // Java resolves leftTable/rightTable against node ALIASES only — the
+    // spec key is not an alias unless it was declared as one.
     let mut aliases: HashSet<String> = HashSet::new();
     for inp in &d.inputs {
         if let Some(a) = spec_node_alias(descs, inp) {
             aliases.insert(a.to_string());
         }
-        aliases.insert(inp.clone());
     }
     for (i, c) in conds.iter().enumerate() {
         for side in ["leftTable", "rightTable"] {
             if let Some(t) = c.get(side).and_then(Value::as_str) {
-                if !t.is_empty() && !aliases.contains(t) {
+                if !t.is_empty() && !aliases.iter().any(|a| field_eq(a, t)) {
                     diags.push(Diag::spec(
                         format!("/nodes/{}/config/joinConditions/{}/{}", d.idx, i, side),
                         "join.condition.alias",
-                        format!("{} {:?} does not match any input node alias/key", side, t),
+                        format!("{} {:?} does not match any input node alias", side, t),
                     ));
+                }
+            }
+        }
+        // clause AND condition-level expressions qualify fields as
+        // [alias].[field]; a qualifier that is an input's spec KEY (but not
+        // its alias) resolves to nothing at runtime — reject it. Quoted
+        // literals are skipped by the shared scanner.
+        let mut scan = |e: &str, epath: String| {
+            for q in exp_table_qualifiers(e) {
+                let is_key = d.inputs.iter().any(|k| field_eq(k, &q));
+                let is_alias = d
+                    .inputs
+                    .iter()
+                    .filter_map(|k| spec_node_alias(descs, k))
+                    .any(|a| field_eq(a, &q));
+                if is_key && !is_alias {
+                    diags.push(Diag::spec(
+                        epath.clone(),
+                        "join.condition.qualifier",
+                        format!("expression qualifier {:?} is a node key, not an alias", q),
+                    ));
+                }
+            }
+        };
+        if let Some(e) = c.get("exp").and_then(Value::as_str) {
+            scan(
+                e,
+                format!("/nodes/{}/config/joinConditions/{}/exp", d.idx, i),
+            );
+        }
+        for (ci, cl) in c
+            .get("clauses")
+            .and_then(Value::as_array)
+            .map(|a| a.iter().enumerate().collect::<Vec<_>>())
+            .unwrap_or_default()
+        {
+            for ek in ["leftExp", "rightExp", "exp"] {
+                if let Some(e) = cl.get(ek).and_then(Value::as_str) {
+                    scan(
+                        e,
+                        format!(
+                            "/nodes/{}/config/joinConditions/{}/clauses/{}/{}",
+                            d.idx, i, ci, ek
+                        ),
+                    );
                 }
             }
         }
@@ -2716,13 +3093,21 @@ fn build_rawtable(spec: &Value) -> Result<Value, Diag> {
 // Generated form build
 // ---------------------------------------------------------------------------
 
-fn build_generated(spec: &Value) -> Result<Value, Diag> {
-    let mut diags = Vec::new();
-    let descs = prepare_nodes(spec, &mut diags);
-    if let Some(d) = diags.into_iter().next() {
-        return Err(d);
-    }
+/// Computed output fields for one node plus per-step emission hints.
+struct ComputedNode {
+    fields: Vec<Value>,
+    /// `originFieldInfo` hints parallel to the spec `steps` array
+    /// (Select Refactor renames only; empty for other node types)
+    step_hints: Vec<Option<Value>>,
+}
 
+/// Build the wire document from already-prepared descriptors; returns the
+/// (possibly field-annotated) descriptors alongside for wire-diag mapping.
+fn build_generated_collect<'a>(
+    spec: &Value,
+    descs: Vec<NodeDesc<'a>>,
+    diags: &mut Vec<Diag>,
+) -> (Option<Value>, Vec<NodeDesc<'a>>) {
     // compute output fields in topo order
     let key_to_idx: HashMap<String, usize> = descs
         .iter()
@@ -2731,12 +3116,18 @@ fn build_generated(spec: &Value) -> Result<Value, Diag> {
         .collect();
     let mut descs = descs;
     for i in 0..descs.len() {
-        let (fields, err) = compute_node_fields(&descs, i, &key_to_idx);
-        match (fields, err) {
-            (Some(f), _) => descs[i].out_fields = Some(f),
-            (None, Some(e)) => return Err(e),
+        let (cf, err) = compute_node_fields(&descs, i, &key_to_idx);
+        match (cf, err) {
+            (Some(c), _) => {
+                descs[i].out_fields = Some(c.fields);
+                descs[i].step_hints = c.step_hints;
+            }
+            (None, Some(e)) => diags.push(e),
             (None, None) => {}
         }
+    }
+    if diags.iter().any(|d| !d.is_warning()) {
+        return (None, descs);
     }
 
     // emit nodes
@@ -2745,31 +3136,99 @@ fn build_generated(spec: &Value) -> Result<Value, Diag> {
         let body = if let Some(rn) = d.raw_body {
             rn.clone() // verbatim, never mutated
         } else {
-            emit_typed_node(d)?
+            match emit_typed_node(d) {
+                Ok(b) => b,
+                Err(e) => {
+                    diags.push(e);
+                    continue;
+                }
+            }
         };
         nodes_map.insert(d.wire_key.clone(), body);
+    }
+    if diags.iter().any(|d| !d.is_warning()) {
+        return (None, descs);
     }
 
     // dataFlow
     let mut flow = Map::new();
     flow.insert("nodes".into(), Value::Object(nodes_map));
     if let Some(sp) = spec.get("subProcesses") {
-        flow.insert("subProcesses".into(), emit_subprocesses(sp)?);
+        match emit_subprocesses(sp) {
+            Ok(v) => {
+                flow.insert("subProcesses".into(), v);
+            }
+            Err(e) => {
+                diags.push(e);
+                return (None, descs);
+            }
+        }
     }
 
     // top-level
     let mut tbl = Map::new();
-    if let Some(v) = spec.get("version") {
-        tbl.insert("version".into(), v.clone());
+    tbl.insert(
+        "version".into(),
+        spec.get("version")
+            .cloned()
+            .unwrap_or_else(|| Value::from(SAVE_VERSION)),
+    );
+    match emit_properties(spec) {
+        Ok(v) => {
+            tbl.insert("properties".into(), v);
+        }
+        Err(e) => {
+            diags.push(e);
+            return (None, descs);
+        }
     }
-    tbl.insert("properties".into(), emit_properties(spec)?);
     if let Some(p) = spec.get("parameters") {
-        tbl.insert("parameters".into(), emit_parameters(p)?);
+        match emit_parameters(p) {
+            Ok(v) => {
+                tbl.insert("parameters".into(), v);
+            }
+            Err(e) => {
+                diags.push(e);
+                return (None, descs);
+            }
+        }
     }
-    // top dimensions/measures from default Output
-    let (dims, measures) = default_output_partition(&descs);
-    tbl.insert("dimensions".into(), Value::Array(dims));
-    tbl.insert("measures".into(), Value::Array(measures));
+    // top dimensions/measures from the default Output; empty partitions are
+    // omitted entirely (the platform writes no empty arrays)
+    let (dims, measures) = default_output_partition(&descs, diags);
+    // extraction needs a physical column name per top field; the wire check
+    // flags it on /dimensions//measures — report it here on the spec side,
+    // routed to the default Output's fields.
+    let extract = spec
+        .pointer("/properties/extractDataEnabled")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    if extract {
+        if let Some(d) = descs.iter().find(|d| is_default_output(d)) {
+            if let Some(fields) = &d.out_fields {
+                for (fi, f) in fields.iter().enumerate() {
+                    let ok = f
+                        .get("dbfield")
+                        .and_then(Value::as_str)
+                        .map(|s| !s.trim().is_empty() && s.chars().all(|c| c.is_ascii()))
+                        .unwrap_or(false);
+                    if !ok {
+                        diags.push(Diag::spec(
+                            format!("/nodes/{}/fields/{}/dbfield", d.idx, fi),
+                            "warn.extract.dbfield",
+                            "extractDataEnabled is set but this output field has no ASCII dbfield",
+                        ));
+                    }
+                }
+            }
+        }
+    }
+    if !dims.is_empty() {
+        tbl.insert("dimensions".into(), Value::Array(dims));
+    }
+    if !measures.is_empty() {
+        tbl.insert("measures".into(), Value::Array(measures));
+    }
     tbl.insert("dataFlow".into(), Value::Object(flow));
     // top raw merge (collisions already validated)
     if let Some(raw) = spec.get("raw").and_then(Value::as_object) {
@@ -2777,86 +3236,109 @@ fn build_generated(spec: &Value) -> Result<Value, Diag> {
             tbl.insert(k.clone(), v.clone());
         }
     }
-    Ok(Value::Object(tbl))
+    if diags.iter().any(|d| !d.is_warning()) {
+        return (None, descs);
+    }
+    (Some(Value::Object(tbl)), descs)
 }
 
-fn compute_node_fields(
-    descs: &[NodeDesc],
-    i: usize,
+/// Resolve a spec input key to its prepared descriptor.
+fn input_desc<'a>(
+    d: &NodeDesc,
+    descs: &'a [NodeDesc<'a>],
     key_to_idx: &HashMap<String, usize>,
-) -> (Option<Vec<Value>>, Option<Diag>) {
-    let d = &descs[i];
-    let Some(sn) = d.spec else {
-        return (None, None);
-    }; // rawNode
-    let ty = d.ty.as_deref().unwrap_or("");
-    if let Some(f) = sn.get("fields") {
-        let mut fields = f.as_array().cloned().unwrap_or_default();
-        if ty == "FileInput" {
-            fill_fileinput_identity(&mut fields);
-        }
-        return (Some(fields), None);
-    }
-    match ty {
-        "Output" => {
-            // identity clone of the single input's fields
-            let Some(pred_key) = d.inputs.first() else {
-                return (
-                    None,
-                    Some(Diag::spec(
-                        format!("/nodes/{}/inputs", d.idx),
-                        "err.dataflow.node.input",
-                        "Output requires 1 input for field derivation",
-                    )),
-                );
-            };
-            let Some(&pi) = key_to_idx.get(pred_key) else {
-                return (
-                    None,
-                    Some(Diag::spec(
-                        format!("/nodes/{}/inputs", d.idx),
-                        "graph.danglingInput",
-                        "unknown input key",
-                    )),
-                );
-            };
-            let pred = &descs[pi];
-            let Some(pred_fields) = &pred.out_fields else {
-                return (
-                    None,
-                    Some(Diag::spec(
-                        format!("/nodes/{}/fields", d.idx),
-                        "field.required",
-                        "predecessor fields not computed",
-                    )),
-                );
-            };
-            let pred_alias = pred.alias.as_deref().unwrap_or(pred.key.as_str());
-            let out = pred_fields
-                .iter()
-                .enumerate()
-                .map(|(fi, f)| clone_field(f, pred_alias, field_name(f, fi)))
-                .collect();
-            (Some(out), None)
-        }
-        "Select" => derive_select_fields(d, descs, key_to_idx),
-        _ => (None, None), // validated: explicit fields required
-    }
+    pos: usize,
+) -> Option<&'a NodeDesc<'a>> {
+    let key = d.inputs.get(pos)?;
+    let &i = key_to_idx.get(key)?;
+    Some(&descs[i])
 }
 
-fn field_name(f: &Value, idx: usize) -> String {
-    f.get("name")
-        .and_then(Value::as_str)
-        .map(str::to_string)
-        .unwrap_or_else(|| format!("field{}", idx))
+/// The alias consumers see for a node (typed: `alias` or key; rawNode: body
+/// alias or spec key).
+fn node_alias(d: &NodeDesc) -> String {
+    if let Some(a) = &d.alias {
+        return a.clone();
+    }
+    if let Some(b) = d.raw_body {
+        if let Some(a) = b.get("alias").and_then(Value::as_str) {
+            return a.to_string();
+        }
+    }
+    d.key.clone()
 }
 
-/// Identity clone: copy field minus exp/aggType/lineage keys, then set
-/// inputNode=predecessor alias, inputField=predecessor name, and fill
-/// originalNode/originalField from the oldest known origin.
-fn clone_field(f: &Value, pred_alias: &str, pred_name: String) -> Value {
-    let mut out = f.as_object().cloned().unwrap_or_default();
+/// Whether the node is a lineage source, including rawNode bodies whose
+/// `type` says FileInput/ModelTable/etc.
+fn node_is_source(d: &NodeDesc) -> bool {
+    let ty =
+        d.ty.as_deref()
+            .or_else(|| {
+                d.raw_body
+                    .and_then(|b| b.get("type"))
+                    .and_then(Value::as_str)
+            })
+            .unwrap_or("");
+    is_source(ty)
+}
+
+/// Proven root lineage of a predecessor field: the oldest `(node, field)`
+/// pair we can stand behind. Computed fields (nonblank `exp`) and
+/// pivot-born/unmatched columns carry NO origin — never fabricated. A
+/// source's own fields root at the source itself, so stale explicit
+/// `original*` on them is rewritten rather than trusted.
+fn field_origin(f: &Value, pred: &NodeDesc) -> Option<(String, String)> {
+    let nonblank = |k: &str| {
+        f.get(k)
+            .and_then(Value::as_str)
+            .map(|s| !s.trim().is_empty())
+            .unwrap_or(false)
+    };
+    if nonblank("exp") {
+        return None;
+    }
+    if node_is_source(pred) {
+        let name = f.get("name").and_then(Value::as_str).unwrap_or("");
+        if !name.is_empty() {
+            return Some((node_alias(pred), name.to_string()));
+        }
+        return None;
+    }
+    if nonblank("originalNode") && nonblank("originalField") {
+        return Some((
+            f["originalNode"].as_str().unwrap_or("").to_string(),
+            f["originalField"].as_str().unwrap_or("").to_string(),
+        ));
+    }
+    None
+}
+
+/// Field keys that carry computed/lineage meaning and are always enforced
+/// by the projection rather than trusted from declarations.
+const ENFORCED_FIELD_KEYS: [&str; 6] = [
+    "name",
+    "inputField",
+    "inputNode",
+    "originalField",
+    "originalNode",
+    "exp",
+];
+
+/// Merge a declared field with its resolved predecessor field: upstream
+/// metadata (dataType, dbfield, isDimension, length, ...) forms the base,
+/// declared non-lineage keys override it, and direct lineage is set from the
+/// resolution — `inputField` = predecessor field name, `inputNode` = input
+/// alias (when `emit_input_node`), `original*` = proven origin only.
+fn merge_declared(
+    declared: &Value,
+    pred_field: &Value,
+    input_field: &str,
+    input_node: Option<&str>,
+    origin: Option<(String, String)>,
+) -> Value {
+    let mut m = pred_field.as_object().cloned().unwrap_or_default();
     for k in [
+        "name",
         "exp",
         "aggType",
         "inputField",
@@ -2864,66 +3346,216 @@ fn clone_field(f: &Value, pred_alias: &str, pred_name: String) -> Value {
         "originalField",
         "originalNode",
     ] {
-        out.remove(k);
+        m.remove(k);
     }
-    out.insert("inputNode".into(), Value::String(pred_alias.to_string()));
-    out.insert("inputField".into(), Value::String(pred_name.clone()));
-    let orig_node = f
-        .get("originalNode")
-        .and_then(Value::as_str)
-        .map(str::to_string)
-        .unwrap_or_else(|| pred_alias.to_string());
-    let orig_field = f
-        .get("originalField")
-        .and_then(Value::as_str)
-        .map(str::to_string)
-        .unwrap_or_else(|| pred_name);
-    out.insert("originalNode".into(), Value::String(orig_node));
-    out.insert("originalField".into(), Value::String(orig_field));
-    Value::Object(out)
+    if let Some(do_) = declared.as_object() {
+        for (k, v) in do_ {
+            if ENFORCED_FIELD_KEYS.contains(&k.as_str()) {
+                continue;
+            }
+            m.insert(k.clone(), v.clone());
+        }
+    }
+    if let Some(nm) = declared.get("name") {
+        m.insert("name".into(), nm.clone());
+    }
+    m.insert("inputField".into(), Value::String(input_field.to_string()));
+    if let Some(ia) = input_node {
+        m.insert("inputNode".into(), Value::String(ia.to_string()));
+    }
+    if let Some((on, of)) = origin {
+        m.insert("originalNode".into(), Value::String(on));
+        m.insert("originalField".into(), Value::String(of));
+    }
+    Value::Object(m)
 }
 
-struct WorkField {
-    /// current output name (after renames)
-    out_name: String,
-    /// name in the Select's direct predecessor (inputField)
-    src_name: String,
-    /// field template (predecessor field minus lineage/exp/aggType)
-    template: Map<String, Value>,
-    /// predecessor's original lineage
-    orig_node: String,
-    orig_field: String,
-    is_new: bool, // AddField result: emit addField verbatim instead
-    add_field: Option<Value>,
+/// A field born by computation (`exp` present): emit the declaration minus
+/// lineage and inputNode — computed values have no proven single input.
+fn emit_computed(declared: &Value) -> Value {
+    let mut m = declared.as_object().cloned().unwrap_or_default();
+    for k in ["originalNode", "originalField", "inputNode"] {
+        m.remove(k);
+    }
+    Value::Object(m)
 }
 
-fn derive_select_fields(
+/// Strip unproven lineage from a declared field that could not be resolved
+/// (opaque reshaping shapes, hidden Union members): keep the declaration —
+/// including any explicit direct refs — but drop the original* pair.
+fn emit_unresolved(declared: &Value) -> Value {
+    let mut m = declared.as_object().cloned().unwrap_or_default();
+    m.remove("originalNode");
+    m.remove("originalField");
+    Value::Object(m)
+}
+
+fn has_exp(f: &Value) -> bool {
+    f.get("exp")
+        .and_then(Value::as_str)
+        .map(|s| !s.trim().is_empty())
+        .unwrap_or(false)
+}
+
+fn field_str<'a>(f: &'a Value, k: &str) -> Option<&'a str> {
+    f.get(k).and_then(Value::as_str).filter(|s| !s.is_empty())
+}
+
+/// The name a field is matched by: declared `inputField` when present else
+/// `name` (Join/Union/Distinct resolution semantics).
+fn field_match_name(f: &Value) -> &str {
+    field_str(f, "inputField")
+        .or_else(|| field_str(f, "name"))
+        .unwrap_or("")
+}
+
+/// Find a predecessor field by name (Unicode-aware).
+fn find_pred_field<'a>(fields: &'a [Value], want: &str) -> Option<&'a Value> {
+    fields.iter().find(|pf| {
+        pf.get("name")
+            .and_then(Value::as_str)
+            .map(|n| field_eq(n, want))
+            .unwrap_or(false)
+    })
+}
+
+fn compute_node_fields(
+    descs: &[NodeDesc],
+    i: usize,
+    key_to_idx: &HashMap<String, usize>,
+) -> (Option<ComputedNode>, Option<Diag>) {
+    let d = &descs[i];
+    // rawNode: fields come from the verbatim body when present (absent =
+    // unknown shape; the default-Output partition check reports that)
+    if d.spec.is_none() {
+        let known = d.raw_body.and_then(|b| b.get("fields")).is_some();
+        let fields = d
+            .raw_body
+            .and_then(|b| b.get("fields"))
+            .and_then(Value::as_array)
+            .cloned()
+            .unwrap_or_default();
+        return (
+            known.then(|| ComputedNode {
+                fields,
+                step_hints: Vec::new(),
+            }),
+            None,
+        );
+    }
+    let sn = d.spec.unwrap();
+    let ty = d.ty.as_deref().unwrap_or("");
+    // sources: declared fields are the root of lineage — each ordinary
+    // field's original* pair is seeded/rewritten to (own alias, own name);
+    // computed (exp) fields shed it. FileInput additionally gets the
+    // identity inputField fill; ModelTable keeps no inputField.
+    if is_source(ty) || ty == "SubProcess" {
+        let Some(f) = sn.get("fields") else {
+            return (None, None);
+        };
+        let mut fields = f.as_array().cloned().unwrap_or_default();
+        if is_source(ty) {
+            let alias = node_alias(d);
+            for f in fields.iter_mut() {
+                let computed = has_exp(f);
+                let Some(m) = f.as_object_mut() else {
+                    continue;
+                };
+                let name = m
+                    .get("name")
+                    .and_then(Value::as_str)
+                    .unwrap_or("")
+                    .to_string();
+                if computed || name.is_empty() {
+                    m.remove("originalNode");
+                    m.remove("originalField");
+                } else {
+                    m.insert("originalNode".into(), Value::String(alias.clone()));
+                    m.insert("originalField".into(), Value::String(name));
+                }
+            }
+        }
+        if ty == "FileInput" {
+            fill_fileinput_identity(&mut fields);
+        }
+        return (
+            Some(ComputedNode {
+                fields,
+                step_hints: Vec::new(),
+            }),
+            None,
+        );
+    }
+    match ty {
+        "Select" => compute_select_fields(d, descs, key_to_idx),
+        "Output" => compute_output_fields(d, descs, key_to_idx),
+        "Distinct" => compute_distinct_fields(d, descs, key_to_idx),
+        "Join" => compute_join_fields(d, descs, key_to_idx),
+        "Union" => compute_union_fields(d, descs, key_to_idx),
+        _ => compute_reshaped_fields(d, descs, key_to_idx),
+    }
+}
+
+/// Output: explicit fields resolve against the single input; absent fields
+/// derive by cloning predecessor fields with rewritten direct lineage.
+fn compute_output_fields(
     d: &NodeDesc,
     descs: &[NodeDesc],
     key_to_idx: &HashMap<String, usize>,
-) -> (Option<Vec<Value>>, Option<Diag>) {
-    let sn = d.spec.unwrap();
-    let Some(pred_key) = d.inputs.first() else {
+) -> (Option<ComputedNode>, Option<Diag>) {
+    let Some(pred) = input_desc(d, descs, key_to_idx, 0) else {
         return (
             None,
             Some(Diag::spec(
                 format!("/nodes/{}/inputs", d.idx),
                 "err.dataflow.node.input",
-                "Select requires 1 input",
+                "Output requires 1 input",
             )),
         );
     };
-    let Some(&pi) = key_to_idx.get(pred_key) else {
-        return (
-            None,
-            Some(Diag::spec(
-                format!("/nodes/{}/inputs", d.idx),
-                "graph.danglingInput",
-                "unknown input key",
-            )),
-        );
-    };
-    let pred = &descs[pi];
+    let sn = d.spec.unwrap();
+    if sn.get("fields").and_then(Value::as_array).is_some() {
+        let Some(pred_fields) = &pred.out_fields else {
+            // raw predecessor without declared fields: the Output's own
+            // declarations ARE the shape — emit them unresolved
+            if pred.raw_body.is_some() {
+                let fields: Vec<Value> = sn
+                    .get("fields")
+                    .and_then(Value::as_array)
+                    .unwrap()
+                    .iter()
+                    .map(emit_computed)
+                    .collect();
+                return (
+                    Some(ComputedNode {
+                        fields,
+                        step_hints: Vec::new(),
+                    }),
+                    None,
+                );
+            }
+            return (
+                None,
+                Some(Diag::spec(
+                    format!("/nodes/{}/fields", d.idx),
+                    "field.required",
+                    "predecessor fields not computed",
+                )),
+            );
+        };
+        match resolve_declared_fields(d, &[pred], &[pred_fields], true, false) {
+            Ok(fields) => {
+                return (
+                    Some(ComputedNode {
+                        fields,
+                        step_hints: Vec::new(),
+                    }),
+                    None,
+                );
+            }
+            Err(e) => return (None, Some(e)),
+        }
+    }
     let Some(pred_fields) = &pred.out_fields else {
         return (
             None,
@@ -2934,203 +3566,1115 @@ fn derive_select_fields(
             )),
         );
     };
-    let pred_alias = pred.alias.as_deref().unwrap_or(pred.key.as_str());
+    let out = pred_fields
+        .iter()
+        .map(|f| clone_passthrough(f, pred))
+        .collect();
+    (
+        Some(ComputedNode {
+            fields: out,
+            step_hints: Vec::new(),
+        }),
+        None,
+    )
+}
 
-    // init working set from predecessor fields (strip lineage; keep template)
-    let mut work: Vec<WorkField> = Vec::new();
-    for (fi, f) in pred_fields.iter().enumerate() {
-        let name = field_name(f, fi);
-        let mut template = f.as_object().cloned().unwrap_or_default();
-        for k in [
-            "exp",
-            "aggType",
-            "inputField",
-            "inputNode",
-            "originalField",
-            "originalNode",
-        ] {
-            template.remove(k);
+/// Identity projection for Output: strip exp/aggType/lineage, set
+/// inputField = predecessor name, original* = proven origin, never inputNode.
+fn clone_passthrough(f: &Value, pred: &NodeDesc) -> Value {
+    let mut m = f.as_object().cloned().unwrap_or_default();
+    for k in [
+        "exp",
+        "aggType",
+        "inputField",
+        "inputNode",
+        "originalField",
+        "originalNode",
+    ] {
+        m.remove(k);
+    }
+    let name = field_name(f, 0);
+    m.insert("name".into(), Value::String(name.clone()));
+    m.insert("inputField".into(), Value::String(name));
+    if let Some((on, of)) = field_origin(f, pred) {
+        m.insert("originalNode".into(), Value::String(on));
+        m.insert("originalField".into(), Value::String(of));
+    }
+    Value::Object(m)
+}
+
+/// Resolve explicit `fields` declarations against predecessor field sets.
+/// `strict` reports notfound/ambiguous; lenient reshaping nodes fall back to
+/// the declaration minus original*. `emit_input_node` controls whether a
+/// resolved input alias is written (Join/Union yes; Output/Distinct no).
+fn resolve_declared_fields(
+    d: &NodeDesc,
+    preds: &[&NodeDesc],
+    fields_of: &[&Vec<Value>],
+    strict: bool,
+    emit_input_node: bool,
+) -> Result<Vec<Value>, Diag> {
+    let declared = d
+        .spec
+        .and_then(|s| s.get("fields"))
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    let mut out = Vec::with_capacity(declared.len());
+    for (fi, df) in declared.iter().enumerate() {
+        if has_exp(df) {
+            out.push(emit_computed(df));
+            continue;
         }
-        work.push(WorkField {
-            out_name: name.clone(),
-            src_name: name.clone(),
-            orig_node: f
-                .get("originalNode")
-                .and_then(Value::as_str)
-                .map(str::to_string)
-                .unwrap_or_else(|| pred_alias.to_string()),
-            orig_field: f
-                .get("originalField")
-                .and_then(Value::as_str)
-                .map(str::to_string)
-                .unwrap_or_else(|| field_name(f, fi)),
-            template,
-            is_new: false,
-            add_field: None,
-        });
+        let want = field_match_name(df);
+        let want_node = field_str(df, "inputNode");
+        let mut matches: Vec<(&NodeDesc, &Value)> = Vec::new();
+        for (pi, pred) in preds.iter().enumerate() {
+            if let Some(wn) = want_node {
+                if !field_eq(wn, &node_alias(pred)) {
+                    continue;
+                }
+            }
+            if let Some(pf) = find_pred_field(fields_of[pi], want) {
+                matches.push((pred, pf));
+            }
+        }
+        match matches.len() {
+            0 => {
+                if strict {
+                    return Err(Diag::spec(
+                        format!("/nodes/{}/fields/{}", d.idx, fi),
+                        "field.notfound",
+                        format!("field {:?} does not resolve to any input field", want),
+                    ));
+                }
+                out.push(emit_unresolved(df));
+            }
+            1 => {
+                let (pred, pf) = matches[0];
+                let pname = pf
+                    .get("name")
+                    .and_then(Value::as_str)
+                    .unwrap_or(want)
+                    .to_string();
+                let in_node = if emit_input_node {
+                    Some(node_alias(pred))
+                } else {
+                    None
+                };
+                out.push(merge_declared(
+                    df,
+                    pf,
+                    &pname,
+                    in_node.as_deref(),
+                    field_origin(pf, pred),
+                ));
+            }
+            _ => {
+                if strict {
+                    return Err(Diag::spec(
+                        format!("/nodes/{}/fields/{}", d.idx, fi),
+                        "field.ambiguous",
+                        format!("field {:?} matches multiple input fields", want),
+                    ));
+                }
+                // never guess matches[0] on ambiguity: keep the declaration
+                // minus the unproven original* pair (explicit direct refs
+                // are preserved)
+                out.push(emit_unresolved(df));
+            }
+        }
+    }
+    Ok(out)
+}
+
+/// Distinct: explicit fields resolve uniquely across inputs (declared
+/// inputNode narrows); no inputNode is emitted (single semantic stream).
+fn compute_distinct_fields(
+    d: &NodeDesc,
+    descs: &[NodeDesc],
+    key_to_idx: &HashMap<String, usize>,
+) -> (Option<ComputedNode>, Option<Diag>) {
+    let mut preds = Vec::new();
+    let mut fields_of = Vec::new();
+    for pos in 0..d.inputs.len() {
+        let Some(pred) = input_desc(d, descs, key_to_idx, pos) else {
+            continue;
+        };
+        let Some(pf) = &pred.out_fields else {
+            return (
+                None,
+                Some(Diag::spec(
+                    format!("/nodes/{}/fields", d.idx),
+                    "field.required",
+                    "predecessor fields not computed",
+                )),
+            );
+        };
+        preds.push(pred);
+        fields_of.push(pf);
+    }
+    if preds.is_empty() {
+        return (
+            None,
+            Some(Diag::spec(
+                format!("/nodes/{}/inputs", d.idx),
+                "err.dataflow.node.input",
+                "Distinct requires at least 1 input",
+            )),
+        );
+    }
+    match resolve_declared_fields(d, &preds, &fields_of, true, false) {
+        Ok(fields) => (
+            Some(ComputedNode {
+                fields,
+                step_hints: Vec::new(),
+            }),
+            None,
+        ),
+        Err(e) => (None, Some(e)),
+    }
+}
+
+/// Join: every declared field must resolve to exactly one predecessor
+/// field; `inputNode` (an input alias) disambiguates shared names.
+fn compute_join_fields(
+    d: &NodeDesc,
+    descs: &[NodeDesc],
+    key_to_idx: &HashMap<String, usize>,
+) -> (Option<ComputedNode>, Option<Diag>) {
+    let mut preds = Vec::new();
+    let mut fields_of = Vec::new();
+    for pos in 0..d.inputs.len() {
+        let Some(pred) = input_desc(d, descs, key_to_idx, pos) else {
+            continue;
+        };
+        let Some(pf) = &pred.out_fields else {
+            return (
+                None,
+                Some(Diag::spec(
+                    format!("/nodes/{}/fields", d.idx),
+                    "field.required",
+                    "predecessor fields not computed",
+                )),
+            );
+        };
+        preds.push(pred);
+        fields_of.push(pf);
+    }
+    match resolve_declared_fields(d, &preds, &fields_of, true, true) {
+        Ok(fields) => (
+            Some(ComputedNode {
+                fields,
+                step_hints: Vec::new(),
+            }),
+            None,
+        ),
+        Err(e) => (None, Some(e)),
+    }
+}
+
+/// Union: declared fields resolve through `unionMapArray` rows exactly like
+/// `DwDataFlowNodeContributor_union#sortFields` — the map key is the first
+/// non-empty `values[i]` paired with input i's alias; the emitted
+/// inputNode/inputField are always that canonical pair. Without a map the
+/// legacy per-input name lookup applies (inputField = declared name).
+fn compute_union_fields(
+    d: &NodeDesc,
+    descs: &[NodeDesc],
+    key_to_idx: &HashMap<String, usize>,
+) -> (Option<ComputedNode>, Option<Diag>) {
+    let mut preds = Vec::new();
+    let mut fields_of = Vec::new();
+    for pos in 0..d.inputs.len() {
+        let Some(pred) = input_desc(d, descs, key_to_idx, pos) else {
+            continue;
+        };
+        let Some(pf) = &pred.out_fields else {
+            return (
+                None,
+                Some(Diag::spec(
+                    format!("/nodes/{}/fields", d.idx),
+                    "field.required",
+                    "predecessor fields not computed",
+                )),
+            );
+        };
+        preds.push(pred);
+        fields_of.push(pf);
+    }
+    if preds.is_empty() {
+        return (
+            None,
+            Some(Diag::spec(
+                format!("/nodes/{}/inputs", d.idx),
+                "err.dataflow.node.input",
+                "Union requires at least 1 input",
+            )),
+        );
+    }
+    let sn = d.spec.unwrap();
+    let map = sn
+        .get("config")
+        .and_then(|c| c.get("unionMapArray"))
+        .and_then(Value::as_array);
+
+    // canonical map keys: (input position of first non-empty value, alias,
+    // field name) per visible row; duplicate keys are an error
+    struct URow {
+        key_pos: usize,
+        key_alias: String,
+        key_field: String,
+        values: Vec<Option<String>>,
+    }
+    let mut rows: Vec<URow> = Vec::new();
+    let mut key_seen: HashSet<(String, String)> = HashSet::new();
+    if let Some(arr) = map {
+        for (ri, item) in arr.iter().enumerate() {
+            let visible = item.get("visible").and_then(Value::as_bool).unwrap_or(true);
+            if !visible {
+                continue;
+            }
+            let Some(vals) = item.get("values").and_then(Value::as_array) else {
+                continue; // shape already diagnosed by validate_closed_config
+            };
+            let mut first: Option<(usize, String)> = None;
+            let mut values: Vec<Option<String>> = Vec::with_capacity(vals.len());
+            for (vi, v) in vals.iter().enumerate() {
+                let s = v.as_str().map(str::to_string);
+                values.push(s.clone());
+                if first.is_none() {
+                    if let Some(sv) = s.as_ref().filter(|x| !x.is_empty()) {
+                        first = Some((vi, sv.clone()));
+                    }
+                }
+            }
+            let Some((kpos, kfield)) = first else {
+                continue; // all empty: Java produces no map key
+            };
+            if kpos >= preds.len() {
+                continue; // width mismatch already diagnosed
+            }
+            let kalias = node_alias(preds[kpos]);
+            if !key_seen.insert((kalias.to_uppercase(), kfield.to_uppercase())) {
+                return (
+                    None,
+                    Some(Diag::spec(
+                        format!("/nodes/{}/config/unionMapArray/{}", d.idx, ri),
+                        "union.mapkey",
+                        "unionMapArray rows produce a duplicate map key",
+                    )),
+                );
+            }
+            rows.push(URow {
+                key_pos: kpos,
+                key_alias: kalias,
+                key_field: kfield,
+                values,
+            });
+        }
     }
 
+    let declared = sn
+        .get("fields")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    let mut out = Vec::with_capacity(declared.len());
+    // canonical map keys already consumed by a visible noncomputed field —
+    // two fields resolving to the same key is an ambiguous runtime
+    // projection, never a legitimate duplicate
+    let mut used_keys: HashSet<(String, String)> = HashSet::new();
+    for (fi, df) in declared.iter().enumerate() {
+        // hidden/invalid declared fields are never read at runtime: they
+        // bypass map matching entirely and carry no proven origin
+        let hidden = df.get("hidden").and_then(Value::as_bool) == Some(true) || skipped_field(df);
+        if hidden {
+            out.push(emit_unresolved(df));
+            continue;
+        }
+        if has_exp(df) {
+            out.push(emit_computed(df));
+            continue;
+        }
+        if rows.is_empty() && map.is_none() {
+            // legacy no-map resolution: inputField = declared name, origin
+            // looked up in the first input
+            let want = field_match_name(df);
+            let origin = find_pred_field(fields_of[0], want)
+                .map(|pf| field_origin(pf, preds[0]))
+                .flatten();
+            let mut m = df.as_object().cloned().unwrap_or_default();
+            m.remove("originalNode");
+            m.remove("originalField");
+            m.remove("inputNode");
+            m.insert("inputField".into(), Value::String(want.to_string()));
+            m.insert("inputNode".into(), Value::String(node_alias(preds[0])));
+            if let Some((on, of)) = origin {
+                m.insert("originalNode".into(), Value::String(on));
+                m.insert("originalField".into(), Value::String(of));
+            }
+            out.push(Value::Object(m));
+            continue;
+        }
+        if rows.is_empty() {
+            // map present but produced no keys: only computed/hidden fields
+            // may remain; every visible passthrough field is an error
+            return (
+                None,
+                Some(Diag::spec(
+                    format!("/nodes/{}/fields/{}", d.idx, fi),
+                    "union.mapkey",
+                    "no visible unionMapArray row can produce this field",
+                )),
+            );
+        }
+        let want_field = field_match_name(df);
+        let want_node = field_str(df, "inputNode");
+        // primary: match the canonical key (field + optional alias)
+        let mut primary: Vec<&URow> = rows
+            .iter()
+            .filter(|r| {
+                field_eq(&r.key_field, want_field)
+                    && want_node
+                        .map(|wn| field_eq(wn, &r.key_alias))
+                        .unwrap_or(true)
+            })
+            .collect();
+        // secondary: the field may be renamed — match any other populated
+        // values[j] together with that input's alias
+        if primary.is_empty() {
+            let mut secondary: Vec<&URow> = Vec::new();
+            for r in &rows {
+                for (j, v) in r.values.iter().enumerate() {
+                    let Some(sv) = v.as_ref().filter(|s| !s.is_empty()) else {
+                        continue;
+                    };
+                    if j == r.key_pos || !field_eq(sv, want_field) {
+                        continue;
+                    }
+                    let alias_j = node_alias(preds[j]);
+                    if want_node.map(|wn| !field_eq(wn, &alias_j)).unwrap_or(false) {
+                        continue;
+                    }
+                    secondary.push(r);
+                    break;
+                }
+            }
+            primary = secondary;
+        }
+        match primary.len() {
+            1 => {
+                let r = primary[0];
+                let Some(pf) = find_pred_field(fields_of[r.key_pos], &r.key_field) else {
+                    return (
+                        None,
+                        Some(Diag::spec(
+                            format!("/nodes/{}/fields/{}", d.idx, fi),
+                            "union.mapkey",
+                            format!(
+                                "unionMapArray key {:?} has no field in input {}",
+                                r.key_field, r.key_pos
+                            ),
+                        )),
+                    );
+                };
+                // two visible noncomputed fields resolving to the same
+                // canonical map key would read the same runtime column
+                if !used_keys.insert((r.key_alias.to_uppercase(), r.key_field.to_uppercase())) {
+                    return (
+                        None,
+                        Some(Diag::spec(
+                            format!("/nodes/{}/fields/{}", d.idx, fi),
+                            "union.mapkey",
+                            format!(
+                                "field {:?} reuses unionMapArray key {:?} already claimed by another field",
+                                want_field, r.key_field
+                            ),
+                        )),
+                    );
+                }
+                let origin = field_origin(pf, preds[r.key_pos]);
+                let pname = r.key_field.clone();
+                let kalias = r.key_alias.clone();
+                out.push(merge_declared(df, pf, &pname, Some(&kalias), origin));
+            }
+            0 => {
+                return (
+                    None,
+                    Some(Diag::spec(
+                        format!("/nodes/{}/fields/{}", d.idx, fi),
+                        "union.mapkey",
+                        format!("no unionMapArray row matches field {:?}", want_field),
+                    )),
+                );
+            }
+            _ => {
+                return (
+                    None,
+                    Some(Diag::spec(
+                        format!("/nodes/{}/fields/{}", d.idx, fi),
+                        "union.mapkey",
+                        format!("field {:?} matches multiple unionMapArray rows", want_field),
+                    )),
+                );
+            }
+        }
+    }
+    (
+        Some(ComputedNode {
+            fields: out,
+            step_hints: Vec::new(),
+        }),
+        None,
+    )
+}
+
+/// Reshaping nodes (Agg, RowToCol, ColToRow, Snapshot, Update, DbOutput,
+/// SlowChanging, GeoFindLocation, Extend): explicit fields only. A unique
+/// predecessor match inherits proven passthrough lineage; anything else
+/// keeps the declaration minus the unproven original* pair.
+fn compute_reshaped_fields(
+    d: &NodeDesc,
+    descs: &[NodeDesc],
+    key_to_idx: &HashMap<String, usize>,
+) -> (Option<ComputedNode>, Option<Diag>) {
+    let mut preds = Vec::new();
+    let mut fields_of = Vec::new();
+    for pos in 0..d.inputs.len() {
+        if let Some(pred) = input_desc(d, descs, key_to_idx, pos) {
+            if let Some(pf) = &pred.out_fields {
+                preds.push(pred);
+                fields_of.push(pf);
+            }
+        }
+    }
+    // reshaping nodes never synthesize inputNode: an invented direct ref
+    // would alter the runtime inputFieldExp (e.g. on pivot-born columns)
+    match resolve_declared_fields(d, &preds, &fields_of, false, false) {
+        Ok(fields) => (
+            Some(ComputedNode {
+                fields,
+                step_hints: Vec::new(),
+            }),
+            None,
+        ),
+        Err(e) => (None, Some(e)),
+    }
+}
+
+fn field_name(f: &Value, idx: usize) -> String {
+    f.get("name")
+        .and_then(Value::as_str)
+        .map(str::to_string)
+        .unwrap_or_else(|| format!("field{}", idx))
+}
+
+/// Sequential Select simulation: evolves the predecessor field set through
+/// every step exactly like `QueryImpl` does, tracking wire-shaped field
+/// values plus the `originFieldInfo` rename hints the editor writes back.
+struct SimResult {
+    /// field state after the last applied step — when `opaque_at` is set
+    /// this is the proven state BEFORE that step
+    fields: Vec<Value>,
+    /// per-step originFieldInfo hints (None = no rename hint emitted)
+    step_hints: Vec<Option<Value>>,
+    /// index of the first step whose shape cannot be modeled
+    /// (rawStep/SplitField/Text2Id/unknown); None when all applied
+    opaque_at: Option<usize>,
+}
+
+/// Apply one provable step's object-level mutation to wire-shaped fields,
+/// mirroring the name evolution `evolve_names` already performed on the
+/// same step. Rename hints capture the CURRENT name/dataType before any
+/// Refactor mutation (the editor dereferences originFieldInfo.name).
+/// `explicit_fields` marks whether the Select declares `fields` — a
+/// type-converting Refactor is only derivable then.
+fn apply_step_mutation(
+    fields: &mut Vec<Value>,
+    s: &Value,
+    si: usize,
+    d_idx: usize,
+    step_hints: &mut [Option<Value>],
+    explicit_fields: bool,
+) -> Result<(), Diag> {
+    let ty = s.get("type").and_then(Value::as_str).unwrap_or("");
+    let operands: Vec<String> = s
+        .get("fields")
+        .and_then(Value::as_array)
+        .map(|a| {
+            a.iter()
+                .filter_map(|v| v.as_str().map(str::to_string))
+                .collect()
+        })
+        .unwrap_or_default();
+    match ty {
+        "RemoveField" => {
+            fields.retain(|f| {
+                let n = f.get("name").and_then(Value::as_str).unwrap_or("");
+                !operands.iter().any(|o| field_eq(o, n))
+            });
+        }
+        "Refactor" => {
+            let refactor = s.get("refactor").and_then(Value::as_object);
+            let type_keys = ["dataType", "length", "decimal", "aggType", "dateFormat"];
+            let has_type_conv = refactor
+                .map(|o| o.keys().any(|k| type_keys.contains(&k.as_str())))
+                .unwrap_or(false);
+            if has_type_conv && !explicit_fields {
+                return Err(Diag::spec(
+                    format!("/nodes/{}/fields", d_idx),
+                    "field.required",
+                    "Refactor type conversion cannot infer length/decimal; provide explicit fields",
+                ));
+            }
+            let sel = operands.first().cloned().unwrap_or_default();
+            let Some(f) = fields.iter_mut().find(|f| {
+                f.get("name")
+                    .and_then(Value::as_str)
+                    .map(|n| field_eq(n, &sel))
+                    .unwrap_or(false)
+            }) else {
+                return Ok(());
+            };
+            let Some(m) = f.as_object_mut() else {
+                return Ok(());
+            };
+            let rename = s
+                .pointer("/refactor/rename")
+                .and_then(Value::as_str)
+                .filter(|r| !r.is_empty())
+                .map(str::to_string);
+            if rename.is_some() {
+                // editor metadata: capture the pre-rename identity
+                let prior_dt = m
+                    .get("dataType")
+                    .and_then(Value::as_str)
+                    .unwrap_or("")
+                    .to_string();
+                step_hints[si] = Some(serde_json::json!({
+                    "name": m.get("name").and_then(Value::as_str).unwrap_or(""),
+                    "dataType": prior_dt,
+                }));
+            }
+            if has_type_conv {
+                if let Some(ro) = refactor {
+                    for (k, v) in ro {
+                        if k != "rename" {
+                            m.insert(k.clone(), v.clone());
+                        }
+                    }
+                }
+            }
+            if let Some(rn) = rename {
+                m.insert("name".into(), Value::String(rn));
+            }
+        }
+        "AddField" => {
+            let af = s.get("addField").cloned().unwrap_or(Value::Null);
+            let name = af.get("name").and_then(Value::as_str).unwrap_or("");
+            let dt = af.get("dataType").and_then(Value::as_str).unwrap_or("");
+            let has_role = af
+                .get("isDimension")
+                .map(Value::is_boolean)
+                .unwrap_or(false);
+            let has_exp = af
+                .get("exp")
+                .and_then(Value::as_str)
+                .map(|x| !x.trim().is_empty())
+                .unwrap_or(false);
+            if name.is_empty() || dt.is_empty() || !has_role || !has_exp {
+                return Err(Diag::spec(
+                    format!("/nodes/{}/steps/{}/addField", d_idx, si),
+                    "field.required",
+                    "AddField requires declared name, dataType, isDimension role and exp for derivation",
+                ));
+            }
+            // the added field is born by computation: no direct lineage
+            let mut m = af.as_object().cloned().unwrap_or_default();
+            for k in ["originalNode", "originalField", "inputNode", "inputField"] {
+                m.remove(k);
+            }
+            fields.push(Value::Object(m));
+        }
+        "TransformToCalculatedField" => {
+            // Java edits the field's expression in place — names preserved
+            // (evolve_names already confirmed); the field becomes computed
+            // so its proven origin is shed
+            let tfi = s.get("transformFieldInfo").cloned().unwrap_or(Value::Null);
+            let exp = tfi
+                .get("exp")
+                .and_then(Value::as_str)
+                .unwrap_or("")
+                .to_string();
+            if exp.is_empty() {
+                return Err(Diag::spec(
+                    format!("/nodes/{}/steps/{}/transformFieldInfo", d_idx, si),
+                    "field.required",
+                    "TransformToCalculatedField requires transformFieldInfo.exp for derivation",
+                ));
+            }
+            let dt = tfi
+                .get("dataType")
+                .and_then(Value::as_str)
+                .map(str::to_string);
+            for f in fields.iter_mut() {
+                let hit = f
+                    .get("name")
+                    .and_then(Value::as_str)
+                    .map(|n| operands.iter().any(|o| field_eq(o, n)))
+                    .unwrap_or(false);
+                if !hit {
+                    continue;
+                }
+                if let Some(m) = f.as_object_mut() {
+                    m.insert("exp".into(), Value::String(exp.clone()));
+                    m.remove("originalNode");
+                    m.remove("originalField");
+                    if let Some(dtv) = &dt {
+                        m.insert("dataType".into(), Value::String(dtv.clone()));
+                    }
+                }
+            }
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+/// Run the Select step simulation over wire-shaped fields. Hard errors
+/// (name collisions, invalid required payloads) are `Err`; an unmodelable
+/// step stops simulation and is reported via `SimResult::opaque_at`.
+fn simulate_select(
+    d: &NodeDesc,
+    pred: &NodeDesc,
+    pred_fields: &[Value],
+    explicit_fields: bool,
+) -> Result<SimResult, Diag> {
+    let sn = d.spec.unwrap();
+    let mut work: Vec<Value> = pred_fields
+        .iter()
+        .map(|f| clone_passthrough(f, pred))
+        .collect();
     let steps = sn
         .get("steps")
         .and_then(Value::as_array)
         .cloned()
         .unwrap_or_default();
+    let mut step_hints: Vec<Option<Value>> = vec![None; steps.len()];
+    let mut opaque_at = None;
     for (si, s) in steps.iter().enumerate() {
-        // rawStep: cannot derive through it
-        if s.get("rawStep").is_some() {
-            return (
-                None,
-                Some(Diag::spec(
-                    format!("/nodes/{}/steps/{}", d.idx, si),
-                    "field.required",
-                    "rawStep changes fields unpredictably; provide explicit fields",
-                )),
-            );
+        // names evolve first: collision detection + authoritative name set
+        let mut names: Vec<String> = work
+            .iter()
+            .enumerate()
+            .map(|(i, f)| field_name(f, i))
+            .collect();
+        match evolve_names(&mut names, s) {
+            Ok(true) => {}
+            Ok(false) => {
+                opaque_at = Some(si);
+                break;
+            }
+            Err(tag) => {
+                return Err(Diag::spec(
+                    format!("/nodes/{}/steps/{}/{}", d.idx, si, tag),
+                    "field.duplicate",
+                    format!(
+                        "step at /nodes/{}/steps/{} creates a duplicate field name",
+                        d.idx, si
+                    ),
+                ));
+            }
         }
+        apply_step_mutation(&mut work, s, si, d.idx, &mut step_hints, explicit_fields)?;
+    }
+    Ok(SimResult {
+        fields: work,
+        step_hints,
+        opaque_at,
+    })
+}
+
+/// Backwards suffix pass over the steps AFTER the last opaque step (or ALL
+/// steps when the predecessor shape is unknown). `fields` are the FINAL
+/// declarations (emit_computed/emit_unresolved applied): their length and
+/// order never change. Walking the suffix in reverse recovers the
+/// step-time metadata that is still provable — a Transform's exp/dataType,
+/// an AddField's birth exp — and rejects declarations the suffix provably
+/// contradicts. Nothing is manufactured: no lineage is synthesized through
+/// the opaque step and no rename hint is guessed (the pre-rename
+/// dataType is unknowable at this point).
+fn apply_escape_steps(
+    d: &NodeDesc,
+    steps: &[Value],
+    fields: &mut [Value],
+    start: usize,
+) -> Result<(), Diag> {
+    let mismatch =
+        |msg: String| Diag::spec(format!("/nodes/{}/fields", d.idx), "field.mismatch", msg);
+    // slot.name = the name the field carried at the current reverse
+    // frontier; alive=false once a reverse AddField consumed its birth
+    let mut slots: Vec<(String, bool)> = fields
+        .iter()
+        .map(|f| {
+            (
+                f.get("name")
+                    .and_then(Value::as_str)
+                    .unwrap_or("")
+                    .to_uppercase(),
+                true,
+            )
+        })
+        .collect();
+    let mut killed: HashSet<String> = HashSet::new();
+    let mut exp_bound: HashSet<usize> = HashSet::new();
+    let mut born: HashMap<usize, Value> = HashMap::new();
+    let mut transformed: HashMap<usize, Value> = HashMap::new();
+    for si in (start..steps.len()).rev() {
+        let s = &steps[si];
         let ty = s.get("type").and_then(Value::as_str).unwrap_or("");
+        if s.get("rawStep").is_some() || matches!(ty, "SplitField" | "Text2Id") {
+            break;
+        }
+        let operands: Vec<String> = s
+            .get("fields")
+            .and_then(Value::as_array)
+            .map(|a| {
+                a.iter()
+                    .filter_map(|v| v.as_str().map(str::to_string))
+                    .collect()
+            })
+            .unwrap_or_default();
         match ty {
-            "Filter" | "ToUppercase" | "ToLowercase" | "Trim" | "DeleteNumbers"
-            | "DeleteLetters" | "DeleteSpechars" | "DeletePunctuations" | "ExcludeEmpty"
-            | "ExtractNumber" | "SubString" | "Replace" | "Distinct" => {}
             "RemoveField" => {
-                if let Some(fl) = s.get("fields").and_then(Value::as_array) {
-                    let names: HashSet<String> = fl
-                        .iter()
-                        .filter_map(|v| v.as_str().map(str::to_string))
-                        .collect();
-                    work.retain(|w| !names.contains(&w.out_name));
+                for o in &operands {
+                    let uo = o.to_uppercase();
+                    // a declared field this step removes is a
+                    // contradiction (re-births were consumed by the
+                    // reverse AddField already)
+                    if slots.iter().any(|(n, a)| *a && *n == uo) {
+                        return Err(mismatch(format!(
+                            "field {:?} is removed by step {} but still declared",
+                            o, si
+                        )));
+                    }
+                    killed.insert(uo);
                 }
             }
             "Refactor" => {
-                // Java: rename is a STRING applied to the single selected
-                // field's current name (contributor_select renames the
-                // fields entry). Type/desc conversions that change
-                // length/decimal cannot be inferred -> explicit fields.
-                let has_type_conv = s
-                    .pointer("/refactor")
-                    .and_then(Value::as_object)
-                    .map(|o| {
-                        o.keys().any(|k| {
-                            matches!(
-                                k.as_str(),
-                                "dataType" | "length" | "decimal" | "aggType" | "dateFormat"
-                            )
-                        })
-                    })
-                    .unwrap_or(false);
-                if has_type_conv {
-                    return (
-                        None,
-                        Some(Diag::spec(
-                            format!("/nodes/{}/fields", d.idx),
-                            "field.required",
-                            "Refactor type conversion cannot infer length/decimal; provide explicit fields",
-                        )),
-                    );
+                // only rename changes names; type conversions carry no
+                // recoverable prior metadata
+                if let Some(rn) = s
+                    .pointer("/refactor/rename")
+                    .and_then(Value::as_str)
+                    .filter(|r| !r.is_empty())
+                {
+                    let urn = rn.to_uppercase();
+                    if let Some(pos) = slots.iter().position(|(n, a)| *a && *n == urn) {
+                        if let Some(sel) = operands.first() {
+                            slots[pos].0 = sel.to_uppercase();
+                        }
+                    } else if killed.contains(&urn) {
+                        // renamed then killed later: the pre-rename name
+                        // is dead at this frontier too
+                        if let Some(sel) = operands.first() {
+                            killed.insert(sel.to_uppercase());
+                        }
+                    }
                 }
-                if let Some(rn) = s.pointer("/refactor/rename").and_then(Value::as_str) {
-                    if !rn.is_empty() {
-                        // find the selected field (validation guarantees
-                        // exactly one); match case-insensitively
-                        let sel = s
-                            .get("fields")
-                            .and_then(Value::as_array)
-                            .and_then(|a| a.first())
-                            .and_then(Value::as_str)
-                            .unwrap_or("");
-                        if let Some(w) = work
-                            .iter_mut()
-                            .find(|w| w.out_name.eq_ignore_ascii_case(sel))
-                        {
-                            w.out_name = rn.to_string();
+            }
+            "TransformToCalculatedField" => {
+                let tfi = s.get("transformFieldInfo").cloned().unwrap_or(Value::Null);
+                for o in &operands {
+                    let uo = o.to_uppercase();
+                    if let Some(idx) = slots.iter().position(|(n, a)| *a && *n == uo) {
+                        // reverse order => first hit per field is the
+                        // LATEST transform; earlier ones must not override
+                        if !exp_bound.contains(&idx) {
+                            transformed.insert(idx, tfi.clone());
+                            exp_bound.insert(idx);
                         }
                     }
                 }
             }
             "AddField" => {
                 let af = s.get("addField").cloned().unwrap_or(Value::Null);
-                let name = af
+                let na = af
                     .get("name")
                     .and_then(Value::as_str)
                     .unwrap_or("")
-                    .to_string();
-                let dt = af
-                    .get("dataType")
-                    .and_then(Value::as_str)
-                    .unwrap_or("")
-                    .to_string();
-                let has_role = af
-                    .get("isDimension")
-                    .map(Value::is_boolean)
-                    .unwrap_or(false);
-                let has_exp = af
-                    .get("exp")
-                    .and_then(Value::as_str)
-                    .map(|x| !x.is_empty())
-                    .unwrap_or(false);
-                if name.is_empty() || dt.is_empty() || !has_role || !has_exp {
-                    return (None, Some(Diag::spec(
-                        format!("/nodes/{}/steps/{}/addField", d.idx, si),
-                        "field.required",
-                        "AddField requires declared name, dataType, isDimension role and exp for derivation",
+                    .to_uppercase();
+                if let Some(idx) = slots.iter().position(|(n, a)| *a && *n == na) {
+                    // birth of a surviving declared field: bind the
+                    // addField payload, consume the slot
+                    born.insert(idx, af.clone());
+                    slots[idx].1 = false;
+                    exp_bound.insert(idx);
+                } else if !killed.contains(&na) {
+                    return Err(mismatch(format!(
+                        "step {} adds field {:?} which the explicit fields omit",
+                        si, na
                     )));
                 }
-                work.push(WorkField {
-                    out_name: name.clone(),
-                    src_name: name,
-                    template: Map::new(),
-                    orig_node: String::new(),
-                    orig_field: String::new(),
-                    is_new: true,
-                    add_field: Some(af),
-                });
+                // na in killed: born then removed later — allowed
             }
-            "SplitField" | "Text2Id" | "TransformToCalculatedField" => {
+            _ => {}
+        }
+    }
+    for (idx, f) in fields.iter_mut().enumerate() {
+        let Some(m) = f.as_object_mut() else {
+            continue;
+        };
+        for k in ["originalNode", "originalField", "inputNode"] {
+            m.remove(k);
+        }
+        if born.contains_key(&idx) {
+            m.remove("inputField");
+        }
+        if let Some(tfi) = transformed.get(&idx) {
+            if let Some(e) = tfi.get("exp").and_then(Value::as_str) {
+                m.insert("exp".into(), Value::String(e.to_string()));
+            }
+            if let Some(dt) = tfi.get("dataType").and_then(Value::as_str) {
+                m.insert("dataType".into(), Value::String(dt.to_string()));
+            }
+        }
+        if let Some(af) = born.get(&idx) {
+            if !transformed.contains_key(&idx) {
+                if let Some(e) = af.get("exp").and_then(Value::as_str) {
+                    m.insert("exp".into(), Value::String(e.to_string()));
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Multiset equality of field names under the platform's Unicode-aware
+/// `field_eq` folding (order-insensitive).
+fn name_multiset_eq(a: &[String], b: &[String]) -> bool {
+    if a.len() != b.len() {
+        return false;
+    }
+    let mut remaining = b.to_vec();
+    'outer: for x in a {
+        for (i, y) in remaining.iter().enumerate() {
+            if field_eq(x, y) {
+                remaining.remove(i);
+                continue 'outer;
+            }
+        }
+        return false;
+    }
+    remaining.is_empty()
+}
+
+/// Select field computation: the sequential simulation provides lineage,
+/// expressions and rename hints. A provable result is checked against the
+/// declared name multiset directly; explicit `fields` keep their order and
+/// presentation while simulated input/exp/origin is enforced by name. An
+/// unmodelable step falls back to the declarations (minus unproven
+/// original*) with whatever later steps remain provable on those names.
+fn compute_select_fields(
+    d: &NodeDesc,
+    descs: &[NodeDesc],
+    key_to_idx: &HashMap<String, usize>,
+) -> (Option<ComputedNode>, Option<Diag>) {
+    let sn = d.spec.unwrap();
+    if d.inputs.is_empty() {
+        return (
+            None,
+            Some(Diag::spec(
+                format!("/nodes/{}/inputs", d.idx),
+                "err.dataflow.node.input",
+                "Select requires 1 input",
+            )),
+        );
+    }
+    let Some(pred) = input_desc(d, descs, key_to_idx, 0) else {
+        return (
+            None,
+            Some(Diag::spec(
+                format!("/nodes/{}/inputs/{}", d.idx, 0),
+                "graph.danglingInput",
+                "unknown input key",
+            )),
+        );
+    };
+    let declared = sn.get("fields").and_then(Value::as_array);
+    let Some(pred_fields) = &pred.out_fields else {
+        // unknown predecessor shape (rawNode without fields): the explicit
+        // declarations ARE the contract — recover provable step metadata by
+        // walking every step backwards; absent declarations stay an error
+        let Some(decl) = declared else {
+            return (
+                None,
+                Some(Diag::spec(
+                    format!("/nodes/{}/fields", d.idx),
+                    "field.required",
+                    "predecessor fields not computed",
+                )),
+            );
+        };
+        let steps = sn
+            .get("steps")
+            .and_then(Value::as_array)
+            .cloned()
+            .unwrap_or_default();
+        let mut fields: Vec<Value> = decl
+            .iter()
+            .map(|df| {
+                if has_exp(df) {
+                    emit_computed(df)
+                } else {
+                    emit_unresolved(df)
+                }
+            })
+            .collect();
+        if let Err(e) = apply_escape_steps(d, &steps, &mut fields, 0) {
+            return (None, Some(e));
+        }
+        return (
+            Some(ComputedNode {
+                fields,
+                step_hints: vec![None; steps.len()],
+            }),
+            None,
+        );
+    };
+    let res = match simulate_select(d, pred, pred_fields, declared.is_some()) {
+        Ok(r) => r,
+        Err(e) => return (None, Some(e)),
+    };
+    match declared {
+        Some(decl) => {
+            if let Some(oi) = res.opaque_at {
+                // unmodelable step: declarations are the escape path —
+                // emit them minus unproven lineage (computed fields also
+                // shed inputNode), keep the hints proven before the opaque
+                // step, then recover provable suffix metadata by walking
+                // the later steps backwards
+                let mut fields: Vec<Value> = decl
+                    .iter()
+                    .map(|df| {
+                        if has_exp(df) {
+                            emit_computed(df)
+                        } else {
+                            emit_unresolved(df)
+                        }
+                    })
+                    .collect();
+                let hints = res.step_hints;
+                let steps = sn
+                    .get("steps")
+                    .and_then(Value::as_array)
+                    .cloned()
+                    .unwrap_or_default();
+                if let Err(e) = apply_escape_steps(d, &steps, &mut fields, oi + 1) {
+                    return (None, Some(e));
+                }
+                return (
+                    Some(ComputedNode {
+                        fields,
+                        step_hints: hints,
+                    }),
+                    None,
+                );
+            }
+            // provable: declared names must equal the simulated multiset —
+            // a mismatch is a spec error, never an unresolved declaration
+            let decl_names: Vec<String> = decl.iter().map(|f| field_name(f, 0)).collect();
+            let sim_names: Vec<String> = res
+                .fields
+                .iter()
+                .enumerate()
+                .map(|(i, f)| field_name(f, i))
+                .collect();
+            if !name_multiset_eq(&decl_names, &sim_names) {
+                return (
+                    None,
+                    Some(Diag::spec(
+                        format!("/nodes/{}/fields", d.idx),
+                        "field.mismatch",
+                        format!(
+                            "explicit fields {:?} do not match derivable output {:?}",
+                            decl_names, sim_names
+                        ),
+                    )),
+                );
+            }
+            // project each declaration onto its simulated field: declared
+            // order + presentation keys, simulated
+            // inputField/exp/original* enforced by name
+            let mut out = Vec::with_capacity(decl.len());
+            for df in decl {
+                let dn = df.get("name").and_then(Value::as_str).unwrap_or("");
+                if let Some(sf) = res.fields.iter().find(|sf| {
+                    sf.get("name")
+                        .and_then(Value::as_str)
+                        .map(|n| field_eq(n, dn))
+                        .unwrap_or(false)
+                }) {
+                    let mut m = sf.as_object().cloned().unwrap_or_default();
+                    if let Some(do_) = df.as_object() {
+                        for (k, v) in do_ {
+                            if ENFORCED_FIELD_KEYS.contains(&k.as_str()) {
+                                continue;
+                            }
+                            m.insert(k.clone(), v.clone());
+                        }
+                    }
+                    m.insert(
+                        "name".into(),
+                        df.get("name").cloned().unwrap_or(Value::Null),
+                    );
+                    out.push(Value::Object(m));
+                } else {
+                    out.push(emit_unresolved(df));
+                }
+            }
+            (
+                Some(ComputedNode {
+                    fields: out,
+                    step_hints: res.step_hints,
+                }),
+                None,
+            )
+        }
+        None => {
+            if let Some(si) = res.opaque_at {
+                let steps = sn
+                    .get("steps")
+                    .and_then(Value::as_array)
+                    .cloned()
+                    .unwrap_or_default();
+                let ty = steps
+                    .get(si)
+                    .and_then(|s| s.get("type"))
+                    .and_then(Value::as_str)
+                    .unwrap_or("rawStep");
                 return (
                     None,
                     Some(Diag::spec(
                         format!("/nodes/{}/fields", d.idx),
                         "field.required",
-                        format!("step {} changes field shape; provide explicit fields", ty),
+                        format!(
+                            "step {} at /nodes/{}/steps/{} changes fields unpredictably; provide explicit fields",
+                            ty, d.idx, si
+                        ),
                     )),
                 );
             }
-            _ => {
-                // unsupported step types already rejected; defensive
-                return (
-                    None,
-                    Some(Diag::spec(
-                        format!("/nodes/{}/steps/{}", d.idx, si),
-                        "field.required",
-                        format!("step {} cannot be used for field derivation", ty),
-                    )),
-                );
-            }
+            (
+                Some(ComputedNode {
+                    fields: res.fields,
+                    step_hints: res.step_hints,
+                }),
+                None,
+            )
         }
     }
-
-    let out: Vec<Value> = work
-        .iter()
-        .map(|w| {
-            if w.is_new {
-                // emit the declared addField payload but under the CURRENT
-                // name (a later Refactor may have renamed it)
-                let mut af = w.add_field.clone().unwrap_or(Value::Null);
-                if let Some(m) = af.as_object_mut() {
-                    m.insert("name".into(), Value::String(w.out_name.clone()));
-                }
-                return af;
-            }
-            let mut m = w.template.clone();
-            m.insert("name".into(), Value::String(w.out_name.clone()));
-            m.insert("inputNode".into(), Value::String(pred_alias.to_string()));
-            m.insert("inputField".into(), Value::String(w.src_name.clone()));
-            m.insert("originalNode".into(), Value::String(w.orig_node.clone()));
-            m.insert("originalField".into(), Value::String(w.orig_field.clone()));
-            Value::Object(m)
-        })
-        .collect();
-    (Some(out), None)
 }
 
 /// DwDataFlowContext#getFileTempFields (206-229) builds the temp-field map
@@ -3171,12 +4715,17 @@ fn emit_typed_node(d: &NodeDesc) -> Result<Value, Diag> {
         }
         body.insert("inputNodes".into(), Value::Array(ids));
     }
-    // fields partition
+    // fields partition: fields:[] is retained for known-empty outputs, but
+    // empty dimensions/measures lists are omitted entirely
     if let Some(fields) = &d.out_fields {
         let (dims, meas) = partition_fields(fields);
         body.insert("fields".into(), Value::Array(fields.clone()));
-        body.insert("dimensions".into(), Value::Array(dims));
-        body.insert("measures".into(), Value::Array(meas));
+        if !dims.is_empty() {
+            body.insert("dimensions".into(), Value::Array(dims));
+        }
+        if !meas.is_empty() {
+            body.insert("measures".into(), Value::Array(meas));
+        }
     }
     if let Some(of) = sn.get("originalFields") {
         body.insert("originalFields".into(), of.clone());
@@ -3187,21 +4736,52 @@ fn emit_typed_node(d: &NodeDesc) -> Result<Value, Diag> {
         }
     }
     if ty == "Select" {
-        // steps: typed verbatim / rawStep verbatim
+        // steps: typed verbatim / rawStep verbatim; empty lists omitted.
+        // Refactor rename hints (originFieldInfo) are regenerated from the
+        // sequential simulation — never trusted from the spec.
         if let Some(steps) = sn.get("steps").and_then(Value::as_array) {
-            let mut out_steps = Vec::new();
-            for s in steps {
-                if let Some(rs) = s.get("rawStep") {
-                    out_steps.push(rs.clone());
-                } else {
-                    out_steps.push(s.clone());
+            if !steps.is_empty() {
+                let mut out_steps = Vec::new();
+                for (si, s) in steps.iter().enumerate() {
+                    if let Some(rs) = s.get("rawStep") {
+                        out_steps.push(rs.clone());
+                    } else {
+                        let mut step = s.clone();
+                        // AddField's fields operand is the platform's own
+                        // selection: a missing operand is synthesized as
+                        // [addField.name]; an explicit operand — even a
+                        // differing singleton — is preserved verbatim.
+                        if s.get("type").and_then(Value::as_str) == Some("AddField")
+                            && !s
+                                .as_object()
+                                .map(|o| o.contains_key("fields"))
+                                .unwrap_or(false)
+                        {
+                            if let Some(nm) = s.pointer("/addField/name").and_then(Value::as_str) {
+                                if !nm.is_empty() {
+                                    if let Some(m) = step.as_object_mut() {
+                                        m.insert(
+                                            "fields".into(),
+                                            Value::Array(vec![Value::String(nm.to_string())]),
+                                        );
+                                    }
+                                }
+                            }
+                        }
+                        if s.get("rawStep").is_none() {
+                            if let Some(hint) = d.step_hints.get(si).and_then(|h| h.as_ref()) {
+                                if let Some(m) = step.as_object_mut() {
+                                    m.insert("originFieldInfo".into(), hint.clone());
+                                }
+                            }
+                        }
+                        out_steps.push(step);
+                    }
                 }
+                body.insert("steps".into(), Value::Array(out_steps));
             }
-            body.insert("steps".into(), Value::Array(out_steps));
-        } else {
-            body.insert("steps".into(), Value::Array(vec![]));
         }
-        // stepCount = max(config.stepCount, steps.len)
+        // stepCount is only meaningful when it exceeds the real step count
         let len = sn
             .get("steps")
             .and_then(Value::as_array)
@@ -3211,7 +4791,9 @@ fn emit_typed_node(d: &NodeDesc) -> Result<Value, Diag> {
             .pointer("/config/stepCount")
             .and_then(Value::as_u64)
             .unwrap_or(0);
-        body.insert("stepCount".into(), Value::from(cfg_sc.max(len)));
+        if cfg_sc > len {
+            body.insert("stepCount".into(), Value::from(cfg_sc));
+        }
     }
     // config verbatim
     if let Some(cfg) = sn.get("config").and_then(Value::as_object) {
@@ -3249,11 +4831,31 @@ pub(crate) fn partition_fields(fields: &[Value]) -> (Vec<Value>, Vec<Value>) {
     (dims, meas)
 }
 
-fn default_output_partition(descs: &[NodeDesc]) -> (Vec<Value>, Vec<Value>) {
+/// The default Output may be typed or a rawNode; its fields drive the
+/// top-level dimensions/measures partition. The loader routes by the
+/// nodes-map key, so `key == "default"` + `type == "Output"` decides for
+/// both forms — a raw body's own `id` is payload, not routing.
+fn is_default_output(d: &NodeDesc) -> bool {
+    d.wire_key == "default" && d.ty.as_deref() == Some("Output")
+}
+
+fn default_output_partition(descs: &[NodeDesc], diags: &mut Vec<Diag>) -> (Vec<Value>, Vec<Value>) {
     for d in descs {
-        if d.ty.as_deref() == Some("Output") && d.wire_key == "default" {
-            if let Some(fields) = &d.out_fields {
-                return partition_fields(fields);
+        if is_default_output(d) {
+            match &d.out_fields {
+                Some(fields) => return partition_fields(fields),
+                None => {
+                    diags.push(Diag::spec(
+                        if d.raw_body.is_some() {
+                            format!("/nodes/{}/rawNode/fields", d.idx)
+                        } else {
+                            format!("/nodes/{}/fields", d.idx)
+                        },
+                        "field.required",
+                        "default Output fields are required to build the top-level partition",
+                    ));
+                    return (vec![], vec![]);
+                }
             }
         }
     }

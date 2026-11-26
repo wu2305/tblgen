@@ -19,7 +19,7 @@ use serde_json::{json, Value};
 
 use tblgen::check::{check_file, CheckReport};
 use tblgen::decompile::decompile;
-use tblgen::gen::{generate, validate_spec};
+use tblgen::gen::generate_with_diagnostics;
 use tblgen::schema::schema_document;
 use tblgen::Diag;
 
@@ -44,7 +44,8 @@ project (a directory with data/), model references and scripts are resolved.
 new: --extract true = ETL into --table; false = query logic. Field list is
 name[=dbfield]:TYPE[:length[.decimal]][:m] (TYPE C/N/I/D/P, m = measure),
 e.g. 统计年月=stat_month:C:7; dbfield defaults to the upper-cased name and
-must be ASCII. dsl takes names only. --input is the reference as written in the model (../ods/x.tbl,
+must be ASCII. dsl takes field names (name=dbfield overrides just the output
+column). --input is the reference as written in the model (../ods/x.tbl,
 $DATA:/ods/x.tbl). Script name defaults to md5(--table); the script goes to
 <project>/data/script/. --cn/--note only fill the script header comment (a
 model's display name lives in the folder's .meta, not in the .tbl).
@@ -151,7 +152,7 @@ fn cmd_gen(args: &[String]) -> ExitCode {
             return ExitCode::from(code as u8);
         }
     };
-    let diags = validate_spec(&spec);
+    let (tbl, diags) = generate_with_diagnostics(&spec);
     // every diagnostic goes to stderr as JSON; only errors stop generation
     for d in &diags {
         eprintln!("{}", d.to_json());
@@ -159,18 +160,15 @@ fn cmd_gen(args: &[String]) -> ExitCode {
     if diags.iter().any(|d| !d.is_warning()) {
         return ExitCode::from(1);
     }
-    match generate(&spec) {
-        Ok(tbl) => match write_out(out.as_deref(), &tbl) {
+    match tbl {
+        Some(tbl) => match write_out(out.as_deref(), &tbl) {
             Ok(()) => ExitCode::SUCCESS,
             Err((msg, code)) => {
                 eprintln!("tblgen: {}", msg);
                 ExitCode::from(code as u8)
             }
         },
-        Err(d) => {
-            eprintln!("{}", d.to_json());
-            ExitCode::from(1)
-        }
+        None => ExitCode::from(1),
     }
 }
 
@@ -418,9 +416,13 @@ fn run_new(args: &[String]) -> Result<ExitCode, String> {
         extract,
         version: one("--version"),
     };
-    if let Some(parent) = out.parent().filter(|p| !p.as_os_str().is_empty()) {
-        fs::create_dir_all(parent).map_err(|e| format!("{}: {}", parent.display(), e))?;
-    }
+    // normalize the primary target before ANY filesystem mutation:
+    // symlink/case aliases in existing parents are resolved so duplicate
+    // and existence checks below compare canonical paths
+    let out =
+        project::normalized_new_path(&out).map_err(|e| format!("{}: {}", out.display(), e))?;
+    // locate WITHOUT creating anything: an existing project resolves
+    // normally; a not-yet-created <P>/data/... path resolves prospectively
     let located = project::locate_new(&out);
 
     let mut writes: Vec<(PathBuf, String)> = Vec::new();
@@ -472,28 +474,68 @@ fn run_new(args: &[String]) -> Result<ExitCode, String> {
         dsl_spec(&common, &inputs, fields.as_deref(), one("--join-on").as_deref(), &join_type)?
     };
 
-    let diags = validate_spec(&spec);
+    let (tbl, diags) = generate_with_diagnostics(&spec);
     for d in &diags {
         eprintln!("{}", d.to_json());
     }
     if diags.iter().any(|d| !d.is_warning()) {
         return Ok(ExitCode::from(1));
     }
-    let tbl = generate(&spec).map_err(|d| d.to_json().to_string())?;
+    let Some(tbl) = tbl else {
+        return Ok(ExitCode::from(1));
+    };
     let pretty = |v: &Value| serde_json::to_string_pretty(v).unwrap_or_default() + "\n";
     writes.insert(0, (out, pretty(&tbl)));
     if let Some(p) = one("--spec-out") {
         writes.push((PathBuf::from(p), pretty(&spec)));
     }
-    if let Some((p, _)) = writes.iter().find(|(p, _)| p.exists()) {
-        eprintln!("tblgen: {}: already exists (use a fresh path)", p.display());
-        return Ok(ExitCode::from(2));
+    // normalize every target, then preflight ALL of them before any write:
+    // duplicate normalized targets and existing files (including dangling
+    // symlinks, which `exists()` misses) reject the whole command
+    for (p, _) in writes.iter_mut() {
+        *p = project::normalized_new_path(p).map_err(|e| format!("{}: {}", p.display(), e))?;
     }
-    for (p, text) in &writes {
+    {
+        use std::collections::HashSet;
+        let mut seen = HashSet::new();
+        for (p, _) in &writes {
+            if !seen.insert(p.clone()) {
+                eprintln!("tblgen: duplicate output target {}", p.display());
+                return Ok(ExitCode::from(2));
+            }
+        }
+    }
+    for (p, _) in &writes {
+        if fs::symlink_metadata(p).is_ok() {
+            eprintln!("tblgen: {}: already exists (use a fresh path)", p.display());
+            return Ok(ExitCode::from(2));
+        }
+    }
+    for (p, _) in &writes {
         if let Some(parent) = p.parent().filter(|d| !d.as_os_str().is_empty()) {
             fs::create_dir_all(parent).map_err(|e| format!("{}: {}", parent.display(), e))?;
         }
-        fs::write(p, text).map_err(|e| format!("{}: {}", p.display(), e))?;
+    }
+    // reserve every target exclusively before writing any bytes; on
+    // failure remove ONLY the files this run created (a same-inode alias
+    // another spelling could not have predicted is still safe: create_new
+    // would have failed for it)
+    let mut reserved: Vec<(PathBuf, fs::File)> = Vec::new();
+    for (p, _) in &writes {
+        match fs::File::options().write(true).create_new(true).open(p) {
+            Ok(f) => reserved.push((p.clone(), f)),
+            Err(e) => {
+                for (rp, rf) in reserved {
+                    drop(rf);
+                    let _ = fs::remove_file(&rp);
+                }
+                return Err(format!("{}: {}", p.display(), e));
+            }
+        }
+    }
+    for ((p, text), (_, mut f)) in writes.iter().zip(reserved.into_iter()) {
+        f.write_all(text.as_bytes())
+            .map_err(|e| format!("{}: {}", p.display(), e))?;
         eprintln!("tblgen: wrote {}", p.display());
     }
     Ok(ExitCode::SUCCESS)

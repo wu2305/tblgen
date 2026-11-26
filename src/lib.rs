@@ -11,5 +11,5 @@ pub mod script;
 
 pub use check::{check, check_file, CheckReport};
 pub use decompile::decompile;
-pub use gen::{generate, validate_spec};
+pub use gen::{generate, generate_with_diagnostics, validate_spec};
 pub use model::Diag;

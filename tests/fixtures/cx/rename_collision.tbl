@@ -1,0 +1,191 @@
+{
+  "dataFlow": {
+    "nodes": {
+      "default": {
+        "alias": "out",
+        "dimensions": [
+          {
+            "dataType": "C",
+            "inputField": "ID",
+            "inputNode": "sel",
+            "isDimension": true,
+            "name": "ID",
+            "originalField": "ID",
+            "originalNode": "src"
+          },
+          {
+            "dataType": "C",
+            "inputField": "ID",
+            "inputNode": "sel",
+            "isDimension": true,
+            "name": "ID",
+            "originalField": "SKU",
+            "originalNode": "src"
+          }
+        ],
+        "fields": [
+          {
+            "dataType": "C",
+            "inputField": "ID",
+            "inputNode": "sel",
+            "isDimension": true,
+            "name": "ID",
+            "originalField": "ID",
+            "originalNode": "src"
+          },
+          {
+            "dataType": "C",
+            "inputField": "ID",
+            "inputNode": "sel",
+            "isDimension": true,
+            "name": "ID",
+            "originalField": "SKU",
+            "originalNode": "src"
+          }
+        ],
+        "id": "default",
+        "inputNodes": [
+          "sel"
+        ],
+        "measures": [],
+        "type": "Output"
+      },
+      "sel": {
+        "alias": "sel",
+        "dimensions": [
+          {
+            "dataType": "C",
+            "inputField": "ID",
+            "inputNode": "src",
+            "isDimension": true,
+            "name": "ID",
+            "originalField": "ID",
+            "originalNode": "src"
+          },
+          {
+            "dataType": "C",
+            "inputField": "SKU",
+            "inputNode": "src",
+            "isDimension": true,
+            "name": "ID",
+            "originalField": "SKU",
+            "originalNode": "src"
+          }
+        ],
+        "fields": [
+          {
+            "dataType": "C",
+            "inputField": "ID",
+            "inputNode": "src",
+            "isDimension": true,
+            "name": "ID",
+            "originalField": "ID",
+            "originalNode": "src"
+          },
+          {
+            "dataType": "C",
+            "inputField": "SKU",
+            "inputNode": "src",
+            "isDimension": true,
+            "name": "ID",
+            "originalField": "SKU",
+            "originalNode": "src"
+          }
+        ],
+        "id": "sel",
+        "inputNodes": [
+          "src"
+        ],
+        "measures": [],
+        "stepCount": 1,
+        "steps": [
+          {
+            "fields": [
+              "SKU"
+            ],
+            "refactor": {
+              "rename": "ID"
+            },
+            "type": "Refactor"
+          }
+        ],
+        "type": "Select"
+      },
+      "src": {
+        "alias": "src",
+        "dimensions": [
+          {
+            "dataType": "C",
+            "inputField": "ID",
+            "isDimension": true,
+            "name": "ID"
+          },
+          {
+            "dataType": "C",
+            "inputField": "SKU",
+            "isDimension": true,
+            "name": "SKU"
+          }
+        ],
+        "fields": [
+          {
+            "dataType": "C",
+            "inputField": "ID",
+            "isDimension": true,
+            "name": "ID"
+          },
+          {
+            "dataType": "C",
+            "inputField": "SKU",
+            "isDimension": true,
+            "name": "SKU"
+          }
+        ],
+        "fileName": "d.xlsx#S",
+        "id": "src",
+        "measures": [],
+        "originalFields": [
+          {
+            "dataType": "C",
+            "inputField": "ID",
+            "isDimension": true,
+            "name": "ID"
+          },
+          {
+            "dataType": "C",
+            "inputField": "SKU",
+            "isDimension": true,
+            "name": "SKU"
+          }
+        ],
+        "type": "FileInput"
+      }
+    }
+  },
+  "dimensions": [
+    {
+      "dataType": "C",
+      "inputField": "ID",
+      "inputNode": "sel",
+      "isDimension": true,
+      "name": "ID",
+      "originalField": "ID",
+      "originalNode": "src"
+    },
+    {
+      "dataType": "C",
+      "inputField": "ID",
+      "inputNode": "sel",
+      "isDimension": true,
+      "name": "ID",
+      "originalField": "SKU",
+      "originalNode": "src"
+    }
+  ],
+  "measures": [],
+  "properties": {
+    "extractDataEnabled": false,
+    "modelDataType": "DataFlow"
+  },
+  "version": "4.19.0"
+}

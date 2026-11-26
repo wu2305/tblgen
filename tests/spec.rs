@@ -45,9 +45,10 @@ fn budget_generates_valid_wire() {
     );
     // config keys flattened to node level
     assert_eq!(nodes["src"]["fileName"], json!("budget.xlsx#Budget"));
-    // Select steps + stepCount
+    // Select steps; stepCount is emitted only when it exceeds the real
+    // step count, so a matching count is omitted entirely
     assert_eq!(nodes["flt"]["steps"][0]["type"], json!("Filter"));
-    assert_eq!(nodes["flt"]["stepCount"], json!(1));
+    assert!(nodes["flt"].get("stepCount").is_none());
     // Refactor rename applied through derivation: ren output has budget_amount
     let ren_names: Vec<String> = nodes["ren"]["fields"]
         .as_array()
@@ -77,11 +78,13 @@ fn budget_generates_valid_wire() {
         .iter()
         .find(|f| f["name"] == "budget_amount")
         .unwrap();
-    assert_eq!(ba["inputNode"], json!("pivot"));
+    // Select fields never carry inputNode; inputField names the predecessor
+    // field. `amount` is pivot-born (ColToRow header column): no origin is
+    // invented for it.
+    assert!(ba.get("inputNode").is_none());
     assert_eq!(ba["inputField"], json!("amount"));
-    // original lineage reaches back to the ColToRow explicit field (oldest kept)
-    assert_eq!(ba["originalNode"], json!("pivot"));
-    assert_eq!(ba["originalField"], json!("amount"));
+    assert!(ba.get("originalNode").is_none());
+    assert!(ba.get("originalField").is_none());
     // DwDataFlowContext#getFileTempFields maps physical columns only via
     // nonblank inputField — FileInput fields without explicit inputField/exp
     // get the identity mapping filled from `name`.
@@ -125,11 +128,13 @@ fn lineage_identity_clone_rules() {
     let tbl = generate(&spec).unwrap();
     let nodes = tbl.pointer("/dataFlow/nodes").unwrap();
     let bf = &nodes["b"]["fields"][0];
-    assert_eq!(bf["inputNode"], json!("a"));
+    // Select fields never carry inputNode (single-input node)
+    assert!(bf.get("inputNode").is_none());
     assert_eq!(bf["inputField"], json!("x"));
-    // oldest originalNode/originalField preserved, not overwritten by hop
-    assert_eq!(bf["originalNode"], json!("src0"));
-    assert_eq!(bf["originalField"], json!("x0"));
+    // a source field's origin is its OWN (alias, name): the stale explicit
+    // src0/x0 pair is rewritten, not trusted
+    assert_eq!(bf["originalNode"], json!("a"));
+    assert_eq!(bf["originalField"], json!("x"));
     // exp/aggType dropped at hop
     let spec2 = json!({
         "format": 1,
@@ -521,8 +526,10 @@ fn refactor_rejects_object_map_and_multi_field() {
 
 #[test]
 fn addfield_and_filter_field_rules() {
-    // AddField: explicit fields must agree with addField.name; omitted ->
-    // synthesized; disagreement rejected.
+    // AddField: a missing fields operand is synthesized as [addField.name];
+    // an explicit non-empty operand is the platform's own selection and is
+    // preserved verbatim even when it differs; an explicitly empty operand
+    // is rejected.
     let base = json!({
         "format":1,
         "nodes":[
@@ -549,10 +556,26 @@ fn addfield_and_filter_field_rules() {
         .map(|f| f["name"].as_str().unwrap())
         .collect();
     assert_eq!(names, vec!["f", "n1"], "AddField must emit nonempty fields");
+    // the synthesized step operand is exactly [addField.name]
+    assert_eq!(
+        tbl.pointer("/dataFlow/nodes/s/steps/0/fields"),
+        Some(&json!(["n1"]))
+    );
 
-    // disagreement rejected
+    // explicit operand differing from addField.name is preserved verbatim
+    let mut other = base.clone();
+    other["nodes"][1]["steps"] = json!([{"type":"AddField","fields":["other"],
+        "addField":{"name":"n1","dataType":"N","isDimension":false,"exp":"[f]"}}]);
+    assert!(spec_errors(&other).is_empty(), "{:?}", spec_errors(&other));
+    let tbl2 = generate(&other).unwrap();
+    assert_eq!(
+        tbl2.pointer("/dataFlow/nodes/s/steps/0/fields"),
+        Some(&json!(["other"]))
+    );
+
+    // explicitly empty operand rejected
     let mut bad = base.clone();
-    bad["nodes"][1]["steps"] = json!([{"type":"AddField","fields":["other"],
+    bad["nodes"][1]["steps"] = json!([{"type":"AddField","fields":[],
         "addField":{"name":"n1","dataType":"N","isDimension":false,"exp":"[f]"}}]);
     assert!(!spec_errors(&bad).is_empty());
 
@@ -1306,7 +1329,7 @@ fn props_spec(props: Value) -> Value {
         "properties": props,
         "nodes": [
             {"key":"mt","type":"ModelTable","config":{"moduleTablePath":"../a.tbl"},
-             "fields":[{"name":"m","dataType":"C","isDimension":true}]},
+             "fields":[{"name":"m","dataType":"C","isDimension":true,"dbfield":"M"}]},
             {"key":"out","type":"Output","inputs":["mt"]}
         ]
     })
@@ -1487,4 +1510,254 @@ fn renamed_script_fields_are_caught() {
     let r = report(&cli(&["check", &t2.display().to_string()]));
     assert!(r.iter().all(|(_, e)| e.is_empty()), "{:?}", r);
     let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn schema_config_refs_and_join_field_variant() {
+    let doc = schema_document();
+    let defs = &doc["schema"]["$defs"];
+    let cfg = &defs["payloads"]["config"];
+    // previously dangling $refs now resolve to real definitions
+    assert_eq!(cfg["groupFields"]["type"], json!("array"));
+    assert_eq!(cfg["groupFields"]["items"]["type"], json!("string"));
+    assert_eq!(cfg["incrementRange"]["type"], json!("array"));
+    assert_eq!(cfg["incrementRange"]["items"]["type"], json!("object"));
+    assert_eq!(cfg["filter"]["type"], json!("object"));
+    assert_eq!(cfg["filter"]["additionalProperties"], json!(false));
+    assert_eq!(
+        cfg["filter"]["properties"]["clauses"]["items"]["type"],
+        json!("object")
+    );
+    // per-type config emits $refs into those defs
+    let arms = doc["schema"]["oneOf"][0]["properties"]["nodes"]["items"]["oneOf"]
+        .as_array()
+        .unwrap();
+    let arm = |ty: &str| {
+        arms.iter()
+            .find(|a| a["properties"]["type"]["const"] == json!(ty))
+            .unwrap_or_else(|| panic!("no schema arm for {}", ty))
+    };
+    assert_eq!(
+        arm("Agg")["properties"]["config"]["properties"]["filter"]["$ref"],
+        json!("#/$defs/payloads/config/filter")
+    );
+    assert_eq!(
+        arm("DbOutput")["properties"]["config"]["properties"]["incrementRange"]["$ref"],
+        json!("#/$defs/payloads/config/incrementRange")
+    );
+    assert_eq!(
+        arm("Join")["properties"]["config"]["properties"]["joinConditions"]["$ref"],
+        json!("#/$defs/payloads/config/joinConditions")
+    );
+    // Join fields are name-only closed refs; other nodes keep the full def
+    let jf = &arm("Join")["properties"]["fields"]["items"];
+    assert_eq!(jf["required"], json!(["name"]));
+    assert_eq!(jf["additionalProperties"], json!(false));
+    assert!(jf["properties"]["dataType"].is_object());
+    assert_eq!(
+        defs["field"]["required"],
+        json!(["name", "dataType", "isDimension"])
+    );
+    // originalFields keeps the full field def even on Join
+    assert_eq!(
+        arm("Join")["properties"]["originalFields"]["items"]["$ref"],
+        json!("#/$defs/field")
+    );
+}
+
+#[test]
+fn cli_new_rejects_duplicate_and_existing_targets() {
+    let bin = env!("CARGO_BIN_EXE_tblgen");
+    let dir = std::env::temp_dir().join(format!("tblgen-newdup-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let d = dir.to_str().unwrap();
+    let run = |extra: &[&str]| {
+        Command::new(bin)
+            .args([
+                "new",
+                "script",
+                "--table",
+                "t",
+                "--extract",
+                "false",
+                "--fields",
+                "f:C",
+                "-o",
+            ])
+            .args(extra)
+            .output()
+            .unwrap()
+    };
+    // every output pair collides under a different spelling -> exit 2,
+    // and no output file is created
+    for extra in [
+        vec![
+            &format!("{}/a.tbl", d),
+            "--spec-out",
+            &format!("{}/./a.tbl", d),
+            "--no-script",
+        ],
+        vec![
+            &format!("{}/a.tbl", d),
+            "--script-out",
+            &format!("{}/sub/../a.tbl", d),
+        ],
+        vec![
+            &format!("{}/a.tbl", d),
+            "--spec-out",
+            &format!("{}/s.spec.json", d),
+            "--script-out",
+            &format!("{}/./s.spec.json", d),
+        ],
+    ] {
+        let out = run(&extra);
+        assert_eq!(out.status.code(), Some(2), "args {:?}", extra);
+        assert_eq!(
+            std::fs::read_dir(&dir).unwrap().count(),
+            0,
+            "no files may be written on preflight failure"
+        );
+    }
+    // an existing target (incl. a dangling symlink) is rejected untouched
+    let sentinel = dir.join("sentinel.tbl");
+    std::fs::write(&sentinel, "keep me").unwrap();
+    let out = run(&[
+        sentinel.to_str().unwrap(),
+        "--spec-out",
+        &format!("{}/s.json", d),
+        "--no-script",
+    ]);
+    assert_eq!(out.status.code(), Some(2));
+    assert_eq!(std::fs::read_to_string(&sentinel).unwrap(), "keep me");
+    #[cfg(unix)]
+    {
+        let dangling = dir.join("dangling.tbl");
+        std::os::unix::fs::symlink(dir.join("missing-target"), &dangling).unwrap();
+        let out = run(&[
+            dangling.to_str().unwrap(),
+            "--spec-out",
+            &format!("{}/s2.json", d),
+            "--no-script",
+        ]);
+        assert_eq!(
+            out.status.code(),
+            Some(2),
+            "dangling symlink target must be rejected"
+        );
+        assert!(dangling.symlink_metadata().is_ok());
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+// ---------------------------------------------------------------------------
+// pass-3 regressions: raw/config collisions, lone non-default Output
+// ---------------------------------------------------------------------------
+
+#[test]
+fn raw_config_key_collision_rejected() {
+    // a raw object key duplicating a generated node key or a config key is
+    // rejected whether or not the values agree — both land on the same
+    // wire object.
+    let base = |raw: Value| {
+        json!({
+            "format": 1,
+            "properties": {"extractDataEnabled": false},
+            "nodes": [
+                {"key":"src","type":"FileInput","alias":"src",
+                 "config":{"fileName":"d.xlsx#S"},
+                 "raw": raw,
+                 "fields":[{"name":"f","dataType":"C","isDimension":true}]},
+                {"key":"out","type":"Output","alias":"out","inputs":["src"]}
+            ]
+        })
+    };
+    // same value as the generated fields array
+    let same = base(json!({"fields":[{"name":"f","dataType":"C"}]}));
+    assert!(
+        spec_errors(&same)
+            .iter()
+            .any(|d| d.rule == "structure.node.raw.collision"),
+        "{:?}",
+        rules(&spec_errors(&same))
+    );
+
+    // different value — still a collision
+    let diff = base(json!({"fields":"bogus"}));
+    assert!(
+        spec_errors(&diff)
+            .iter()
+            .any(|d| d.rule == "structure.node.raw.collision"),
+        "{:?}",
+        rules(&spec_errors(&diff))
+    );
+
+    // raw key colliding with a config key
+    let cfgcol = base(json!({"fileName":"other.xlsx"}));
+    assert!(
+        spec_errors(&cfgcol)
+            .iter()
+            .any(|d| d.rule == "structure.node.raw.collision"),
+        "{:?}",
+        rules(&spec_errors(&cfgcol))
+    );
+}
+
+#[test]
+fn lone_nondefault_output_rejected() {
+    // a single Output carrying an explicit non-"default" id leaves the flow
+    // without a default Output -> flow.noDefaultOutput
+    let spec = json!({
+        "format": 1,
+        "properties": {"extractDataEnabled": false},
+        "nodes": [
+            {"key":"src","type":"FileInput","alias":"src","config":{"fileName":"d.xlsx#S"},
+             "fields":[{"name":"f","dataType":"C","isDimension":true}]},
+            {"key":"out","type":"Output","id":"myout","alias":"out","inputs":["src"]}
+        ]
+    });
+    assert!(
+        spec_errors(&spec)
+            .iter()
+            .any(|d| d.rule == "flow.noDefaultOutput"),
+        "{:?}",
+        rules(&spec_errors(&spec))
+    );
+}
+
+#[test]
+fn cli_new_duplicate_under_nonexistent_dirs() {
+    let bin = env!("CARGO_BIN_EXE_tblgen");
+    let dir = std::env::temp_dir().join(format!("tblgen-newsub-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    // every target lives under a directory that does not exist yet:
+    // preflight must reject the duplicate spellings BEFORE any mkdir/write
+    // — even the parent directory itself must not appear.
+    let sub = dir.join("no/such/dir");
+    let a = format!("{}/a.tbl", sub.display());
+    let b = format!("{}/./a.tbl", sub.display());
+    let out = Command::new(bin)
+        .args([
+            "new",
+            "script",
+            "--table",
+            "t",
+            "--extract",
+            "false",
+            "--fields",
+            "f:C",
+            "-o",
+            &a,
+            "--spec-out",
+            &b,
+            "--no-script",
+        ])
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(2), "{:?}", out);
+    assert!(
+        !dir.join("no").exists(),
+        "preflight must not create directories: {:?}",
+        std::fs::read_dir(&dir).unwrap().collect::<Vec<_>>()
+    );
+    let _ = std::fs::remove_dir_all(&dir);
 }

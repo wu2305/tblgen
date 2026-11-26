@@ -7,49 +7,38 @@
           {
             "dataType": "C",
             "inputField": "month",
-            "inputNode": "ren",
             "isDimension": true,
-            "name": "month",
-            "originalField": "month",
-            "originalNode": "pivot"
+            "name": "month"
           },
           {
             "dataType": "C",
             "inputField": "property",
-            "inputNode": "ren",
             "isDimension": true,
             "name": "property",
             "originalField": "property",
-            "originalNode": "pivot"
+            "originalNode": "预算文件"
           }
         ],
         "fields": [
           {
             "dataType": "C",
             "inputField": "month",
-            "inputNode": "ren",
             "isDimension": true,
-            "name": "month",
-            "originalField": "month",
-            "originalNode": "pivot"
+            "name": "month"
           },
           {
             "dataType": "N",
             "inputField": "budget_amount",
-            "inputNode": "ren",
             "isDimension": false,
-            "name": "budget_amount",
-            "originalField": "amount",
-            "originalNode": "pivot"
+            "name": "budget_amount"
           },
           {
             "dataType": "C",
             "inputField": "property",
-            "inputNode": "ren",
             "isDimension": true,
             "name": "property",
             "originalField": "property",
-            "originalNode": "pivot"
+            "originalNode": "预算文件"
           }
         ],
         "id": "default",
@@ -60,11 +49,8 @@
           {
             "dataType": "N",
             "inputField": "budget_amount",
-            "inputNode": "ren",
             "isDimension": false,
-            "name": "budget_amount",
-            "originalField": "amount",
-            "originalNode": "pivot"
+            "name": "budget_amount"
           }
         ],
         "type": "Output"
@@ -75,7 +61,6 @@
           {
             "dataType": "C",
             "inputField": "property",
-            "inputNode": "预算文件",
             "isDimension": true,
             "name": "property",
             "originalField": "property",
@@ -86,7 +71,6 @@
           {
             "dataType": "C",
             "inputField": "property",
-            "inputNode": "预算文件",
             "isDimension": true,
             "name": "property",
             "originalField": "property",
@@ -95,7 +79,6 @@
           {
             "dataType": "N",
             "inputField": "m01",
-            "inputNode": "预算文件",
             "isDimension": false,
             "name": "m01",
             "originalField": "m01",
@@ -104,7 +87,6 @@
           {
             "dataType": "N",
             "inputField": "m02",
-            "inputNode": "预算文件",
             "isDimension": false,
             "name": "m02",
             "originalField": "m02",
@@ -113,7 +95,6 @@
           {
             "dataType": "N",
             "inputField": "m03",
-            "inputNode": "预算文件",
             "isDimension": false,
             "name": "m03",
             "originalField": "m03",
@@ -122,7 +103,6 @@
           {
             "dataType": "N",
             "inputField": "m04",
-            "inputNode": "预算文件",
             "isDimension": false,
             "name": "m04",
             "originalField": "m04",
@@ -131,7 +111,6 @@
           {
             "dataType": "N",
             "inputField": "m05",
-            "inputNode": "预算文件",
             "isDimension": false,
             "name": "m05",
             "originalField": "m05",
@@ -140,7 +119,6 @@
           {
             "dataType": "N",
             "inputField": "m06",
-            "inputNode": "预算文件",
             "isDimension": false,
             "name": "m06",
             "originalField": "m06",
@@ -149,7 +127,6 @@
           {
             "dataType": "N",
             "inputField": "m07",
-            "inputNode": "预算文件",
             "isDimension": false,
             "name": "m07",
             "originalField": "m07",
@@ -158,7 +135,6 @@
           {
             "dataType": "N",
             "inputField": "m08",
-            "inputNode": "预算文件",
             "isDimension": false,
             "name": "m08",
             "originalField": "m08",
@@ -167,7 +143,6 @@
           {
             "dataType": "N",
             "inputField": "m09",
-            "inputNode": "预算文件",
             "isDimension": false,
             "name": "m09",
             "originalField": "m09",
@@ -176,7 +151,6 @@
           {
             "dataType": "N",
             "inputField": "m10",
-            "inputNode": "预算文件",
             "isDimension": false,
             "name": "m10",
             "originalField": "m10",
@@ -185,7 +159,6 @@
           {
             "dataType": "N",
             "inputField": "m11",
-            "inputNode": "预算文件",
             "isDimension": false,
             "name": "m11",
             "originalField": "m11",
@@ -194,7 +167,6 @@
           {
             "dataType": "N",
             "inputField": "m12",
-            "inputNode": "预算文件",
             "isDimension": false,
             "name": "m12",
             "originalField": "m12",
@@ -209,7 +181,6 @@
           {
             "dataType": "N",
             "inputField": "m01",
-            "inputNode": "预算文件",
             "isDimension": false,
             "name": "m01",
             "originalField": "m01",
@@ -218,7 +189,6 @@
           {
             "dataType": "N",
             "inputField": "m02",
-            "inputNode": "预算文件",
             "isDimension": false,
             "name": "m02",
             "originalField": "m02",
@@ -227,7 +197,6 @@
           {
             "dataType": "N",
             "inputField": "m03",
-            "inputNode": "预算文件",
             "isDimension": false,
             "name": "m03",
             "originalField": "m03",
@@ -236,7 +205,6 @@
           {
             "dataType": "N",
             "inputField": "m04",
-            "inputNode": "预算文件",
             "isDimension": false,
             "name": "m04",
             "originalField": "m04",
@@ -245,7 +213,6 @@
           {
             "dataType": "N",
             "inputField": "m05",
-            "inputNode": "预算文件",
             "isDimension": false,
             "name": "m05",
             "originalField": "m05",
@@ -254,7 +221,6 @@
           {
             "dataType": "N",
             "inputField": "m06",
-            "inputNode": "预算文件",
             "isDimension": false,
             "name": "m06",
             "originalField": "m06",
@@ -263,7 +229,6 @@
           {
             "dataType": "N",
             "inputField": "m07",
-            "inputNode": "预算文件",
             "isDimension": false,
             "name": "m07",
             "originalField": "m07",
@@ -272,7 +237,6 @@
           {
             "dataType": "N",
             "inputField": "m08",
-            "inputNode": "预算文件",
             "isDimension": false,
             "name": "m08",
             "originalField": "m08",
@@ -281,7 +245,6 @@
           {
             "dataType": "N",
             "inputField": "m09",
-            "inputNode": "预算文件",
             "isDimension": false,
             "name": "m09",
             "originalField": "m09",
@@ -290,7 +253,6 @@
           {
             "dataType": "N",
             "inputField": "m10",
-            "inputNode": "预算文件",
             "isDimension": false,
             "name": "m10",
             "originalField": "m10",
@@ -299,7 +261,6 @@
           {
             "dataType": "N",
             "inputField": "m11",
-            "inputNode": "预算文件",
             "isDimension": false,
             "name": "m11",
             "originalField": "m11",
@@ -308,14 +269,12 @@
           {
             "dataType": "N",
             "inputField": "m12",
-            "inputNode": "预算文件",
             "isDimension": false,
             "name": "m12",
             "originalField": "m12",
             "originalNode": "预算文件"
           }
         ],
-        "stepCount": 1,
         "steps": [
           {
             "fields": [
@@ -431,7 +390,9 @@
             "dataType": "C",
             "inputField": "property",
             "isDimension": true,
-            "name": "property"
+            "name": "property",
+            "originalField": "property",
+            "originalNode": "预算文件"
           }
         ],
         "fields": [
@@ -449,7 +410,9 @@
             "dataType": "C",
             "inputField": "property",
             "isDimension": true,
-            "name": "property"
+            "name": "property",
+            "originalField": "property",
+            "originalNode": "预算文件"
           }
         ],
         "id": "pivot",
@@ -471,49 +434,38 @@
           {
             "dataType": "C",
             "inputField": "month",
-            "inputNode": "pivot",
             "isDimension": true,
-            "name": "month",
-            "originalField": "month",
-            "originalNode": "pivot"
+            "name": "month"
           },
           {
             "dataType": "C",
             "inputField": "property",
-            "inputNode": "pivot",
             "isDimension": true,
             "name": "property",
             "originalField": "property",
-            "originalNode": "pivot"
+            "originalNode": "预算文件"
           }
         ],
         "fields": [
           {
             "dataType": "C",
             "inputField": "month",
-            "inputNode": "pivot",
             "isDimension": true,
-            "name": "month",
-            "originalField": "month",
-            "originalNode": "pivot"
+            "name": "month"
           },
           {
             "dataType": "N",
             "inputField": "amount",
-            "inputNode": "pivot",
             "isDimension": false,
-            "name": "budget_amount",
-            "originalField": "amount",
-            "originalNode": "pivot"
+            "name": "budget_amount"
           },
           {
             "dataType": "C",
             "inputField": "property",
-            "inputNode": "pivot",
             "isDimension": true,
             "name": "property",
             "originalField": "property",
-            "originalNode": "pivot"
+            "originalNode": "预算文件"
           }
         ],
         "id": "ren",
@@ -524,19 +476,19 @@
           {
             "dataType": "N",
             "inputField": "amount",
-            "inputNode": "pivot",
             "isDimension": false,
-            "name": "budget_amount",
-            "originalField": "amount",
-            "originalNode": "pivot"
+            "name": "budget_amount"
           }
         ],
-        "stepCount": 1,
         "steps": [
           {
             "fields": [
               "amount"
             ],
+            "originFieldInfo": {
+              "dataType": "N",
+              "name": "amount"
+            },
             "refactor": {
               "rename": "budget_amount"
             },
@@ -552,7 +504,9 @@
             "dataType": "C",
             "inputField": "property",
             "isDimension": true,
-            "name": "property"
+            "name": "property",
+            "originalField": "property",
+            "originalNode": "预算文件"
           }
         ],
         "fields": [
@@ -560,79 +514,105 @@
             "dataType": "C",
             "inputField": "property",
             "isDimension": true,
-            "name": "property"
+            "name": "property",
+            "originalField": "property",
+            "originalNode": "预算文件"
           },
           {
             "dataType": "N",
             "inputField": "m01",
             "isDimension": false,
-            "name": "m01"
+            "name": "m01",
+            "originalField": "m01",
+            "originalNode": "预算文件"
           },
           {
             "dataType": "N",
             "inputField": "m02",
             "isDimension": false,
-            "name": "m02"
+            "name": "m02",
+            "originalField": "m02",
+            "originalNode": "预算文件"
           },
           {
             "dataType": "N",
             "inputField": "m03",
             "isDimension": false,
-            "name": "m03"
+            "name": "m03",
+            "originalField": "m03",
+            "originalNode": "预算文件"
           },
           {
             "dataType": "N",
             "inputField": "m04",
             "isDimension": false,
-            "name": "m04"
+            "name": "m04",
+            "originalField": "m04",
+            "originalNode": "预算文件"
           },
           {
             "dataType": "N",
             "inputField": "m05",
             "isDimension": false,
-            "name": "m05"
+            "name": "m05",
+            "originalField": "m05",
+            "originalNode": "预算文件"
           },
           {
             "dataType": "N",
             "inputField": "m06",
             "isDimension": false,
-            "name": "m06"
+            "name": "m06",
+            "originalField": "m06",
+            "originalNode": "预算文件"
           },
           {
             "dataType": "N",
             "inputField": "m07",
             "isDimension": false,
-            "name": "m07"
+            "name": "m07",
+            "originalField": "m07",
+            "originalNode": "预算文件"
           },
           {
             "dataType": "N",
             "inputField": "m08",
             "isDimension": false,
-            "name": "m08"
+            "name": "m08",
+            "originalField": "m08",
+            "originalNode": "预算文件"
           },
           {
             "dataType": "N",
             "inputField": "m09",
             "isDimension": false,
-            "name": "m09"
+            "name": "m09",
+            "originalField": "m09",
+            "originalNode": "预算文件"
           },
           {
             "dataType": "N",
             "inputField": "m10",
             "isDimension": false,
-            "name": "m10"
+            "name": "m10",
+            "originalField": "m10",
+            "originalNode": "预算文件"
           },
           {
             "dataType": "N",
             "inputField": "m11",
             "isDimension": false,
-            "name": "m11"
+            "name": "m11",
+            "originalField": "m11",
+            "originalNode": "预算文件"
           },
           {
             "dataType": "N",
             "inputField": "m12",
             "isDimension": false,
-            "name": "m12"
+            "name": "m12",
+            "originalField": "m12",
+            "originalNode": "预算文件"
           }
         ],
         "fileName": "budget.xlsx#Budget",
@@ -645,73 +625,97 @@
             "dataType": "N",
             "inputField": "m01",
             "isDimension": false,
-            "name": "m01"
+            "name": "m01",
+            "originalField": "m01",
+            "originalNode": "预算文件"
           },
           {
             "dataType": "N",
             "inputField": "m02",
             "isDimension": false,
-            "name": "m02"
+            "name": "m02",
+            "originalField": "m02",
+            "originalNode": "预算文件"
           },
           {
             "dataType": "N",
             "inputField": "m03",
             "isDimension": false,
-            "name": "m03"
+            "name": "m03",
+            "originalField": "m03",
+            "originalNode": "预算文件"
           },
           {
             "dataType": "N",
             "inputField": "m04",
             "isDimension": false,
-            "name": "m04"
+            "name": "m04",
+            "originalField": "m04",
+            "originalNode": "预算文件"
           },
           {
             "dataType": "N",
             "inputField": "m05",
             "isDimension": false,
-            "name": "m05"
+            "name": "m05",
+            "originalField": "m05",
+            "originalNode": "预算文件"
           },
           {
             "dataType": "N",
             "inputField": "m06",
             "isDimension": false,
-            "name": "m06"
+            "name": "m06",
+            "originalField": "m06",
+            "originalNode": "预算文件"
           },
           {
             "dataType": "N",
             "inputField": "m07",
             "isDimension": false,
-            "name": "m07"
+            "name": "m07",
+            "originalField": "m07",
+            "originalNode": "预算文件"
           },
           {
             "dataType": "N",
             "inputField": "m08",
             "isDimension": false,
-            "name": "m08"
+            "name": "m08",
+            "originalField": "m08",
+            "originalNode": "预算文件"
           },
           {
             "dataType": "N",
             "inputField": "m09",
             "isDimension": false,
-            "name": "m09"
+            "name": "m09",
+            "originalField": "m09",
+            "originalNode": "预算文件"
           },
           {
             "dataType": "N",
             "inputField": "m10",
             "isDimension": false,
-            "name": "m10"
+            "name": "m10",
+            "originalField": "m10",
+            "originalNode": "预算文件"
           },
           {
             "dataType": "N",
             "inputField": "m11",
             "isDimension": false,
-            "name": "m11"
+            "name": "m11",
+            "originalField": "m11",
+            "originalNode": "预算文件"
           },
           {
             "dataType": "N",
             "inputField": "m12",
             "isDimension": false,
-            "name": "m12"
+            "name": "m12",
+            "originalField": "m12",
+            "originalNode": "预算文件"
           }
         ],
         "originalFields": [
@@ -719,79 +723,105 @@
             "dataType": "C",
             "inputField": "property",
             "isDimension": true,
-            "name": "property"
+            "name": "property",
+            "originalField": "property",
+            "originalNode": "预算文件"
           },
           {
             "dataType": "N",
             "inputField": "m01",
             "isDimension": false,
-            "name": "m01"
+            "name": "m01",
+            "originalField": "m01",
+            "originalNode": "预算文件"
           },
           {
             "dataType": "N",
             "inputField": "m02",
             "isDimension": false,
-            "name": "m02"
+            "name": "m02",
+            "originalField": "m02",
+            "originalNode": "预算文件"
           },
           {
             "dataType": "N",
             "inputField": "m03",
             "isDimension": false,
-            "name": "m03"
+            "name": "m03",
+            "originalField": "m03",
+            "originalNode": "预算文件"
           },
           {
             "dataType": "N",
             "inputField": "m04",
             "isDimension": false,
-            "name": "m04"
+            "name": "m04",
+            "originalField": "m04",
+            "originalNode": "预算文件"
           },
           {
             "dataType": "N",
             "inputField": "m05",
             "isDimension": false,
-            "name": "m05"
+            "name": "m05",
+            "originalField": "m05",
+            "originalNode": "预算文件"
           },
           {
             "dataType": "N",
             "inputField": "m06",
             "isDimension": false,
-            "name": "m06"
+            "name": "m06",
+            "originalField": "m06",
+            "originalNode": "预算文件"
           },
           {
             "dataType": "N",
             "inputField": "m07",
             "isDimension": false,
-            "name": "m07"
+            "name": "m07",
+            "originalField": "m07",
+            "originalNode": "预算文件"
           },
           {
             "dataType": "N",
             "inputField": "m08",
             "isDimension": false,
-            "name": "m08"
+            "name": "m08",
+            "originalField": "m08",
+            "originalNode": "预算文件"
           },
           {
             "dataType": "N",
             "inputField": "m09",
             "isDimension": false,
-            "name": "m09"
+            "name": "m09",
+            "originalField": "m09",
+            "originalNode": "预算文件"
           },
           {
             "dataType": "N",
             "inputField": "m10",
             "isDimension": false,
-            "name": "m10"
+            "name": "m10",
+            "originalField": "m10",
+            "originalNode": "预算文件"
           },
           {
             "dataType": "N",
             "inputField": "m11",
             "isDimension": false,
-            "name": "m11"
+            "name": "m11",
+            "originalField": "m11",
+            "originalNode": "预算文件"
           },
           {
             "dataType": "N",
             "inputField": "m12",
             "isDimension": false,
-            "name": "m12"
+            "name": "m12",
+            "originalField": "m12",
+            "originalNode": "预算文件"
           }
         ],
         "type": "FileInput"
@@ -802,31 +832,24 @@
     {
       "dataType": "C",
       "inputField": "month",
-      "inputNode": "ren",
       "isDimension": true,
-      "name": "month",
-      "originalField": "month",
-      "originalNode": "pivot"
+      "name": "month"
     },
     {
       "dataType": "C",
       "inputField": "property",
-      "inputNode": "ren",
       "isDimension": true,
       "name": "property",
       "originalField": "property",
-      "originalNode": "pivot"
+      "originalNode": "预算文件"
     }
   ],
   "measures": [
     {
       "dataType": "N",
       "inputField": "budget_amount",
-      "inputNode": "ren",
       "isDimension": false,
-      "name": "budget_amount",
-      "originalField": "amount",
-      "originalNode": "pivot"
+      "name": "budget_amount"
     }
   ],
   "parameters": [

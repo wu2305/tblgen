@@ -322,16 +322,18 @@ fn node_to_spec(key: &str, body: &Value, first_output_seen: &mut bool) -> Option
         return rawnode_fallback(key, body);
     }
 
-    // dimensions/measures consistency with fields partition
+    // dimensions/measures consistency with fields partition; the emitter
+    // omits empty lists, so an absent key is only consistent with an empty
+    // expected partition.
     if fields_ok {
         let expected = crate::gen::partition_fields(fields_val.unwrap().as_array().unwrap());
         let dims_ok = match bobj.get("dimensions") {
             Some(d) => *d == Value::Array(expected.0.clone()),
-            None => false,
+            None => expected.0.is_empty(),
         };
         let meas_ok = match bobj.get("measures") {
             Some(mm) => *mm == Value::Array(expected.1.clone()),
-            None => false,
+            None => expected.1.is_empty(),
         };
         if !dims_ok || !meas_ok {
             return rawnode_fallback(key, body);
@@ -421,8 +423,26 @@ fn fields_fit_schema(f: &Value) -> bool {
 
 fn step_to_spec(s: &Value) -> Value {
     let ty = s.get("type").and_then(Value::as_str).unwrap_or("");
-    let fits = step_supported(ty)
+    // `originFieldInfo` is editor metadata tblgen itself emits on typed
+    // Refactor renames; it is regenerated on recompile, so strip it before
+    // the fit check to keep our own wire typed. A step that still does not
+    // fit keeps the hint verbatim inside rawStep.
+    let stripped;
+    let candidate = if ty == "Refactor"
         && s.as_object()
+            .map(|o| o.contains_key("originFieldInfo"))
+            .unwrap_or(false)
+    {
+        let mut m = s.as_object().cloned().unwrap_or_default();
+        m.remove("originFieldInfo");
+        stripped = Value::Object(m);
+        &stripped
+    } else {
+        s
+    };
+    let fits = step_supported(ty)
+        && candidate
+            .as_object()
             .map(|o| {
                 o.keys()
                     .all(|k| step_allowed_keys(ty).contains(&k.as_str()))
@@ -430,7 +450,7 @@ fn step_to_spec(s: &Value) -> Value {
             })
             .unwrap_or(false);
     if fits {
-        return s.clone();
+        return candidate.clone();
     }
     // rawStep escape
     let mut m = Map::new();

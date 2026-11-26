@@ -90,6 +90,117 @@ pub fn ptr_push(base: &str, seg: &str) -> String {
     format!("{}/{}", base, ptr_escape(seg))
 }
 
+/// Platform save version stamped on generated `.tbl` documents when the
+/// spec does not declare `version` (`DwTableService` writes this on save).
+pub const SAVE_VERSION: &str = "4.19.0";
+
+/// Field-name equality as the platform sees it: `QueryImpl#getField` and
+/// friends compare `toUpperCase()`d names, which is Unicode-aware
+/// (`ß` folds to `SS`), not ASCII-only case folding.
+pub(crate) fn field_eq(a: &str, b: &str) -> bool {
+    a.to_uppercase() == b.to_uppercase()
+}
+
+/// Node types whose fields are self-declared roots of lineage: they have no
+/// graph predecessor whose fields could be inherited.
+pub(crate) fn is_source(ty: &str) -> bool {
+    matches!(
+        ty,
+        "ModelTable" | "DbTable" | "FileInput" | "Sql" | "Script"
+    )
+}
+
+/// Whether the loader drops this field before reading it:
+/// `invalid == true` unless `isOriginalFieldInvalid == true` resurrects it
+/// (`DataFlowNodeImpl` field filtering). Hidden fields are filtered by
+/// callers separately.
+pub(crate) fn skipped_field(f: &Value) -> bool {
+    f.get("invalid").and_then(Value::as_bool) == Some(true)
+        && f.get("isOriginalFieldInvalid").and_then(Value::as_bool) != Some(true)
+}
+
+/// Evolve a provable field-name list through one Select step, mirroring the
+/// name effects of `QueryImpl` step execution (`removeField`, `renameField`,
+/// `addField`). Shared by the generator projection and the wire checker.
+///
+/// Returns `Ok(true)` when the step's name effect is known and `names` was
+/// updated in place, `Ok(false)` when the step reshapes fields in a way the
+/// projection cannot model (rawStep, SplitField, Text2Id, unknown types) and
+/// `Err(tag)` when the step would create a duplicate field name — the tag is
+/// the payload path tail used for diagnostics (`"addField/name"` or
+/// `"refactor/rename"`).
+pub(crate) fn evolve_names(names: &mut Vec<String>, step: &Value) -> Result<bool, &'static str> {
+    if step.get("rawStep").is_some() {
+        return Ok(false);
+    }
+    let ty = step.get("type").and_then(Value::as_str).unwrap_or("");
+    let operands: Vec<String> = step
+        .get("fields")
+        .and_then(Value::as_array)
+        .map(|a| {
+            a.iter()
+                .filter_map(|v| v.as_str().map(str::to_string))
+                .collect()
+        })
+        .unwrap_or_default();
+    match ty {
+        "Filter"
+        | "ToUppercase"
+        | "ToLowercase"
+        | "ToNumber"
+        | "ToDate"
+        | "ToSynonym"
+        | "Trim"
+        | "DeleteNumbers"
+        | "DeleteLetters"
+        | "DeleteSpechars"
+        | "DeletePunctuations"
+        | "ExcludeEmpty"
+        | "ExtractNumber"
+        | "SubString"
+        | "Replace"
+        | "Distinct"
+        | "TransformToCalculatedField" => Ok(true),
+        "RemoveField" => {
+            names.retain(|n| !operands.iter().any(|f| field_eq(f, n)));
+            Ok(true)
+        }
+        "Refactor" => {
+            if let Some(rn) = step.pointer("/refactor/rename").and_then(Value::as_str) {
+                if !rn.is_empty() {
+                    if let Some(pos) = names
+                        .iter()
+                        .position(|n| operands.first().map(|f| field_eq(f, n)).unwrap_or(false))
+                    {
+                        let own = field_eq(rn, &names[pos]);
+                        let collision = names
+                            .iter()
+                            .enumerate()
+                            .any(|(i, n)| i != pos && field_eq(n, rn));
+                        if !own && collision {
+                            return Err("refactor/rename");
+                        }
+                        names[pos] = rn.to_string();
+                    }
+                }
+            }
+            Ok(true)
+        }
+        "AddField" => {
+            if let Some(nm) = step.pointer("/addField/name").and_then(Value::as_str) {
+                if !nm.is_empty() {
+                    if names.iter().any(|n| field_eq(n, nm)) {
+                        return Err("addField/name");
+                    }
+                    names.push(nm.to_string());
+                }
+            }
+            Ok(true)
+        }
+        _ => Ok(false),
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Node types — DataFlowNodeType, 20 enum values (coverage.md node table).
 // ---------------------------------------------------------------------------
@@ -324,7 +435,6 @@ pub fn config_scalar_keys(ty: &str) -> &'static [&'static str] {
             "mergeData",
             "rebuildIndexAndKey",
             "extractMethod",
-            "incrementRange",
             "md5Field",
         ],
         "Snapshot" => &[
@@ -335,7 +445,6 @@ pub fn config_scalar_keys(ty: &str) -> &'static [&'static str] {
             "periodField",
         ],
         "Select" => &["stepCount"],
-        "Agg" => &["filter"],
         "Union" => &["unionType"],
         _ => &[],
     }
@@ -356,9 +465,16 @@ pub enum ClosedKind {
     StrMap,
     /// distinctSorts[]: {exp,type}
     Sorts,
+    /// incrementRange[]: clause objects with arbitrary loader keys
+    /// (`ClauseFilterImpl.loadJsonMap` accepts any map).
+    Clauses,
+    /// filter object: {matchAll?,enabled?,clauses?:[object]}
+    Condition,
 }
 
-/// Closed payload keys per node type.
+/// Closed payload keys per node type. `filter`/`incrementRange` are read on
+/// every node by the loaders, but the typed spec only admits them where the
+/// platform actually writes them (Agg conditions, DbOutput increments).
 pub fn config_closed_keys(ty: &str) -> &'static [(&'static str, ClosedKind)] {
     match ty {
         "Join" => &[("joinConditions", ClosedKind::JoinConditions)],
@@ -367,8 +483,10 @@ pub fn config_closed_keys(ty: &str) -> &'static [(&'static str, ClosedKind)] {
         "Agg" => &[
             ("groupFields", ClosedKind::StrArray),
             ("groupFieldsMap", ClosedKind::StrMap),
+            ("filter", ClosedKind::Condition),
         ],
         "Distinct" => &[("distinctSorts", ClosedKind::Sorts)],
+        "DbOutput" => &[("incrementRange", ClosedKind::Clauses)],
         _ => &[],
     }
 }
@@ -796,6 +914,70 @@ pub fn exp_bracket_refs(exp: &str) -> Vec<(String, bool)> {
                 skip_next = false;
             }
             out.push((name, qualified));
+            i = j + 1;
+            continue;
+        }
+        i += 1;
+    }
+    out
+}
+
+/// Table qualifiers of `[alias].[field]` references: the bracketed name
+/// immediately followed by `.[`. Same scanning rules as
+/// [`exp_bracket_refs`] — quoted literals skipped, `]]` escapes a literal
+/// `]`; anything else is unknown grammar and yields no qualifier.
+pub fn exp_table_qualifiers(exp: &str) -> Vec<String> {
+    let b = exp.as_bytes();
+    let mut out = Vec::new();
+    let mut i = 0;
+    while i < b.len() {
+        let c = b[i];
+        if c == b'\'' || c == b'"' {
+            let q = c;
+            i += 1;
+            while i < b.len() {
+                if b[i] == b'\\' {
+                    i += 2;
+                    continue;
+                }
+                if b[i] == q {
+                    i += 1;
+                    break;
+                }
+                i += 1;
+            }
+            continue;
+        }
+        if c == b'[' {
+            let mut name = String::new();
+            let mut j = i + 1;
+            let mut closed = false;
+            while j < b.len() {
+                if b[j] == b']' {
+                    if j + 1 < b.len() && b[j + 1] == b']' {
+                        name.push(']');
+                        j += 2;
+                        continue;
+                    }
+                    closed = true;
+                    break;
+                }
+                let ch_len = utf8_len(b[j]);
+                name.push_str(&exp[j..j + ch_len]);
+                j += ch_len;
+            }
+            if !closed {
+                i += 1;
+                continue;
+            }
+            // qualified iff followed by `.` + `[` (whitespace tolerated)
+            let rest = exp[j + 1..].trim_start();
+            if rest
+                .strip_prefix('.')
+                .is_some_and(|r| r.trim_start().starts_with('['))
+            {
+                out.push(name);
+            }
             i = j + 1;
             continue;
         }
