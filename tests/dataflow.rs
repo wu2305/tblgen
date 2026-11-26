@@ -257,14 +257,24 @@ fn join_clause_qualifier_must_be_an_alias() {
         json!([{"exp":"[left].[ID] = [right].[ID]"}]);
     assert!(generate(&expression).is_ok());
 
-    // [alias].[field].[part] (a date part, as the platform saves) is
-    // qualified by its chain head only; a key-qualified chain still fails.
-    let part = join_alias_spec("left", "right", "[left].[ID].[年]", "[right].[ID]");
-    assert!(spec_errors(&part).is_empty(), "{:?}", spec_errors(&part));
-    let tbl = generate(&part).expect("generate");
-    assert!(wire_errors(&tbl).is_empty(), "{:?}", wire_errors(&tbl));
-    let bad_part = join_alias_spec("left", "right", "[l].[ID].[年]", "[right].[ID]");
-    assert!(rules(&spec_errors(&bad_part)).contains(&"join.condition.qualifier".to_string()));
+    // 日期部件等多段引用只按链首校验别名，点号两侧允许空白。
+    for (part, bad_part) in [
+        ("[left].[ID].[年]", "[l].[ID].[年]"),
+        ("[left] . [ID].\t[年]", "[l] . [ID].\t[年]"),
+    ] {
+        let spec = join_alias_spec("left", "right", part, "[right].[ID]");
+        assert!(spec_errors(&spec).is_empty(), "{:?}", spec_errors(&spec));
+        let mut tbl = generate(&spec).expect("生成应成功");
+        assert!(wire_errors(&tbl).is_empty(), "{:?}", wire_errors(&tbl));
+        let bad_spec = join_alias_spec("left", "right", bad_part, "[right].[ID]");
+        assert!(spec_errors(&bad_spec)
+            .iter()
+            .any(|d| d.rule == "join.condition.qualifier"));
+        tbl["dataFlow"]["nodes"]["j"]["joinConditions"][0]["clauses"][0]["leftExp"] = json!(bad_part);
+        assert!(wire_errors(&tbl)
+            .iter()
+            .any(|d| d.rule == "join.condition.qualifier"));
+    }
 }
 
 // ---------------------------------------------------------------------------

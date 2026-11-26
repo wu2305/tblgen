@@ -850,92 +850,44 @@ pub mod cite {
         "com.succez.bi/src/main/java/com/succez/dw/services/impl/dataflow/nodeImpls/DwDataFlowNodeContributor_distinct.java";
 }
 
-/// Conservative bracket-reference scanner for Select-step expressions.
-/// Extracts `[name]` references; `]]` inside brackets escapes a literal `]`;
-/// '...' and "..." quoted literals are ignored. A reference is reported as
-/// `qualified` (and therefore not validated) when it contains '.', is
-/// followed by `.[`, or is itself the field part of a `].[ ` pair — qualified
-/// alias->node mapping is not provable in step context, so callers skip it.
-/// Unknown grammar simply yields no refs (false negatives are documented,
-/// never guessed).
+/// 提取 Select 步骤表达式中的方括号引用。
+/// 单个标识符含点号或属于方括号链时，`qualified` 为 `true`。
+/// 步骤校验据此跳过无法在当前字段集合中解析的限定引用。
+/// 引号内的文本会被跳过，标识符中的 `]]` 表示字面量 `]`。
 pub fn exp_bracket_refs(exp: &str) -> Vec<(String, bool)> {
-    let b = exp.as_bytes();
     let mut out = Vec::new();
-    let mut i = 0;
-    let mut skip_next = false; // this bracket is the field part of `].[`
-    while i < b.len() {
-        let c = b[i];
-        if c == b'\'' || c == b'"' {
-            // quoted literal: skip to matching quote honoring backslash
-            let q = c;
-            i += 1;
-            while i < b.len() {
-                if b[i] == b'\\' {
-                    i += 2;
-                    continue;
-                }
-                if b[i] == q {
-                    i += 1;
-                    break;
-                }
-                i += 1;
-            }
-            continue;
-        }
-        if c == b'[' {
-            // collect bracket content
-            let mut name = String::new();
-            let mut j = i + 1;
-            let mut closed = false;
-            while j < b.len() {
-                if b[j] == b']' {
-                    if j + 1 < b.len() && b[j + 1] == b']' {
-                        name.push(']');
-                        j += 2;
-                        continue;
-                    }
-                    closed = true;
-                    break;
-                }
-                // content may be UTF-8; copy raw bytes via char boundary
-                let ch_len = utf8_len(b[j]);
-                name.push_str(&exp[j..j + ch_len]);
-                j += ch_len;
-            }
-            if !closed {
-                i += 1;
-                continue; // unterminated -> unknown grammar, ignore
-            }
-            // qualified if: contains '.', followed by ".[", or preceded by ".["
-            let followed_by_dot_bracket = exp[j + 1..].starts_with(".[");
-            let contains_dot = name.contains('.');
-            let qualified = contains_dot || followed_by_dot_bracket || skip_next;
-            if followed_by_dot_bracket {
-                skip_next = true; // next bracket is the field part
-            } else {
-                skip_next = false;
-            }
-            out.push((name, qualified));
-            i = j + 1;
-            continue;
-        }
-        i += 1;
-    }
+    scan_bracket_refs(exp, |reference| {
+        let qualified =
+            reference.chained_before || reference.chained_after || reference.name.contains('.');
+        out.push((reference.name, qualified));
+    });
     out
 }
 
-/// Table qualifiers of `[alias].[field]` references: the bracketed name
-/// immediately followed by `.[` that heads its chain — in
-/// `[alias].[field].[attr]` (a date part or dimension attribute, as the
-/// platform saves) only `alias` is a qualifier. Same scanning rules as
-/// [`exp_bracket_refs`] — quoted literals skipped, `]]` escapes a literal
-/// `]`; anything else is unknown grammar and yields no qualifier.
+/// 提取 Join 表达式中方括号链首的表别名。
+/// `[alias].[field].[attr]` 只返回 `alias`。点号两侧允许空白，
+/// 词法规则与 [`exp_bracket_refs`] 相同。
 pub fn exp_table_qualifiers(exp: &str) -> Vec<String> {
-    let b = exp.as_bytes();
     let mut out = Vec::new();
+    scan_bracket_refs(exp, |reference| {
+        if reference.chained_after && !reference.chained_before {
+            out.push(reference.name);
+        }
+    });
+    out
+}
+
+struct BracketRef {
+    name: String,
+    chained_before: bool,
+    chained_after: bool,
+}
+
+// 跳过引号内的文本，仅提取闭合的方括号标识符，并记录两侧的链连接。
+fn scan_bracket_refs(exp: &str, mut visit: impl FnMut(BracketRef)) {
+    let b = exp.as_bytes();
     let mut i = 0;
-    // the previous bracket was followed by `.[`: this one continues its chain
-    let mut in_chain = false;
+    let mut chained_before = false;
     while i < b.len() {
         let c = b[i];
         if c == b'\'' || c == b'"' {
@@ -956,51 +908,40 @@ pub fn exp_table_qualifiers(exp: &str) -> Vec<String> {
         }
         if c == b'[' {
             let mut name = String::new();
-            let mut j = i + 1;
-            let mut closed = false;
+            let mut start = i + 1;
+            let mut j = start;
             while j < b.len() {
                 if b[j] == b']' {
                     if j + 1 < b.len() && b[j + 1] == b']' {
-                        name.push(']');
+                        // 保留转义对中的第一个右括号。
+                        name.push_str(&exp[start..j + 1]);
                         j += 2;
+                        start = j;
                         continue;
                     }
-                    closed = true;
                     break;
                 }
-                let ch_len = utf8_len(b[j]);
-                name.push_str(&exp[j..j + ch_len]);
-                j += ch_len;
+                j += 1;
             }
-            if !closed {
+            if j == b.len() {
                 i += 1;
                 continue;
             }
-            // qualified iff followed by `.` + `[` (whitespace tolerated)
+            // 切片端点来自 ASCII 括号，保留标识符中的完整 UTF-8 字符。
+            name.push_str(&exp[start..j]);
             let rest = exp[j + 1..].trim_start();
-            let chained = rest
+            let chained_after = rest
                 .strip_prefix('.')
                 .is_some_and(|r| r.trim_start().starts_with('['));
-            if chained && !in_chain {
-                out.push(name);
-            }
-            in_chain = chained;
+            visit(BracketRef {
+                name,
+                chained_before,
+                chained_after,
+            });
+            chained_before = chained_after;
             i = j + 1;
             continue;
         }
         i += 1;
-    }
-    out
-}
-
-fn utf8_len(b: u8) -> usize {
-    if b < 0x80 {
-        1
-    } else if b < 0xE0 {
-        2
-    } else if b < 0xF0 {
-        3
-    } else {
-        4
     }
 }
