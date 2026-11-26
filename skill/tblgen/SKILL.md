@@ -18,13 +18,14 @@ python3 "$RUN" <命令> [参数]
 | 命令 | 作用 |
 | --- | --- |
 | `schema` | 在 stdout 输出 `{"schema": ..., "examples": ...}`。不带任何参数。 |
-| `check <文件或目录>...` | 校验规格、`.tbl` 和 `.action.ts`；目录会递归展开。stdout 输出一份 `{"files":[{file, scope, errors, warnings}]}` 报告。 |
+| `check <文件或目录>... [--jobs N]` | 校验规格、`.tbl` 和 `.action.ts`；目录会递归展开。stdout 输出一份 `{"files":[{file, scope, errors, warnings}]}` 报告。 |
 | `new script\|dsl ...` | 直接生成常见模型（见「用 new 起步」），写 `.tbl`，脚本型还写脚本骨架。 |
 | `gen <spec.json> [-o <out.tbl>]` | 校验并生成 `.tbl`。不加 `-o` 时写 stdout。 |
 | `decompile <in.tbl> [-o <out.json>]` | 把 `.tbl` 反解为规格，自动选择形态。 |
 | `help`、`-h`、`--help` | 完整用法写 stderr；`new --help` 同样可用。 |
 
 - 所有写文件的命令都不覆盖已有文件，目标必须不存在。`schema` 不接受选项；`check` 不写文件，要保存报告请捕获 stdout。完整参数见 `"$RUN" --help`。
+- `check` 默认最多用 4 个 worker 并行处理文件，`--jobs 1` 可回到串行；显式 `--jobs N` 可以超过 4。并行只改变耗时和资源占用，不改变文件顺序、诊断内容、stdout/stderr 或退出码。内存紧张、排查竞态或极小项目用 `--jobs 1`；大批量目录通常保留默认即可。
 - stdout 只放 JSON 结果；下载进度、`tblgen: wrote ...`、帮助和 `gen`/`new` 的诊断都写 stderr（每行一个 JSON 诊断）。两个流分开读。`rule` 以 `warn.` 开头的是警告，不会让命令失败，但要读并在交付时说明。
 - 退出码：`0` 成功（可能带 warnings），`1` 规格或模型无效，`2` 用法、I/O 或启动器错误。
 
@@ -152,7 +153,7 @@ python3 "$RUN" decompile existing.tbl -o existing.spec.json
 - `archive`：DataFlow 保真快照，改字段后**不会**重新推导下游。
 - `rawTable`：非 DataFlow 文件的原样快照。
 
-不加修改直接 `gen` 反解结果，得到的 `.tbl` 与原文件内容一致。在反解结果上做小改动后 `gen` 到新路径，其余内容也会保留。不要手写一份新规格去替换存量模型：手写规格里没写的内容（如顶层 `version`、`rollbackEnabled` 等模型属性、节点的 `lastModifyTime`）都会丢失。
+不加修改直接 `gen` 反解结果，得到的 `.tbl` 会保留平台语义相关内容；但 `nodes` 生成形态不会恢复节点的 `lastModifyTime` 缓存时间戳，因此不要按逐字节相等理解。`archive`/`rawTable` 快照保留原始内容。在反解结果上做小改动后 `gen` 到新路径，规格已表达的内容会保留；不要把规范化差异误认为业务字段丢失。不要手写一份新规格去替换存量模型：手写规格里没写的内容（如顶层 `version`、`rollbackEnabled` 等模型属性、raw 节点细节）都会丢失。
 
 如果改动需要重新推导字段，就按来源重建 typed 节点图，不要把 raw 往返当作语义验证。`archive` 形态改动后不会重新推导，加节点、改字段这类改动更适合在设计器里完成。只有 Script 节点的模型，加工逻辑在它引用的脚本里，改脚本，不要重新生成 `.tbl`。
 
