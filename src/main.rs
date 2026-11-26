@@ -11,7 +11,6 @@
 
 use std::env;
 use std::fs;
-use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -24,6 +23,10 @@ use tblgen::decompile::decompile;
 use tblgen::gen::generate_with_diagnostics;
 use tblgen::schema::schema_document;
 use tblgen::Diag;
+
+mod output;
+
+use output::{json_text, write_exclusive_all, write_out};
 
 const USAGE: &str = "tblgen — offline .tbl <-> spec-format v1 converter
 
@@ -113,31 +116,6 @@ fn read_json(path: &str) -> Result<Value, (String, i32)> {
     serde_json::from_str(text).map_err(|e| (format!("{}: invalid JSON: {}", path, e), 1))
 }
 
-fn write_out(path: Option<&str>, value: &Value) -> Result<(), (String, i32)> {
-    let text = serde_json::to_string_pretty(value).map_err(|e| (format!("serialize: {}", e), 2))?;
-    match path {
-        Some(p) => {
-            // create_new: fail if the target already exists (no overwrite)
-            match fs::OpenOptions::new().write(true).create_new(true).open(p) {
-                Ok(mut f) => {
-                    f.write_all(text.as_bytes())
-                        .and_then(|_| f.write_all(b"\n"))
-                        .map_err(|e| (format!("{}: {}", p, e), 2))?;
-                }
-                Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {
-                    return Err((format!("{}: already exists (use a fresh path)", p), 2));
-                }
-                Err(e) => return Err((format!("{}: {}", p, e), 2)),
-            }
-            eprintln!("tblgen: wrote {}", p);
-        }
-        None => {
-            println!("{}", text);
-        }
-    }
-    Ok(())
-}
-
 fn cmd_gen(args: &[String]) -> ExitCode {
     let (files, out) = match parse_io_args(args) {
         Ok(v) => v,
@@ -168,9 +146,9 @@ fn cmd_gen(args: &[String]) -> ExitCode {
     match tbl {
         Some(tbl) => match write_out(out.as_deref(), &tbl) {
             Ok(()) => ExitCode::SUCCESS,
-            Err((msg, code)) => {
+            Err(msg) => {
                 eprintln!("tblgen: {}", msg);
-                ExitCode::from(code as u8)
+                ExitCode::from(2)
             }
         },
         None => ExitCode::from(1),
@@ -202,9 +180,9 @@ fn cmd_decompile(args: &[String]) -> ExitCode {
     match decompile(&tbl) {
         Ok(spec) => match write_out(out.as_deref(), &spec) {
             Ok(()) => ExitCode::SUCCESS,
-            Err((msg, code)) => {
+            Err(msg) => {
                 eprintln!("tblgen: {}", msg);
-                ExitCode::from(code as u8)
+                ExitCode::from(2)
             }
         },
         Err(d) => {
@@ -720,10 +698,9 @@ fn run_new(args: &[String]) -> Result<ExitCode, String> {
     let Some(tbl) = tbl else {
         return Ok(ExitCode::from(1));
     };
-    let pretty = |v: &Value| serde_json::to_string_pretty(v).unwrap_or_default() + "\n";
-    writes.insert(0, (out, pretty(&tbl)));
+    writes.insert(0, (out, json_text(&tbl)?));
     if let Some(p) = one("--spec-out") {
-        writes.push((PathBuf::from(p), pretty(&spec)));
+        writes.push((PathBuf::from(p), json_text(&spec)?));
     }
     // normalize every target, then preflight ALL of them before any write:
     // duplicate normalized targets and existing files (including dangling
@@ -752,27 +729,6 @@ fn run_new(args: &[String]) -> Result<ExitCode, String> {
             fs::create_dir_all(parent).map_err(|e| format!("{}: {}", parent.display(), e))?;
         }
     }
-    // reserve every target exclusively before writing any bytes; on
-    // failure remove ONLY the files this run created (a same-inode alias
-    // another spelling could not have predicted is still safe: create_new
-    // would have failed for it)
-    let mut reserved: Vec<(PathBuf, fs::File)> = Vec::new();
-    for (p, _) in &writes {
-        match fs::File::options().write(true).create_new(true).open(p) {
-            Ok(f) => reserved.push((p.clone(), f)),
-            Err(e) => {
-                for (rp, rf) in reserved {
-                    drop(rf);
-                    let _ = fs::remove_file(&rp);
-                }
-                return Err(format!("{}: {}", p.display(), e));
-            }
-        }
-    }
-    for ((p, text), (_, mut f)) in writes.iter().zip(reserved.into_iter()) {
-        f.write_all(text.as_bytes())
-            .map_err(|e| format!("{}: {}", p.display(), e))?;
-        eprintln!("tblgen: wrote {}", p.display());
-    }
+    write_exclusive_all(&writes)?;
     Ok(ExitCode::SUCCESS)
 }
