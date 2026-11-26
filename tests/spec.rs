@@ -1240,6 +1240,56 @@ fn invalid_step_enums_rejected() {
 }
 
 #[test]
+fn bracket_reference_projections_share_chain_boundaries() {
+    let cases = [
+        (
+            "[表].[字段].[年] + [裸字段] + [单个.名称]",
+            &[
+                ("表", true),
+                ("字段", true),
+                ("年", true),
+                ("裸字段", false),
+                ("单个.名称", true),
+            ][..],
+            &["表"][..],
+        ),
+        (
+            "[别]]名]\u{3000}.\t[字段] .\n[😀][另一表]. [金额][裸字段]",
+            &[
+                ("别]名", true),
+                ("字段", true),
+                ("😀", true),
+                ("另一表", true),
+                ("金额", true),
+                ("裸字段", false),
+            ],
+            &["别]名", "另一表"],
+        ),
+        (
+            r#"'[忽略].[列]' + "\"[忽略]" + [可见] . '[隔断]' [裸字段]"#,
+            &[("可见", false), ("裸字段", false)],
+            &[],
+        ),
+        ("[已有] + [未闭合]]", &[("已有", false)], &[]),
+        ("[已有] + '[未闭合引号].[列]", &[("已有", false)], &[]),
+        ("[表] . [未闭合", &[("表", true)], &["表"]),
+    ];
+    for (exp, refs, qualifiers) in cases {
+        let actual = exp_bracket_refs(exp);
+        let actual = actual
+            .iter()
+            .map(|(name, qualified)| (name.as_str(), *qualified))
+            .collect::<Vec<_>>();
+        assert_eq!(actual, refs, "表达式 {exp:?} 的引用和限定状态");
+        assert_eq!(
+            exp_table_qualifiers(exp),
+            qualifiers,
+            "表达式 {exp:?} 的限定符"
+        );
+    }
+}
+
+#[test]
 fn expression_refs_validated_conservatively() {
     // [missing] != NULL -> proved-bad unqualified ref rejected
     let bad = json!({
@@ -1332,6 +1382,28 @@ fn expression_refs_validated_conservatively() {
         wd.iter().map(|d| &d.rule).collect::<Vec<_>>()
     );
     assert!(!wd.iter().any(|d| d.rule == "err.exp.ref.notfound"));
+
+    let mut qualified_spec = bad;
+    let mut qualified_wire = wire;
+    for exp in [
+        "[别名].[字段].[年] != NULL",
+        "[别名] . [字段].\t[年] != NULL",
+    ] {
+        qualified_spec["nodes"][1]["steps"][0]["filter"] = json!(exp);
+        qualified_wire["dataFlow"]["nodes"]["s"]["steps"][0]["filter"] = json!(exp);
+        assert!(
+            !spec_errors(&qualified_spec)
+                .iter()
+                .any(|d| d.rule == "err.exp.ref.notfound"),
+            "生成校验应跳过已限定的引用 {exp:?}"
+        );
+        assert!(
+            !check(&qualified_wire)
+                .iter()
+                .any(|d| d.rule == "warn.exp.ref.notfound"),
+            "文件校验应跳过已限定的引用 {exp:?}"
+        );
+    }
 }
 
 /// The general `examples.typed` / `examples.rawOnly` arrays: every entry must
