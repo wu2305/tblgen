@@ -84,6 +84,12 @@ fn default_cases() -> Vec<Case> {
             repeats: 80,
             warmup: 3,
         },
+        Case {
+            name: "select-heavy",
+            path: fixture("select-heavy"),
+            repeats: 60,
+            warmup: 3,
+        },
     ]
 }
 
