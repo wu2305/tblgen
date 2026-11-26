@@ -641,6 +641,20 @@ fn decompile_roundtrip_generated() {
 }
 
 #[test]
+fn decompile_preserves_subprocess_key_and_explicit_id() {
+    let mut spec = budget_spec();
+    let subprocesses = json!({
+        "process-key": {"id": "process-id", "rootNodeId": "src", "nodeIds": ["src"]}
+    });
+    spec["subProcesses"] = subprocesses.clone();
+
+    let tbl = generate(&spec).unwrap();
+    let back = decompile(&tbl).unwrap();
+    assert_eq!(back["subProcesses"], subprocesses);
+    assert_eq!(generate(&back).unwrap(), tbl);
+}
+
+#[test]
 fn decompile_nonflow_is_rawtable() {
     let tbl = json!({"version":"4.0.0","properties":{"modelDataType":"Ods"},"dimensions":[]});
     let spec = decompile(&tbl).unwrap();

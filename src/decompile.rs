@@ -207,8 +207,6 @@ fn try_generated(tbl: &Value) -> Option<Value> {
     let mut first_output_seen = false;
 
     for (key, body) in nodes_obj {
-        let base = format!("/dataFlow/nodes/{}", ptr_escape(key));
-        let _ = base;
         match node_to_spec(key, body, &mut first_output_seen) {
             Some(sn) => spec_nodes.push(sn),
             None => return None, // unconvertible node body -> archive
@@ -220,10 +218,10 @@ fn try_generated(tbl: &Value) -> Option<Value> {
     if let Some(sp) = flow.get("subProcesses") {
         if let Some(spobj) = sp.as_object() {
             let mut items = Map::new();
-            for (id, item) in spobj {
-                match subprocess_to_spec(id, item) {
+            for (key, item) in spobj {
+                match subprocess_to_spec(item) {
                     Some(v) => {
-                        items.insert(id.clone(), v);
+                        items.insert(key.clone(), v);
                     }
                     None => return None,
                 }
@@ -481,7 +479,7 @@ fn step_payloads_fit(o: &serde_json::Map<String, Value>, ty: &str) -> bool {
     true
 }
 
-fn subprocess_to_spec(id: &str, item: &Value) -> Option<Value> {
+fn subprocess_to_spec(item: &Value) -> Option<Value> {
     let Some(iobj) = item.as_object() else {
         return None;
     };
@@ -503,7 +501,6 @@ fn subprocess_to_spec(id: &str, item: &Value) -> Option<Value> {
     if !raw.is_empty() {
         m.insert("raw".into(), Value::Object(raw));
     }
-    let _ = id;
     Some(Value::Object(m))
 }
 
