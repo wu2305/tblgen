@@ -1,0 +1,67 @@
+{
+  "format": 1,
+  "version": "4.19.0",
+  "properties": {
+    "datasource": "defdw",
+    "extractDataEnabled": false
+  },
+  "nodes": [
+    {
+      "key": "src",
+      "type": "FileInput",
+      "alias": "src",
+      "config": {
+        "fileName": "small.xlsx#S"
+      },
+      "fields": [
+        {
+          "name": "dim",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "measure",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "note",
+          "dataType": "C",
+          "isDimension": true
+        }
+      ]
+    },
+    {
+      "key": "flt",
+      "type": "Select",
+      "inputs": [
+        "src"
+      ],
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "dim"
+          ],
+          "filter": "[dim] != NULL"
+        },
+        {
+          "type": "Refactor",
+          "fields": [
+            "measure"
+          ],
+          "refactor": {
+            "rename": "amount"
+          }
+        }
+      ]
+    },
+    {
+      "key": "out",
+      "type": "Output",
+      "inputs": [
+        "flt"
+      ]
+    }
+  ]
+}

@@ -386,6 +386,64 @@ fn select_explicit_fields_project_lineage() {
 }
 
 #[test]
+fn select_explicit_fields_multiset_semantics() {
+    let field = |name: &str| json!({"name": name, "dataType": "C", "isDimension": true});
+    let mk = |src: &[&str], decl: &[&str]| {
+        json!({
+            "format": 1,
+            "properties": {"extractDataEnabled": false},
+            "nodes": [
+                {"key":"src","type":"FileInput","alias":"src","config":{"fileName":"d.xlsx#S"},
+                 "fields": src.iter().map(|n| field(n)).collect::<Vec<_>>()},
+                {"key":"sel","type":"Select","alias":"sel","inputs":["src"],
+                 "fields": decl.iter().map(|n| field(n)).collect::<Vec<_>>()},
+                {"key":"out","type":"Output","alias":"out","inputs":["sel"]}
+            ]
+        })
+    };
+
+    for decl in [&["ID", "SKU", "Amount"][..], &["Amount", "SKU", "ID"][..]] {
+        let spec = mk(&["ID", "SKU", "Amount"], decl);
+        assert!(spec_errors(&spec).is_empty(), "{:?}", spec_errors(&spec));
+        let tbl = generate(&spec).expect("generate");
+        let got: Vec<&str> = node(&tbl, "sel")["fields"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|f| f["name"].as_str().unwrap())
+            .collect();
+        assert_eq!(got, decl);
+        assert!(wire_errors(&tbl).is_empty(), "{:?}", wire_errors(&tbl));
+    }
+
+    // Folded duplicates are a multiset: replacing one SKU occurrence with a
+    // second ID changes the counts even though every name still exists.
+    let bad = mk(&["ID", "SKU", "sku"], &["ID", "SKU", "ID"]);
+    let ds = spec_errors(&bad);
+    assert!(
+        ds.iter()
+            .any(|d| d.rule == "field.mismatch" && d.path == "/nodes/1/fields"),
+        "{:?}",
+        ds.iter().map(|d| (&d.path, &d.rule)).collect::<Vec<_>>()
+    );
+    assert!(generate(&bad).is_err());
+
+    // ß and SS collide only after Unicode uppercasing; both occurrences must
+    // be counted, and the declared reverse order still wins.
+    let uni = mk(&["Straße", "STRASSE", "ID"], &["id", "strasse", "STRASSE"]);
+    assert!(spec_errors(&uni).is_empty(), "{:?}", spec_errors(&uni));
+    let tbl = generate(&uni).expect("generate unicode multiset");
+    let got: Vec<&str> = node(&tbl, "sel")["fields"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|f| f["name"].as_str().unwrap())
+        .collect();
+    assert_eq!(got, vec!["id", "strasse", "STRASSE"]);
+    assert!(wire_errors(&tbl).is_empty(), "{:?}", wire_errors(&tbl));
+}
+
+#[test]
 fn transform_is_derivable_and_rename_after_add_works() {
     // TransformToCalculatedField preserves names (Java edits the field's
     // expression in place); an AddField without a fields operand is still
@@ -534,6 +592,72 @@ fn union_map_errors_on_unmatched_and_duplicate_keys() {
     assert!(spec_errors(&spec2)
         .iter()
         .any(|d| d.rule == "union.mapkey" && d.path.contains("unionMapArray")));
+}
+
+#[test]
+fn union_map_lookup_aliases_and_secondary_values() {
+    // Node keys (x/y) differ from aliases (Alpha/Beta); the second row has an
+    // empty first value so its canonical key is anchored on Beta; the third
+    // row exercises renamed-value (secondary) resolution back to Alpha.A2.
+    let spec = json!({
+        "format": 1,
+        "properties": {"extractDataEnabled": false},
+        "nodes": [
+            {"key":"x","type":"FileInput","alias":"Alpha","config":{"fileName":"x.xlsx#S"},
+             "fields":[{"name":"A1","dataType":"C","isDimension":true},
+                       {"name":"A2","dataType":"C","isDimension":true}]},
+            {"key":"y","type":"FileInput","alias":"Beta","config":{"fileName":"y.xlsx#S"},
+             "fields":[{"name":"B1","dataType":"C","isDimension":true},
+                       {"name":"B2","dataType":"C","isDimension":true}]},
+            {"key":"u","type":"Union","alias":"u","inputs":["x","y"],
+             "config":{"unionType":"UnionAll","unionMapArray":[
+                 {"values":["A1",""],"visible":true},
+                 {"values":["","B1"],"visible":true},
+                 {"values":["A2","B2"],"visible":true}
+             ]},
+             "fields":[
+                 {"name":"OUT_A","dataType":"C","isDimension":true,"inputField":"A1","inputNode":"Alpha"},
+                 {"name":"OUT_B","dataType":"C","isDimension":true,"inputField":"B1","inputNode":"Beta"},
+                 {"name":"OUT_SECONDARY","dataType":"C","isDimension":true,"inputField":"B2","inputNode":"Beta"}
+             ]},
+            {"key":"out","type":"Output","alias":"out","inputs":["u"]}
+        ]
+    });
+    assert!(spec_errors(&spec).is_empty(), "{:?}", spec_errors(&spec));
+    let tbl = generate(&spec).expect("generate");
+    assert_eq!(field(&tbl, "u", "OUT_A")["inputNode"], json!("Alpha"));
+    assert_eq!(field(&tbl, "u", "OUT_A")["inputField"], json!("A1"));
+    assert_eq!(field(&tbl, "u", "OUT_B")["inputNode"], json!("Beta"));
+    assert_eq!(field(&tbl, "u", "OUT_B")["inputField"], json!("B1"));
+    assert_eq!(
+        field(&tbl, "u", "OUT_SECONDARY")["inputNode"],
+        json!("Alpha")
+    );
+    assert_eq!(field(&tbl, "u", "OUT_SECONDARY")["inputField"], json!("A2"));
+    assert_eq!(
+        field(&tbl, "u", "OUT_SECONDARY")["originalNode"],
+        json!("Alpha")
+    );
+    assert_eq!(
+        field(&tbl, "u", "OUT_SECONDARY")["originalField"],
+        json!("A2")
+    );
+    assert!(wire_errors(&tbl).is_empty(), "{:?}", wire_errors(&tbl));
+
+    // A visible passthrough field that no canonical or secondary value can
+    // produce is still union.mapkey, in declared order.
+    let mut bad = spec.clone();
+    bad["nodes"][2]["fields"] = json!([
+        {"name":"OK","dataType":"C","isDimension":true,"inputField":"A1","inputNode":"Alpha"},
+        {"name":"MISSING","dataType":"C","isDimension":true,"inputField":"NOPE","inputNode":"Beta"}
+    ]);
+    let ds = spec_errors(&bad);
+    assert!(
+        ds.iter()
+            .any(|d| d.rule == "union.mapkey" && d.path.ends_with("/fields/1")),
+        "{:?}",
+        rules(&ds)
+    );
 }
 
 #[test]
@@ -929,6 +1053,61 @@ fn join_fields_resolve_with_optional_inputnode() {
     assert!(spec_errors(&miss)
         .iter()
         .any(|d| d.rule == "field.notfound"));
+}
+
+#[test]
+fn join_projection_lookup_multi_input_aliases() {
+    // Three inputs whose aliases differ from their keys; duplicate `id`/`shared`
+    // columns require inputNode, while a unique column resolves across inputs.
+    let spec = json!({
+        "format": 1,
+        "properties": {"extractDataEnabled": false},
+        "nodes": [
+            {"key":"n1","type":"FileInput","alias":"Alpha","config":{"fileName":"n1.xlsx#S"},
+             "fields":[{"name":"id","dataType":"C","isDimension":true},
+                       {"name":"shared","dataType":"C","isDimension":true},
+                       {"name":"a_only","dataType":"N","isDimension":false}]},
+            {"key":"n2","type":"FileInput","alias":"Beta","config":{"fileName":"n2.xlsx#S"},
+             "fields":[{"name":"id","dataType":"C","isDimension":true},
+                       {"name":"shared","dataType":"C","isDimension":true},
+                       {"name":"b_only","dataType":"N","isDimension":false}]},
+            {"key":"n3","type":"FileInput","alias":"Gamma","config":{"fileName":"n3.xlsx#S"},
+             "fields":[{"name":"id","dataType":"C","isDimension":true},
+                       {"name":"shared","dataType":"C","isDimension":true},
+                       {"name":"c_only","dataType":"N","isDimension":false}]},
+            {"key":"j","type":"Join","alias":"j","inputs":["n1","n2","n3"],
+             "config":{"joinConditions":[
+                 {"leftTable":"Alpha","rightTable":"Beta","joinType":"InnerJoin",
+                  "clauses":[{"leftExp":"[Alpha].[id]","operator":"=","rightExp":"[Beta].[id]"}]},
+                 {"leftTable":"Beta","rightTable":"Gamma","joinType":"InnerJoin",
+                  "clauses":[{"leftExp":"[Beta].[id]","operator":"=","rightExp":"[Gamma].[id]"}]}
+             ]},
+             "fields":[
+                 {"name":"id","inputNode":"Beta"},
+                 {"name":"a_renamed","inputField":"a_only","inputNode":"Alpha"},
+                 {"name":"c_only"}
+             ]},
+            {"key":"out","type":"Output","alias":"out","inputs":["j"]}
+        ]
+    });
+    assert!(spec_errors(&spec).is_empty(), "{:?}", spec_errors(&spec));
+    let tbl = generate(&spec).expect("generate");
+    let id = field(&tbl, "j", "id");
+    assert_eq!(id["inputNode"], json!("Beta"));
+    assert_eq!(id["inputField"], json!("id"));
+    assert_eq!(id["originalNode"], json!("Beta"));
+    let renamed = field(&tbl, "j", "a_renamed");
+    assert_eq!(renamed["inputNode"], json!("Alpha"));
+    assert_eq!(renamed["inputField"], json!("a_only"));
+    let c = field(&tbl, "j", "c_only");
+    assert_eq!(c["inputNode"], json!("Gamma"));
+    assert!(wire_errors(&tbl).is_empty(), "{:?}", wire_errors(&tbl));
+
+    // The same shared column without inputNode stays ambiguous in declared order.
+    let mut amb = spec.clone();
+    amb["nodes"][3]["fields"] = json!([{"name":"shared"}]);
+    let ds = spec_errors(&amb);
+    assert!(ds.iter().any(|d| d.rule == "field.ambiguous" && d.path.ends_with("/fields/0")), "{:?}", rules(&ds));
 }
 
 // ---------------------------------------------------------------------------

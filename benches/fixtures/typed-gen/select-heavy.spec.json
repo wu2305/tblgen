@@ -1,0 +1,3414 @@
+{
+  "format": 1,
+  "version": "4.19.0",
+  "properties": {
+    "datasource": "defdw",
+    "extractDataEnabled": false
+  },
+  "nodes": [
+    {
+      "key": "src",
+      "type": "FileInput",
+      "alias": "src",
+      "config": {
+        "fileName": "select-heavy.xlsx#S"
+      },
+      "fields": [
+        {
+          "name": "dim_00",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "dim_01",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "dim_02",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "dim_03",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "dim_04",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "dim_05",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "dim_06",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "dim_07",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "dim_08",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "dim_09",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "dim_10",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "dim_11",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "dim_12",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "dim_13",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "dim_14",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "dim_15",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "dim_16",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "dim_17",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "dim_18",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "dim_19",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "dim_20",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "dim_21",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "dim_22",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "dim_23",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "dim_24",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "dim_25",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "dim_26",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "dim_27",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "dim_28",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "dim_29",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "dim_30",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "dim_31",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "meas_00",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_01",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_02",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_03",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_04",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_05",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_06",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_07",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_08",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_09",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_10",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_11",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_12",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_13",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_14",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_15",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_16",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_17",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_18",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_19",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_20",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_21",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_22",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_23",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_24",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_25",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_26",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_27",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_28",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_29",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_30",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_31",
+          "dataType": "N",
+          "isDimension": false
+        }
+      ]
+    },
+    {
+      "key": "s00",
+      "type": "Select",
+      "inputs": [
+        "src"
+      ],
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "dim_00"
+          ],
+          "filter": "[dim_00] != NULL"
+        },
+        {
+          "type": "Refactor",
+          "fields": [
+            "meas_00"
+          ],
+          "refactor": {
+            "rename": "rn_0_a"
+          }
+        },
+        {
+          "type": "RemoveField",
+          "fields": [
+            "dim_00"
+          ]
+        },
+        {
+          "type": "AddField",
+          "addField": {
+            "name": "calc_0_a",
+            "dataType": "N",
+            "isDimension": false,
+            "exp": "[rn_0_a] * 2"
+          }
+        },
+        {
+          "type": "TransformToCalculatedField",
+          "fields": [
+            "meas_01"
+          ],
+          "transformFieldInfo": {
+            "dataType": "N",
+            "exp": "[rn_0_a] + 1"
+          }
+        },
+        {
+          "type": "Refactor",
+          "fields": [
+            "meas_02"
+          ],
+          "refactor": {
+            "rename": "rn_0_b"
+          }
+        },
+        {
+          "type": "RemoveField",
+          "fields": [
+            "dim_01"
+          ]
+        },
+        {
+          "type": "AddField",
+          "addField": {
+            "name": "calc_0_b",
+            "dataType": "C",
+            "length": 20,
+            "isDimension": false,
+            "exp": "'0'"
+          }
+        },
+        {
+          "type": "Filter",
+          "fields": [
+            "calc_0_a"
+          ],
+          "filter": "[calc_0_a] > 0"
+        },
+        {
+          "type": "Refactor",
+          "fields": [
+            "calc_0_b"
+          ],
+          "refactor": {
+            "rename": "rc_0_b"
+          }
+        }
+      ]
+    },
+    {
+      "key": "s01",
+      "type": "Select",
+      "inputs": [
+        "s00"
+      ],
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "dim_02"
+          ],
+          "filter": "[dim_02] != NULL"
+        },
+        {
+          "type": "Refactor",
+          "fields": [
+            "rn_0_a"
+          ],
+          "refactor": {
+            "rename": "rn_1_a"
+          }
+        },
+        {
+          "type": "RemoveField",
+          "fields": [
+            "dim_02"
+          ]
+        },
+        {
+          "type": "AddField",
+          "addField": {
+            "name": "calc_1_a",
+            "dataType": "N",
+            "isDimension": false,
+            "exp": "[rn_1_a] * 2"
+          }
+        },
+        {
+          "type": "TransformToCalculatedField",
+          "fields": [
+            "meas_01"
+          ],
+          "transformFieldInfo": {
+            "dataType": "N",
+            "exp": "[rn_1_a] + 1"
+          }
+        },
+        {
+          "type": "Refactor",
+          "fields": [
+            "rn_0_b"
+          ],
+          "refactor": {
+            "rename": "rn_1_b"
+          }
+        },
+        {
+          "type": "RemoveField",
+          "fields": [
+            "dim_03"
+          ]
+        },
+        {
+          "type": "AddField",
+          "addField": {
+            "name": "calc_1_b",
+            "dataType": "C",
+            "length": 20,
+            "isDimension": false,
+            "exp": "'1'"
+          }
+        },
+        {
+          "type": "Filter",
+          "fields": [
+            "calc_1_a"
+          ],
+          "filter": "[calc_1_a] > 0"
+        },
+        {
+          "type": "Refactor",
+          "fields": [
+            "calc_1_b"
+          ],
+          "refactor": {
+            "rename": "rc_1_b"
+          }
+        }
+      ]
+    },
+    {
+      "key": "s02",
+      "type": "Select",
+      "inputs": [
+        "s01"
+      ],
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "dim_04"
+          ],
+          "filter": "[dim_04] != NULL"
+        },
+        {
+          "type": "Refactor",
+          "fields": [
+            "rn_1_a"
+          ],
+          "refactor": {
+            "rename": "rn_2_a"
+          }
+        },
+        {
+          "type": "RemoveField",
+          "fields": [
+            "dim_04"
+          ]
+        },
+        {
+          "type": "AddField",
+          "addField": {
+            "name": "calc_2_a",
+            "dataType": "N",
+            "isDimension": false,
+            "exp": "[rn_2_a] * 2"
+          }
+        },
+        {
+          "type": "TransformToCalculatedField",
+          "fields": [
+            "meas_01"
+          ],
+          "transformFieldInfo": {
+            "dataType": "N",
+            "exp": "[rn_2_a] + 1"
+          }
+        },
+        {
+          "type": "Refactor",
+          "fields": [
+            "rn_1_b"
+          ],
+          "refactor": {
+            "rename": "rn_2_b"
+          }
+        },
+        {
+          "type": "RemoveField",
+          "fields": [
+            "dim_05"
+          ]
+        },
+        {
+          "type": "AddField",
+          "addField": {
+            "name": "calc_2_b",
+            "dataType": "C",
+            "length": 20,
+            "isDimension": false,
+            "exp": "'2'"
+          }
+        },
+        {
+          "type": "Filter",
+          "fields": [
+            "calc_2_a"
+          ],
+          "filter": "[calc_2_a] > 0"
+        },
+        {
+          "type": "Refactor",
+          "fields": [
+            "calc_2_b"
+          ],
+          "refactor": {
+            "rename": "rc_2_b"
+          }
+        }
+      ],
+      "fields": [
+        {
+          "name": "dim_06",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "dim_07",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "dim_08",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "dim_09",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "dim_10",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "dim_11",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "dim_12",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "dim_13",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "dim_14",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "dim_15",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "dim_16",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "dim_17",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "dim_18",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "dim_19",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "dim_20",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "dim_21",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "dim_22",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "dim_23",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "dim_24",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "dim_25",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "dim_26",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "dim_27",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "dim_28",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "dim_29",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "dim_30",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "dim_31",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "rn_2_a",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_01",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "rn_2_b",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_03",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_04",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_05",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_06",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_07",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_08",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_09",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_10",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_11",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_12",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_13",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_14",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_15",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_16",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_17",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_18",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_19",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_20",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_21",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_22",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_23",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_24",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_25",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_26",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_27",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_28",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_29",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_30",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_31",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "calc_0_a",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "rc_0_b",
+          "dataType": "C",
+          "isDimension": false
+        },
+        {
+          "name": "calc_1_a",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "rc_1_b",
+          "dataType": "C",
+          "isDimension": false
+        },
+        {
+          "name": "calc_2_a",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "rc_2_b",
+          "dataType": "C",
+          "isDimension": false
+        }
+      ]
+    },
+    {
+      "key": "s03",
+      "type": "Select",
+      "inputs": [
+        "s02"
+      ],
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "dim_06"
+          ],
+          "filter": "[dim_06] != NULL"
+        },
+        {
+          "type": "Refactor",
+          "fields": [
+            "rn_2_a"
+          ],
+          "refactor": {
+            "rename": "rn_3_a"
+          }
+        },
+        {
+          "type": "RemoveField",
+          "fields": [
+            "dim_06"
+          ]
+        },
+        {
+          "type": "AddField",
+          "addField": {
+            "name": "calc_3_a",
+            "dataType": "N",
+            "isDimension": false,
+            "exp": "[rn_3_a] * 2"
+          }
+        },
+        {
+          "type": "TransformToCalculatedField",
+          "fields": [
+            "meas_01"
+          ],
+          "transformFieldInfo": {
+            "dataType": "N",
+            "exp": "[rn_3_a] + 1"
+          }
+        },
+        {
+          "type": "Refactor",
+          "fields": [
+            "rn_2_b"
+          ],
+          "refactor": {
+            "rename": "rn_3_b"
+          }
+        },
+        {
+          "type": "RemoveField",
+          "fields": [
+            "dim_07"
+          ]
+        },
+        {
+          "type": "AddField",
+          "addField": {
+            "name": "calc_3_b",
+            "dataType": "C",
+            "length": 20,
+            "isDimension": false,
+            "exp": "'3'"
+          }
+        },
+        {
+          "type": "Filter",
+          "fields": [
+            "calc_3_a"
+          ],
+          "filter": "[calc_3_a] > 0"
+        },
+        {
+          "type": "Refactor",
+          "fields": [
+            "calc_3_b"
+          ],
+          "refactor": {
+            "rename": "rc_3_b"
+          }
+        }
+      ]
+    },
+    {
+      "key": "s04",
+      "type": "Select",
+      "inputs": [
+        "s03"
+      ],
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "dim_08"
+          ],
+          "filter": "[dim_08] != NULL"
+        },
+        {
+          "type": "Refactor",
+          "fields": [
+            "rn_3_a"
+          ],
+          "refactor": {
+            "rename": "rn_4_a"
+          }
+        },
+        {
+          "type": "RemoveField",
+          "fields": [
+            "dim_08"
+          ]
+        },
+        {
+          "type": "AddField",
+          "addField": {
+            "name": "calc_4_a",
+            "dataType": "N",
+            "isDimension": false,
+            "exp": "[rn_4_a] * 2"
+          }
+        },
+        {
+          "type": "TransformToCalculatedField",
+          "fields": [
+            "meas_01"
+          ],
+          "transformFieldInfo": {
+            "dataType": "N",
+            "exp": "[rn_4_a] + 1"
+          }
+        },
+        {
+          "type": "Refactor",
+          "fields": [
+            "rn_3_b"
+          ],
+          "refactor": {
+            "rename": "rn_4_b"
+          }
+        },
+        {
+          "type": "RemoveField",
+          "fields": [
+            "dim_09"
+          ]
+        },
+        {
+          "type": "AddField",
+          "addField": {
+            "name": "calc_4_b",
+            "dataType": "C",
+            "length": 20,
+            "isDimension": false,
+            "exp": "'4'"
+          }
+        },
+        {
+          "type": "Filter",
+          "fields": [
+            "calc_4_a"
+          ],
+          "filter": "[calc_4_a] > 0"
+        },
+        {
+          "type": "Refactor",
+          "fields": [
+            "calc_4_b"
+          ],
+          "refactor": {
+            "rename": "rc_4_b"
+          }
+        }
+      ]
+    },
+    {
+      "key": "s05",
+      "type": "Select",
+      "inputs": [
+        "s04"
+      ],
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "dim_10"
+          ],
+          "filter": "[dim_10] != NULL"
+        },
+        {
+          "type": "Refactor",
+          "fields": [
+            "rn_4_a"
+          ],
+          "refactor": {
+            "rename": "rn_5_a"
+          }
+        },
+        {
+          "type": "RemoveField",
+          "fields": [
+            "dim_10"
+          ]
+        },
+        {
+          "type": "AddField",
+          "addField": {
+            "name": "calc_5_a",
+            "dataType": "N",
+            "isDimension": false,
+            "exp": "[rn_5_a] * 2"
+          }
+        },
+        {
+          "type": "TransformToCalculatedField",
+          "fields": [
+            "meas_01"
+          ],
+          "transformFieldInfo": {
+            "dataType": "N",
+            "exp": "[rn_5_a] + 1"
+          }
+        },
+        {
+          "type": "Refactor",
+          "fields": [
+            "rn_4_b"
+          ],
+          "refactor": {
+            "rename": "rn_5_b"
+          }
+        },
+        {
+          "type": "RemoveField",
+          "fields": [
+            "dim_11"
+          ]
+        },
+        {
+          "type": "AddField",
+          "addField": {
+            "name": "calc_5_b",
+            "dataType": "C",
+            "length": 20,
+            "isDimension": false,
+            "exp": "'5'"
+          }
+        },
+        {
+          "type": "Filter",
+          "fields": [
+            "calc_5_a"
+          ],
+          "filter": "[calc_5_a] > 0"
+        },
+        {
+          "type": "Refactor",
+          "fields": [
+            "calc_5_b"
+          ],
+          "refactor": {
+            "rename": "rc_5_b"
+          }
+        }
+      ]
+    },
+    {
+      "key": "s06",
+      "type": "Select",
+      "inputs": [
+        "s05"
+      ],
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "dim_12"
+          ],
+          "filter": "[dim_12] != NULL"
+        },
+        {
+          "type": "Refactor",
+          "fields": [
+            "rn_5_a"
+          ],
+          "refactor": {
+            "rename": "rn_6_a"
+          }
+        },
+        {
+          "type": "RemoveField",
+          "fields": [
+            "dim_12"
+          ]
+        },
+        {
+          "type": "AddField",
+          "addField": {
+            "name": "calc_6_a",
+            "dataType": "N",
+            "isDimension": false,
+            "exp": "[rn_6_a] * 2"
+          }
+        },
+        {
+          "type": "TransformToCalculatedField",
+          "fields": [
+            "meas_01"
+          ],
+          "transformFieldInfo": {
+            "dataType": "N",
+            "exp": "[rn_6_a] + 1"
+          }
+        },
+        {
+          "type": "Refactor",
+          "fields": [
+            "rn_5_b"
+          ],
+          "refactor": {
+            "rename": "rn_6_b"
+          }
+        },
+        {
+          "type": "RemoveField",
+          "fields": [
+            "dim_13"
+          ]
+        },
+        {
+          "type": "AddField",
+          "addField": {
+            "name": "calc_6_b",
+            "dataType": "C",
+            "length": 20,
+            "isDimension": false,
+            "exp": "'6'"
+          }
+        },
+        {
+          "type": "Filter",
+          "fields": [
+            "calc_6_a"
+          ],
+          "filter": "[calc_6_a] > 0"
+        },
+        {
+          "type": "Refactor",
+          "fields": [
+            "calc_6_b"
+          ],
+          "refactor": {
+            "rename": "rc_6_b"
+          }
+        }
+      ],
+      "fields": [
+        {
+          "name": "dim_14",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "dim_15",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "dim_16",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "dim_17",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "dim_18",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "dim_19",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "dim_20",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "dim_21",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "dim_22",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "dim_23",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "dim_24",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "dim_25",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "dim_26",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "dim_27",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "dim_28",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "dim_29",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "dim_30",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "dim_31",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "rn_6_a",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_01",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "rn_6_b",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_03",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_04",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_05",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_06",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_07",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_08",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_09",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_10",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_11",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_12",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_13",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_14",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_15",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_16",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_17",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_18",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_19",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_20",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_21",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_22",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_23",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_24",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_25",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_26",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_27",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_28",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_29",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_30",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_31",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "calc_0_a",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "rc_0_b",
+          "dataType": "C",
+          "isDimension": false
+        },
+        {
+          "name": "calc_1_a",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "rc_1_b",
+          "dataType": "C",
+          "isDimension": false
+        },
+        {
+          "name": "calc_2_a",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "rc_2_b",
+          "dataType": "C",
+          "isDimension": false
+        },
+        {
+          "name": "calc_3_a",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "rc_3_b",
+          "dataType": "C",
+          "isDimension": false
+        },
+        {
+          "name": "calc_4_a",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "rc_4_b",
+          "dataType": "C",
+          "isDimension": false
+        },
+        {
+          "name": "calc_5_a",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "rc_5_b",
+          "dataType": "C",
+          "isDimension": false
+        },
+        {
+          "name": "calc_6_a",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "rc_6_b",
+          "dataType": "C",
+          "isDimension": false
+        }
+      ]
+    },
+    {
+      "key": "s07",
+      "type": "Select",
+      "inputs": [
+        "s06"
+      ],
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "dim_14"
+          ],
+          "filter": "[dim_14] != NULL"
+        },
+        {
+          "type": "Refactor",
+          "fields": [
+            "rn_6_a"
+          ],
+          "refactor": {
+            "rename": "rn_7_a"
+          }
+        },
+        {
+          "type": "RemoveField",
+          "fields": [
+            "dim_14"
+          ]
+        },
+        {
+          "type": "AddField",
+          "addField": {
+            "name": "calc_7_a",
+            "dataType": "N",
+            "isDimension": false,
+            "exp": "[rn_7_a] * 2"
+          }
+        },
+        {
+          "type": "TransformToCalculatedField",
+          "fields": [
+            "meas_01"
+          ],
+          "transformFieldInfo": {
+            "dataType": "N",
+            "exp": "[rn_7_a] + 1"
+          }
+        },
+        {
+          "type": "Refactor",
+          "fields": [
+            "rn_6_b"
+          ],
+          "refactor": {
+            "rename": "rn_7_b"
+          }
+        },
+        {
+          "type": "RemoveField",
+          "fields": [
+            "dim_15"
+          ]
+        },
+        {
+          "type": "AddField",
+          "addField": {
+            "name": "calc_7_b",
+            "dataType": "C",
+            "length": 20,
+            "isDimension": false,
+            "exp": "'7'"
+          }
+        },
+        {
+          "type": "Filter",
+          "fields": [
+            "calc_7_a"
+          ],
+          "filter": "[calc_7_a] > 0"
+        },
+        {
+          "type": "Refactor",
+          "fields": [
+            "calc_7_b"
+          ],
+          "refactor": {
+            "rename": "rc_7_b"
+          }
+        }
+      ]
+    },
+    {
+      "key": "s08",
+      "type": "Select",
+      "inputs": [
+        "s07"
+      ],
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "dim_16"
+          ],
+          "filter": "[dim_16] != NULL"
+        },
+        {
+          "type": "Refactor",
+          "fields": [
+            "rn_7_a"
+          ],
+          "refactor": {
+            "rename": "rn_8_a"
+          }
+        },
+        {
+          "type": "RemoveField",
+          "fields": [
+            "dim_16"
+          ]
+        },
+        {
+          "type": "AddField",
+          "addField": {
+            "name": "calc_8_a",
+            "dataType": "N",
+            "isDimension": false,
+            "exp": "[rn_8_a] * 2"
+          }
+        },
+        {
+          "type": "TransformToCalculatedField",
+          "fields": [
+            "meas_01"
+          ],
+          "transformFieldInfo": {
+            "dataType": "N",
+            "exp": "[rn_8_a] + 1"
+          }
+        },
+        {
+          "type": "Refactor",
+          "fields": [
+            "rn_7_b"
+          ],
+          "refactor": {
+            "rename": "rn_8_b"
+          }
+        },
+        {
+          "type": "RemoveField",
+          "fields": [
+            "dim_17"
+          ]
+        },
+        {
+          "type": "AddField",
+          "addField": {
+            "name": "calc_8_b",
+            "dataType": "C",
+            "length": 20,
+            "isDimension": false,
+            "exp": "'8'"
+          }
+        },
+        {
+          "type": "Filter",
+          "fields": [
+            "calc_8_a"
+          ],
+          "filter": "[calc_8_a] > 0"
+        },
+        {
+          "type": "Refactor",
+          "fields": [
+            "calc_8_b"
+          ],
+          "refactor": {
+            "rename": "rc_8_b"
+          }
+        }
+      ]
+    },
+    {
+      "key": "s09",
+      "type": "Select",
+      "inputs": [
+        "s08"
+      ],
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "dim_18"
+          ],
+          "filter": "[dim_18] != NULL"
+        },
+        {
+          "type": "Refactor",
+          "fields": [
+            "rn_8_a"
+          ],
+          "refactor": {
+            "rename": "rn_9_a"
+          }
+        },
+        {
+          "type": "RemoveField",
+          "fields": [
+            "dim_18"
+          ]
+        },
+        {
+          "type": "AddField",
+          "addField": {
+            "name": "calc_9_a",
+            "dataType": "N",
+            "isDimension": false,
+            "exp": "[rn_9_a] * 2"
+          }
+        },
+        {
+          "type": "TransformToCalculatedField",
+          "fields": [
+            "meas_01"
+          ],
+          "transformFieldInfo": {
+            "dataType": "N",
+            "exp": "[rn_9_a] + 1"
+          }
+        },
+        {
+          "type": "Refactor",
+          "fields": [
+            "rn_8_b"
+          ],
+          "refactor": {
+            "rename": "rn_9_b"
+          }
+        },
+        {
+          "type": "RemoveField",
+          "fields": [
+            "dim_19"
+          ]
+        },
+        {
+          "type": "AddField",
+          "addField": {
+            "name": "calc_9_b",
+            "dataType": "C",
+            "length": 20,
+            "isDimension": false,
+            "exp": "'9'"
+          }
+        },
+        {
+          "type": "Filter",
+          "fields": [
+            "calc_9_a"
+          ],
+          "filter": "[calc_9_a] > 0"
+        },
+        {
+          "type": "Refactor",
+          "fields": [
+            "calc_9_b"
+          ],
+          "refactor": {
+            "rename": "rc_9_b"
+          }
+        }
+      ]
+    },
+    {
+      "key": "s10",
+      "type": "Select",
+      "inputs": [
+        "s09"
+      ],
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "dim_20"
+          ],
+          "filter": "[dim_20] != NULL"
+        },
+        {
+          "type": "Refactor",
+          "fields": [
+            "rn_9_a"
+          ],
+          "refactor": {
+            "rename": "rn_10_a"
+          }
+        },
+        {
+          "type": "RemoveField",
+          "fields": [
+            "dim_20"
+          ]
+        },
+        {
+          "type": "AddField",
+          "addField": {
+            "name": "calc_10_a",
+            "dataType": "N",
+            "isDimension": false,
+            "exp": "[rn_10_a] * 2"
+          }
+        },
+        {
+          "type": "TransformToCalculatedField",
+          "fields": [
+            "meas_01"
+          ],
+          "transformFieldInfo": {
+            "dataType": "N",
+            "exp": "[rn_10_a] + 1"
+          }
+        },
+        {
+          "type": "Refactor",
+          "fields": [
+            "rn_9_b"
+          ],
+          "refactor": {
+            "rename": "rn_10_b"
+          }
+        },
+        {
+          "type": "RemoveField",
+          "fields": [
+            "dim_21"
+          ]
+        },
+        {
+          "type": "AddField",
+          "addField": {
+            "name": "calc_10_b",
+            "dataType": "C",
+            "length": 20,
+            "isDimension": false,
+            "exp": "'10'"
+          }
+        },
+        {
+          "type": "Filter",
+          "fields": [
+            "calc_10_a"
+          ],
+          "filter": "[calc_10_a] > 0"
+        },
+        {
+          "type": "Refactor",
+          "fields": [
+            "calc_10_b"
+          ],
+          "refactor": {
+            "rename": "rc_10_b"
+          }
+        }
+      ],
+      "fields": [
+        {
+          "name": "dim_22",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "dim_23",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "dim_24",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "dim_25",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "dim_26",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "dim_27",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "dim_28",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "dim_29",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "dim_30",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "dim_31",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "rn_10_a",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_01",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "rn_10_b",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_03",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_04",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_05",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_06",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_07",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_08",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_09",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_10",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_11",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_12",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_13",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_14",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_15",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_16",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_17",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_18",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_19",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_20",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_21",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_22",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_23",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_24",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_25",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_26",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_27",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_28",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_29",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_30",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_31",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "calc_0_a",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "rc_0_b",
+          "dataType": "C",
+          "isDimension": false
+        },
+        {
+          "name": "calc_1_a",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "rc_1_b",
+          "dataType": "C",
+          "isDimension": false
+        },
+        {
+          "name": "calc_2_a",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "rc_2_b",
+          "dataType": "C",
+          "isDimension": false
+        },
+        {
+          "name": "calc_3_a",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "rc_3_b",
+          "dataType": "C",
+          "isDimension": false
+        },
+        {
+          "name": "calc_4_a",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "rc_4_b",
+          "dataType": "C",
+          "isDimension": false
+        },
+        {
+          "name": "calc_5_a",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "rc_5_b",
+          "dataType": "C",
+          "isDimension": false
+        },
+        {
+          "name": "calc_6_a",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "rc_6_b",
+          "dataType": "C",
+          "isDimension": false
+        },
+        {
+          "name": "calc_7_a",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "rc_7_b",
+          "dataType": "C",
+          "isDimension": false
+        },
+        {
+          "name": "calc_8_a",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "rc_8_b",
+          "dataType": "C",
+          "isDimension": false
+        },
+        {
+          "name": "calc_9_a",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "rc_9_b",
+          "dataType": "C",
+          "isDimension": false
+        },
+        {
+          "name": "calc_10_a",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "rc_10_b",
+          "dataType": "C",
+          "isDimension": false
+        }
+      ]
+    },
+    {
+      "key": "s11",
+      "type": "Select",
+      "inputs": [
+        "s10"
+      ],
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "dim_22"
+          ],
+          "filter": "[dim_22] != NULL"
+        },
+        {
+          "type": "Refactor",
+          "fields": [
+            "rn_10_a"
+          ],
+          "refactor": {
+            "rename": "rn_11_a"
+          }
+        },
+        {
+          "type": "RemoveField",
+          "fields": [
+            "dim_22"
+          ]
+        },
+        {
+          "type": "AddField",
+          "addField": {
+            "name": "calc_11_a",
+            "dataType": "N",
+            "isDimension": false,
+            "exp": "[rn_11_a] * 2"
+          }
+        },
+        {
+          "type": "TransformToCalculatedField",
+          "fields": [
+            "meas_01"
+          ],
+          "transformFieldInfo": {
+            "dataType": "N",
+            "exp": "[rn_11_a] + 1"
+          }
+        },
+        {
+          "type": "Refactor",
+          "fields": [
+            "rn_10_b"
+          ],
+          "refactor": {
+            "rename": "rn_11_b"
+          }
+        },
+        {
+          "type": "RemoveField",
+          "fields": [
+            "dim_23"
+          ]
+        },
+        {
+          "type": "AddField",
+          "addField": {
+            "name": "calc_11_b",
+            "dataType": "C",
+            "length": 20,
+            "isDimension": false,
+            "exp": "'11'"
+          }
+        },
+        {
+          "type": "Filter",
+          "fields": [
+            "calc_11_a"
+          ],
+          "filter": "[calc_11_a] > 0"
+        },
+        {
+          "type": "Refactor",
+          "fields": [
+            "calc_11_b"
+          ],
+          "refactor": {
+            "rename": "rc_11_b"
+          }
+        }
+      ]
+    },
+    {
+      "key": "s12",
+      "type": "Select",
+      "inputs": [
+        "s11"
+      ],
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "dim_24"
+          ],
+          "filter": "[dim_24] != NULL"
+        },
+        {
+          "type": "Refactor",
+          "fields": [
+            "rn_11_a"
+          ],
+          "refactor": {
+            "rename": "rn_12_a"
+          }
+        },
+        {
+          "type": "RemoveField",
+          "fields": [
+            "dim_24"
+          ]
+        },
+        {
+          "type": "AddField",
+          "addField": {
+            "name": "calc_12_a",
+            "dataType": "N",
+            "isDimension": false,
+            "exp": "[rn_12_a] * 2"
+          }
+        },
+        {
+          "type": "TransformToCalculatedField",
+          "fields": [
+            "meas_01"
+          ],
+          "transformFieldInfo": {
+            "dataType": "N",
+            "exp": "[rn_12_a] + 1"
+          }
+        },
+        {
+          "type": "Refactor",
+          "fields": [
+            "rn_11_b"
+          ],
+          "refactor": {
+            "rename": "rn_12_b"
+          }
+        },
+        {
+          "type": "RemoveField",
+          "fields": [
+            "dim_25"
+          ]
+        },
+        {
+          "type": "AddField",
+          "addField": {
+            "name": "calc_12_b",
+            "dataType": "C",
+            "length": 20,
+            "isDimension": false,
+            "exp": "'12'"
+          }
+        },
+        {
+          "type": "Filter",
+          "fields": [
+            "calc_12_a"
+          ],
+          "filter": "[calc_12_a] > 0"
+        },
+        {
+          "type": "Refactor",
+          "fields": [
+            "calc_12_b"
+          ],
+          "refactor": {
+            "rename": "rc_12_b"
+          }
+        }
+      ]
+    },
+    {
+      "key": "s13",
+      "type": "Select",
+      "inputs": [
+        "s12"
+      ],
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "dim_26"
+          ],
+          "filter": "[dim_26] != NULL"
+        },
+        {
+          "type": "Refactor",
+          "fields": [
+            "rn_12_a"
+          ],
+          "refactor": {
+            "rename": "rn_13_a"
+          }
+        },
+        {
+          "type": "RemoveField",
+          "fields": [
+            "dim_26"
+          ]
+        },
+        {
+          "type": "AddField",
+          "addField": {
+            "name": "calc_13_a",
+            "dataType": "N",
+            "isDimension": false,
+            "exp": "[rn_13_a] * 2"
+          }
+        },
+        {
+          "type": "TransformToCalculatedField",
+          "fields": [
+            "meas_01"
+          ],
+          "transformFieldInfo": {
+            "dataType": "N",
+            "exp": "[rn_13_a] + 1"
+          }
+        },
+        {
+          "type": "Refactor",
+          "fields": [
+            "rn_12_b"
+          ],
+          "refactor": {
+            "rename": "rn_13_b"
+          }
+        },
+        {
+          "type": "RemoveField",
+          "fields": [
+            "dim_27"
+          ]
+        },
+        {
+          "type": "AddField",
+          "addField": {
+            "name": "calc_13_b",
+            "dataType": "C",
+            "length": 20,
+            "isDimension": false,
+            "exp": "'13'"
+          }
+        },
+        {
+          "type": "Filter",
+          "fields": [
+            "calc_13_a"
+          ],
+          "filter": "[calc_13_a] > 0"
+        },
+        {
+          "type": "Refactor",
+          "fields": [
+            "calc_13_b"
+          ],
+          "refactor": {
+            "rename": "rc_13_b"
+          }
+        }
+      ]
+    },
+    {
+      "key": "s14",
+      "type": "Select",
+      "inputs": [
+        "s13"
+      ],
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "dim_28"
+          ],
+          "filter": "[dim_28] != NULL"
+        },
+        {
+          "type": "Refactor",
+          "fields": [
+            "rn_13_a"
+          ],
+          "refactor": {
+            "rename": "rn_14_a"
+          }
+        },
+        {
+          "type": "RemoveField",
+          "fields": [
+            "dim_28"
+          ]
+        },
+        {
+          "type": "AddField",
+          "addField": {
+            "name": "calc_14_a",
+            "dataType": "N",
+            "isDimension": false,
+            "exp": "[rn_14_a] * 2"
+          }
+        },
+        {
+          "type": "TransformToCalculatedField",
+          "fields": [
+            "meas_01"
+          ],
+          "transformFieldInfo": {
+            "dataType": "N",
+            "exp": "[rn_14_a] + 1"
+          }
+        },
+        {
+          "type": "Refactor",
+          "fields": [
+            "rn_13_b"
+          ],
+          "refactor": {
+            "rename": "rn_14_b"
+          }
+        },
+        {
+          "type": "RemoveField",
+          "fields": [
+            "dim_29"
+          ]
+        },
+        {
+          "type": "AddField",
+          "addField": {
+            "name": "calc_14_b",
+            "dataType": "C",
+            "length": 20,
+            "isDimension": false,
+            "exp": "'14'"
+          }
+        },
+        {
+          "type": "Filter",
+          "fields": [
+            "calc_14_a"
+          ],
+          "filter": "[calc_14_a] > 0"
+        },
+        {
+          "type": "Refactor",
+          "fields": [
+            "calc_14_b"
+          ],
+          "refactor": {
+            "rename": "rc_14_b"
+          }
+        }
+      ],
+      "fields": [
+        {
+          "name": "dim_30",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "dim_31",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "rn_14_a",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_01",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "rn_14_b",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_03",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_04",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_05",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_06",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_07",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_08",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_09",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_10",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_11",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_12",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_13",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_14",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_15",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_16",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_17",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_18",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_19",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_20",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_21",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_22",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_23",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_24",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_25",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_26",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_27",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_28",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_29",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_30",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_31",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "calc_0_a",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "rc_0_b",
+          "dataType": "C",
+          "isDimension": false
+        },
+        {
+          "name": "calc_1_a",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "rc_1_b",
+          "dataType": "C",
+          "isDimension": false
+        },
+        {
+          "name": "calc_2_a",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "rc_2_b",
+          "dataType": "C",
+          "isDimension": false
+        },
+        {
+          "name": "calc_3_a",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "rc_3_b",
+          "dataType": "C",
+          "isDimension": false
+        },
+        {
+          "name": "calc_4_a",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "rc_4_b",
+          "dataType": "C",
+          "isDimension": false
+        },
+        {
+          "name": "calc_5_a",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "rc_5_b",
+          "dataType": "C",
+          "isDimension": false
+        },
+        {
+          "name": "calc_6_a",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "rc_6_b",
+          "dataType": "C",
+          "isDimension": false
+        },
+        {
+          "name": "calc_7_a",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "rc_7_b",
+          "dataType": "C",
+          "isDimension": false
+        },
+        {
+          "name": "calc_8_a",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "rc_8_b",
+          "dataType": "C",
+          "isDimension": false
+        },
+        {
+          "name": "calc_9_a",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "rc_9_b",
+          "dataType": "C",
+          "isDimension": false
+        },
+        {
+          "name": "calc_10_a",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "rc_10_b",
+          "dataType": "C",
+          "isDimension": false
+        },
+        {
+          "name": "calc_11_a",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "rc_11_b",
+          "dataType": "C",
+          "isDimension": false
+        },
+        {
+          "name": "calc_12_a",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "rc_12_b",
+          "dataType": "C",
+          "isDimension": false
+        },
+        {
+          "name": "calc_13_a",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "rc_13_b",
+          "dataType": "C",
+          "isDimension": false
+        },
+        {
+          "name": "calc_14_a",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "rc_14_b",
+          "dataType": "C",
+          "isDimension": false
+        }
+      ]
+    },
+    {
+      "key": "s15",
+      "type": "Select",
+      "inputs": [
+        "s14"
+      ],
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "dim_30"
+          ],
+          "filter": "[dim_30] != NULL"
+        },
+        {
+          "type": "Refactor",
+          "fields": [
+            "rn_14_a"
+          ],
+          "refactor": {
+            "rename": "rn_15_a"
+          }
+        },
+        {
+          "type": "RemoveField",
+          "fields": [
+            "dim_30"
+          ]
+        },
+        {
+          "type": "AddField",
+          "addField": {
+            "name": "calc_15_a",
+            "dataType": "N",
+            "isDimension": false,
+            "exp": "[rn_15_a] * 2"
+          }
+        },
+        {
+          "type": "TransformToCalculatedField",
+          "fields": [
+            "meas_01"
+          ],
+          "transformFieldInfo": {
+            "dataType": "N",
+            "exp": "[rn_15_a] + 1"
+          }
+        },
+        {
+          "type": "Refactor",
+          "fields": [
+            "rn_14_b"
+          ],
+          "refactor": {
+            "rename": "rn_15_b"
+          }
+        },
+        {
+          "type": "RemoveField",
+          "fields": [
+            "dim_31"
+          ]
+        },
+        {
+          "type": "AddField",
+          "addField": {
+            "name": "calc_15_b",
+            "dataType": "C",
+            "length": 20,
+            "isDimension": false,
+            "exp": "'15'"
+          }
+        },
+        {
+          "type": "Filter",
+          "fields": [
+            "calc_15_a"
+          ],
+          "filter": "[calc_15_a] > 0"
+        },
+        {
+          "type": "SplitField",
+          "fields": [
+            "calc_15_b"
+          ],
+          "split": {
+            "splitString": ",",
+            "splitType": "Column"
+          }
+        }
+      ],
+      "fields": [
+        {
+          "name": "rn_15_a",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_01",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "rn_15_b",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_03",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_04",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_05",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_06",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_07",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_08",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_09",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_10",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_11",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_12",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_13",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_14",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_15",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_16",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_17",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_18",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_19",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_20",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_21",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_22",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_23",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_24",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_25",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_26",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_27",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_28",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_29",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_30",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "meas_31",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "calc_0_a",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "rc_0_b",
+          "dataType": "C",
+          "isDimension": false
+        },
+        {
+          "name": "calc_1_a",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "rc_1_b",
+          "dataType": "C",
+          "isDimension": false
+        },
+        {
+          "name": "calc_2_a",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "rc_2_b",
+          "dataType": "C",
+          "isDimension": false
+        },
+        {
+          "name": "calc_3_a",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "rc_3_b",
+          "dataType": "C",
+          "isDimension": false
+        },
+        {
+          "name": "calc_4_a",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "rc_4_b",
+          "dataType": "C",
+          "isDimension": false
+        },
+        {
+          "name": "calc_5_a",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "rc_5_b",
+          "dataType": "C",
+          "isDimension": false
+        },
+        {
+          "name": "calc_6_a",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "rc_6_b",
+          "dataType": "C",
+          "isDimension": false
+        },
+        {
+          "name": "calc_7_a",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "rc_7_b",
+          "dataType": "C",
+          "isDimension": false
+        },
+        {
+          "name": "calc_8_a",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "rc_8_b",
+          "dataType": "C",
+          "isDimension": false
+        },
+        {
+          "name": "calc_9_a",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "rc_9_b",
+          "dataType": "C",
+          "isDimension": false
+        },
+        {
+          "name": "calc_10_a",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "rc_10_b",
+          "dataType": "C",
+          "isDimension": false
+        },
+        {
+          "name": "calc_11_a",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "rc_11_b",
+          "dataType": "C",
+          "isDimension": false
+        },
+        {
+          "name": "calc_12_a",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "rc_12_b",
+          "dataType": "C",
+          "isDimension": false
+        },
+        {
+          "name": "calc_13_a",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "rc_13_b",
+          "dataType": "C",
+          "isDimension": false
+        },
+        {
+          "name": "calc_14_a",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "rc_14_b",
+          "dataType": "C",
+          "isDimension": false
+        },
+        {
+          "name": "calc_15_a",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "calc_15_b",
+          "dataType": "C",
+          "isDimension": false
+        }
+      ]
+    },
+    {
+      "key": "out",
+      "type": "Output",
+      "inputs": [
+        "s15"
+      ]
+    }
+  ]
+}

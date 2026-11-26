@@ -1,0 +1,494 @@
+{
+  "format": 1,
+  "version": "4.19.0",
+  "properties": {
+    "datasource": "defdw",
+    "extractDataEnabled": false
+  },
+  "nodes": [
+    {
+      "key": "src",
+      "type": "FileInput",
+      "alias": "src",
+      "config": {
+        "fileName": "fanout.xlsx#S"
+      },
+      "fields": [
+        {
+          "name": "dim_00",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "measure_01",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "measure_02",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "measure_03",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "dim_04",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "measure_05",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "measure_06",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "measure_07",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "dim_08",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "measure_09",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "measure_10",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "measure_11",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "dim_12",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "measure_13",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "measure_14",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "measure_15",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "dim_16",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "measure_17",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "measure_18",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "measure_19",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "dim_20",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "measure_21",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "measure_22",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "measure_23",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "dim_24",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "measure_25",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "measure_26",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "measure_27",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "dim_28",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "measure_29",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "measure_30",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "measure_31",
+          "dataType": "N",
+          "isDimension": false
+        }
+      ]
+    },
+    {
+      "key": "b0",
+      "type": "Select",
+      "inputs": [
+        "src"
+      ],
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "dim_00"
+          ],
+          "filter": "[dim_00] != NULL"
+        }
+      ]
+    },
+    {
+      "key": "b1",
+      "type": "Select",
+      "inputs": [
+        "src"
+      ],
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "dim_00"
+          ],
+          "filter": "[dim_00] != NULL"
+        }
+      ]
+    },
+    {
+      "key": "b2",
+      "type": "Select",
+      "inputs": [
+        "src"
+      ],
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "dim_00"
+          ],
+          "filter": "[dim_00] != NULL"
+        }
+      ]
+    },
+    {
+      "key": "b3",
+      "type": "Select",
+      "inputs": [
+        "src"
+      ],
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "dim_00"
+          ],
+          "filter": "[dim_00] != NULL"
+        }
+      ]
+    },
+    {
+      "key": "b4",
+      "type": "Select",
+      "inputs": [
+        "src"
+      ],
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "dim_00"
+          ],
+          "filter": "[dim_00] != NULL"
+        }
+      ]
+    },
+    {
+      "key": "b5",
+      "type": "Select",
+      "inputs": [
+        "src"
+      ],
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "dim_00"
+          ],
+          "filter": "[dim_00] != NULL"
+        }
+      ]
+    },
+    {
+      "key": "b6",
+      "type": "Select",
+      "inputs": [
+        "src"
+      ],
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "dim_00"
+          ],
+          "filter": "[dim_00] != NULL"
+        }
+      ]
+    },
+    {
+      "key": "b7",
+      "type": "Select",
+      "inputs": [
+        "src"
+      ],
+      "steps": [
+        {
+          "type": "Filter",
+          "fields": [
+            "dim_00"
+          ],
+          "filter": "[dim_00] != NULL"
+        }
+      ]
+    },
+    {
+      "key": "u",
+      "type": "Union",
+      "inputs": [
+        "b0",
+        "b1",
+        "b2",
+        "b3",
+        "b4",
+        "b5",
+        "b6",
+        "b7"
+      ],
+      "config": {
+        "unionType": "UnionAll"
+      },
+      "fields": [
+        {
+          "name": "dim_00",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "measure_01",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "measure_02",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "measure_03",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "dim_04",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "measure_05",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "measure_06",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "measure_07",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "dim_08",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "measure_09",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "measure_10",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "measure_11",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "dim_12",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "measure_13",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "measure_14",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "measure_15",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "dim_16",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "measure_17",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "measure_18",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "measure_19",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "dim_20",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "measure_21",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "measure_22",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "measure_23",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "dim_24",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "measure_25",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "measure_26",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "measure_27",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "dim_28",
+          "dataType": "C",
+          "isDimension": true
+        },
+        {
+          "name": "measure_29",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "measure_30",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "measure_31",
+          "dataType": "N",
+          "isDimension": false
+        }
+      ]
+    },
+    {
+      "key": "out",
+      "type": "Output",
+      "inputs": [
+        "u"
+      ]
+    }
+  ]
+}

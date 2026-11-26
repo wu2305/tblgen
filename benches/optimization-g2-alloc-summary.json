@@ -1,0 +1,1066 @@
+{
+  "schema": "tblgen-g2-alloc-summary/v1",
+  "pair_count": 8,
+  "order": "AB/BA alternating",
+  "samples_per_run": 10,
+  "warmup_per_run": 3,
+  "cases": [
+    {
+      "name": "small",
+      "alloc_count": {
+        "base_median_of_run_medians": 872.0,
+        "cand_median_of_run_medians": 872.0,
+        "median_pair_delta": 0.0,
+        "min_pair_delta": 0.0,
+        "max_pair_delta": 0.0,
+        "median_pair_ratio": 1.0,
+        "min_pair_ratio": 1.0,
+        "max_pair_ratio": 1.0,
+        "base_run_medians": [
+          872.0,
+          872.0,
+          872.0,
+          872.0,
+          872.0,
+          872.0,
+          872.0,
+          872.0
+        ],
+        "cand_run_medians": [
+          872.0,
+          872.0,
+          872.0,
+          872.0,
+          872.0,
+          872.0,
+          872.0,
+          872.0
+        ],
+        "pair_delta": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "alloc_bytes": {
+        "base_median_of_run_medians": 39733.0,
+        "cand_median_of_run_medians": 39733.0,
+        "median_pair_delta": 0.0,
+        "min_pair_delta": 0.0,
+        "max_pair_delta": 0.0,
+        "median_pair_ratio": 1.0,
+        "min_pair_ratio": 1.0,
+        "max_pair_ratio": 1.0,
+        "base_run_medians": [
+          39733.0,
+          39733.0,
+          39733.0,
+          39733.0,
+          39733.0,
+          39733.0,
+          39733.0,
+          39733.0
+        ],
+        "cand_run_medians": [
+          39733.0,
+          39733.0,
+          39733.0,
+          39733.0,
+          39733.0,
+          39733.0,
+          39733.0,
+          39733.0
+        ],
+        "pair_delta": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "equivalence": {
+        "wire_fingerprint": "fnv1a64:0648c6995c55eb05",
+        "diag_fingerprint": "fnv1a64:09612b07b5ecb5a5",
+        "diag_count": 0
+      }
+    },
+    {
+      "name": "experiment",
+      "alloc_count": {
+        "base_median_of_run_medians": 41344.0,
+        "cand_median_of_run_medians": 41199.0,
+        "median_pair_delta": -145.0,
+        "min_pair_delta": -145.0,
+        "max_pair_delta": -145.0,
+        "median_pair_ratio": 0.9964928405572755,
+        "min_pair_ratio": 0.9964928405572755,
+        "max_pair_ratio": 0.9964928405572755,
+        "base_run_medians": [
+          41344.0,
+          41344.0,
+          41344.0,
+          41344.0,
+          41344.0,
+          41344.0,
+          41344.0,
+          41344.0
+        ],
+        "cand_run_medians": [
+          41199.0,
+          41199.0,
+          41199.0,
+          41199.0,
+          41199.0,
+          41199.0,
+          41199.0,
+          41199.0
+        ],
+        "pair_delta": [
+          -145.0,
+          -145.0,
+          -145.0,
+          -145.0,
+          -145.0,
+          -145.0,
+          -145.0,
+          -145.0
+        ]
+      },
+      "alloc_bytes": {
+        "base_median_of_run_medians": 1498806.0,
+        "cand_median_of_run_medians": 1498471.0,
+        "median_pair_delta": -335.0,
+        "min_pair_delta": -335.0,
+        "max_pair_delta": -335.0,
+        "median_pair_ratio": 0.999776488751713,
+        "min_pair_ratio": 0.999776488751713,
+        "max_pair_ratio": 0.999776488751713,
+        "base_run_medians": [
+          1498806.0,
+          1498806.0,
+          1498806.0,
+          1498806.0,
+          1498806.0,
+          1498806.0,
+          1498806.0,
+          1498806.0
+        ],
+        "cand_run_medians": [
+          1498471.0,
+          1498471.0,
+          1498471.0,
+          1498471.0,
+          1498471.0,
+          1498471.0,
+          1498471.0,
+          1498471.0
+        ],
+        "pair_delta": [
+          -335.0,
+          -335.0,
+          -335.0,
+          -335.0,
+          -335.0,
+          -335.0,
+          -335.0,
+          -335.0
+        ]
+      },
+      "equivalence": {
+        "wire_fingerprint": "fnv1a64:514638947d4cd532",
+        "diag_fingerprint": "fnv1a64:e03be87ae4881054",
+        "diag_count": 10
+      }
+    },
+    {
+      "name": "wide",
+      "alloc_count": {
+        "base_median_of_run_medians": 108944.0,
+        "cand_median_of_run_medians": 108944.0,
+        "median_pair_delta": 0.0,
+        "min_pair_delta": 0.0,
+        "max_pair_delta": 0.0,
+        "median_pair_ratio": 1.0,
+        "min_pair_ratio": 1.0,
+        "max_pair_ratio": 1.0,
+        "base_run_medians": [
+          108944.0,
+          108944.0,
+          108944.0,
+          108944.0,
+          108944.0,
+          108944.0,
+          108944.0,
+          108944.0
+        ],
+        "cand_run_medians": [
+          108944.0,
+          108944.0,
+          108944.0,
+          108944.0,
+          108944.0,
+          108944.0,
+          108944.0,
+          108944.0
+        ],
+        "pair_delta": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "alloc_bytes": {
+        "base_median_of_run_medians": 6389354.0,
+        "cand_median_of_run_medians": 6389354.0,
+        "median_pair_delta": 0.0,
+        "min_pair_delta": 0.0,
+        "max_pair_delta": 0.0,
+        "median_pair_ratio": 1.0,
+        "min_pair_ratio": 1.0,
+        "max_pair_ratio": 1.0,
+        "base_run_medians": [
+          6389354.0,
+          6389354.0,
+          6389354.0,
+          6389354.0,
+          6389354.0,
+          6389354.0,
+          6389354.0,
+          6389354.0
+        ],
+        "cand_run_medians": [
+          6389354.0,
+          6389354.0,
+          6389354.0,
+          6389354.0,
+          6389354.0,
+          6389354.0,
+          6389354.0,
+          6389354.0
+        ],
+        "pair_delta": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "equivalence": {
+        "wire_fingerprint": "fnv1a64:b1ba761d06f55fce",
+        "diag_fingerprint": "fnv1a64:09612b07b5ecb5a5",
+        "diag_count": 0
+      }
+    },
+    {
+      "name": "deep",
+      "alloc_count": {
+        "base_median_of_run_medians": 31619.0,
+        "cand_median_of_run_medians": 31619.0,
+        "median_pair_delta": 0.0,
+        "min_pair_delta": 0.0,
+        "max_pair_delta": 0.0,
+        "median_pair_ratio": 1.0,
+        "min_pair_ratio": 1.0,
+        "max_pair_ratio": 1.0,
+        "base_run_medians": [
+          31619.0,
+          31619.0,
+          31619.0,
+          31619.0,
+          31619.0,
+          31619.0,
+          31619.0,
+          31619.0
+        ],
+        "cand_run_medians": [
+          31619.0,
+          31619.0,
+          31619.0,
+          31619.0,
+          31619.0,
+          31619.0,
+          31619.0,
+          31619.0
+        ],
+        "pair_delta": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "alloc_bytes": {
+        "base_median_of_run_medians": 1485388.0,
+        "cand_median_of_run_medians": 1485388.0,
+        "median_pair_delta": 0.0,
+        "min_pair_delta": 0.0,
+        "max_pair_delta": 0.0,
+        "median_pair_ratio": 1.0,
+        "min_pair_ratio": 1.0,
+        "max_pair_ratio": 1.0,
+        "base_run_medians": [
+          1485388.0,
+          1485388.0,
+          1485388.0,
+          1485388.0,
+          1485388.0,
+          1485388.0,
+          1485388.0,
+          1485388.0
+        ],
+        "cand_run_medians": [
+          1485388.0,
+          1485388.0,
+          1485388.0,
+          1485388.0,
+          1485388.0,
+          1485388.0,
+          1485388.0,
+          1485388.0
+        ],
+        "pair_delta": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "equivalence": {
+        "wire_fingerprint": "fnv1a64:a8f3e23348a809da",
+        "diag_fingerprint": "fnv1a64:09612b07b5ecb5a5",
+        "diag_count": 0
+      }
+    },
+    {
+      "name": "fan-in",
+      "alloc_count": {
+        "base_median_of_run_medians": 8259.0,
+        "cand_median_of_run_medians": 8259.5,
+        "median_pair_delta": 0.0,
+        "min_pair_delta": -1.0,
+        "max_pair_delta": 3.0,
+        "median_pair_ratio": 1.0,
+        "min_pair_ratio": 0.9998789346246973,
+        "max_pair_ratio": 1.000363284088157,
+        "base_run_medians": [
+          8260.0,
+          8258.0,
+          8259.0,
+          8259.0,
+          8259.0,
+          8260.0,
+          8261.0,
+          8258.0
+        ],
+        "cand_run_medians": [
+          8260.0,
+          8259.0,
+          8259.0,
+          8261.0,
+          8259.0,
+          8259.0,
+          8261.0,
+          8261.0
+        ],
+        "pair_delta": [
+          0.0,
+          1.0,
+          0.0,
+          2.0,
+          0.0,
+          -1.0,
+          0.0,
+          3.0
+        ]
+      },
+      "alloc_bytes": {
+        "base_median_of_run_medians": 412366.0,
+        "cand_median_of_run_medians": 412367.0,
+        "median_pair_delta": 0.0,
+        "min_pair_delta": -2.0,
+        "max_pair_delta": 6.0,
+        "median_pair_ratio": 1.0,
+        "min_pair_ratio": 0.9999951499631398,
+        "max_pair_ratio": 1.0000145502517193,
+        "base_run_medians": [
+          412368.0,
+          412364.0,
+          412366.0,
+          412366.0,
+          412366.0,
+          412368.0,
+          412370.0,
+          412364.0
+        ],
+        "cand_run_medians": [
+          412368.0,
+          412366.0,
+          412366.0,
+          412370.0,
+          412366.0,
+          412366.0,
+          412370.0,
+          412370.0
+        ],
+        "pair_delta": [
+          0.0,
+          2.0,
+          0.0,
+          4.0,
+          0.0,
+          -2.0,
+          0.0,
+          6.0
+        ]
+      },
+      "equivalence": {
+        "wire_fingerprint": "fnv1a64:1b61cb53bebbeeb1",
+        "diag_fingerprint": "fnv1a64:09612b07b5ecb5a5",
+        "diag_count": 0
+      }
+    },
+    {
+      "name": "fan-out",
+      "alloc_count": {
+        "base_median_of_run_medians": 16453.0,
+        "cand_median_of_run_medians": 16453.0,
+        "median_pair_delta": 0.0,
+        "min_pair_delta": 0.0,
+        "max_pair_delta": 0.0,
+        "median_pair_ratio": 1.0,
+        "min_pair_ratio": 1.0,
+        "max_pair_ratio": 1.0,
+        "base_run_medians": [
+          16453.0,
+          16453.0,
+          16453.0,
+          16453.0,
+          16453.0,
+          16453.0,
+          16453.0,
+          16453.0
+        ],
+        "cand_run_medians": [
+          16453.0,
+          16453.0,
+          16453.0,
+          16453.0,
+          16453.0,
+          16453.0,
+          16453.0,
+          16453.0
+        ],
+        "pair_delta": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "alloc_bytes": {
+        "base_median_of_run_medians": 843366.0,
+        "cand_median_of_run_medians": 843366.0,
+        "median_pair_delta": 0.0,
+        "min_pair_delta": 0.0,
+        "max_pair_delta": 0.0,
+        "median_pair_ratio": 1.0,
+        "min_pair_ratio": 1.0,
+        "max_pair_ratio": 1.0,
+        "base_run_medians": [
+          843366.0,
+          843366.0,
+          843366.0,
+          843366.0,
+          843366.0,
+          843366.0,
+          843366.0,
+          843366.0
+        ],
+        "cand_run_medians": [
+          843366.0,
+          843366.0,
+          843366.0,
+          843366.0,
+          843366.0,
+          843366.0,
+          843366.0,
+          843366.0
+        ],
+        "pair_delta": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "equivalence": {
+        "wire_fingerprint": "fnv1a64:e48b7924cfe01a26",
+        "diag_fingerprint": "fnv1a64:09612b07b5ecb5a5",
+        "diag_count": 0
+      }
+    },
+    {
+      "name": "union-map",
+      "alloc_count": {
+        "base_median_of_run_medians": 19927.0,
+        "cand_median_of_run_medians": 19927.0,
+        "median_pair_delta": 0.0,
+        "min_pair_delta": 0.0,
+        "max_pair_delta": 0.0,
+        "median_pair_ratio": 1.0,
+        "min_pair_ratio": 1.0,
+        "max_pair_ratio": 1.0,
+        "base_run_medians": [
+          19927.0,
+          19927.0,
+          19927.0,
+          19927.0,
+          19927.0,
+          19927.0,
+          19927.0,
+          19927.0
+        ],
+        "cand_run_medians": [
+          19927.0,
+          19927.0,
+          19927.0,
+          19927.0,
+          19927.0,
+          19927.0,
+          19927.0,
+          19927.0
+        ],
+        "pair_delta": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "alloc_bytes": {
+        "base_median_of_run_medians": 987585.0,
+        "cand_median_of_run_medians": 987585.0,
+        "median_pair_delta": 0.0,
+        "min_pair_delta": 0.0,
+        "max_pair_delta": 0.0,
+        "median_pair_ratio": 1.0,
+        "min_pair_ratio": 1.0,
+        "max_pair_ratio": 1.0,
+        "base_run_medians": [
+          987585.0,
+          987585.0,
+          987585.0,
+          987585.0,
+          987585.0,
+          987585.0,
+          987585.0,
+          987585.0
+        ],
+        "cand_run_medians": [
+          987585.0,
+          987585.0,
+          987585.0,
+          987585.0,
+          987585.0,
+          987585.0,
+          987585.0,
+          987585.0
+        ],
+        "pair_delta": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "equivalence": {
+        "wire_fingerprint": "fnv1a64:72bfdba4d4fa46a9",
+        "diag_fingerprint": "fnv1a64:09612b07b5ecb5a5",
+        "diag_count": 0
+      }
+    },
+    {
+      "name": "error-dense",
+      "alloc_count": {
+        "base_median_of_run_medians": 15304.0,
+        "cand_median_of_run_medians": 15304.0,
+        "median_pair_delta": 0.0,
+        "min_pair_delta": 0.0,
+        "max_pair_delta": 0.0,
+        "median_pair_ratio": 1.0,
+        "min_pair_ratio": 1.0,
+        "max_pair_ratio": 1.0,
+        "base_run_medians": [
+          15304.0,
+          15304.0,
+          15304.0,
+          15304.0,
+          15304.0,
+          15304.0,
+          15304.0,
+          15304.0
+        ],
+        "cand_run_medians": [
+          15304.0,
+          15304.0,
+          15304.0,
+          15304.0,
+          15304.0,
+          15304.0,
+          15304.0,
+          15304.0
+        ],
+        "pair_delta": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "alloc_bytes": {
+        "base_median_of_run_medians": 871841.0,
+        "cand_median_of_run_medians": 871841.0,
+        "median_pair_delta": 0.0,
+        "min_pair_delta": 0.0,
+        "max_pair_delta": 0.0,
+        "median_pair_ratio": 1.0,
+        "min_pair_ratio": 1.0,
+        "max_pair_ratio": 1.0,
+        "base_run_medians": [
+          871841.0,
+          871841.0,
+          871841.0,
+          871841.0,
+          871841.0,
+          871841.0,
+          871841.0,
+          871841.0
+        ],
+        "cand_run_medians": [
+          871841.0,
+          871841.0,
+          871841.0,
+          871841.0,
+          871841.0,
+          871841.0,
+          871841.0,
+          871841.0
+        ],
+        "pair_delta": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "equivalence": {
+        "wire_fingerprint": "fnv1a64:5b9bc4ba528108e4",
+        "diag_fingerprint": "fnv1a64:a92000f67730ccf5",
+        "diag_count": 192
+      }
+    },
+    {
+      "name": "select-heavy",
+      "alloc_count": {
+        "base_median_of_run_medians": 173744.0,
+        "cand_median_of_run_medians": 157108.0,
+        "median_pair_delta": -16636.0,
+        "min_pair_delta": -16636.0,
+        "max_pair_delta": -16636.0,
+        "median_pair_ratio": 0.9042499309328668,
+        "min_pair_ratio": 0.9042499309328668,
+        "max_pair_ratio": 0.9042499309328668,
+        "base_run_medians": [
+          173744.0,
+          173744.0,
+          173744.0,
+          173744.0,
+          173744.0,
+          173744.0,
+          173744.0,
+          173744.0
+        ],
+        "cand_run_medians": [
+          157108.0,
+          157108.0,
+          157108.0,
+          157108.0,
+          157108.0,
+          157108.0,
+          157108.0,
+          157108.0
+        ],
+        "pair_delta": [
+          -16636.0,
+          -16636.0,
+          -16636.0,
+          -16636.0,
+          -16636.0,
+          -16636.0,
+          -16636.0,
+          -16636.0
+        ]
+      },
+      "alloc_bytes": {
+        "base_median_of_run_medians": 4039936.0,
+        "cand_median_of_run_medians": 3965168.0,
+        "median_pair_delta": -74768.0,
+        "min_pair_delta": -74768.0,
+        "max_pair_delta": -74768.0,
+        "median_pair_ratio": 0.9814927761231861,
+        "min_pair_ratio": 0.9814927761231861,
+        "max_pair_ratio": 0.9814927761231861,
+        "base_run_medians": [
+          4039936.0,
+          4039936.0,
+          4039936.0,
+          4039936.0,
+          4039936.0,
+          4039936.0,
+          4039936.0,
+          4039936.0
+        ],
+        "cand_run_medians": [
+          3965168.0,
+          3965168.0,
+          3965168.0,
+          3965168.0,
+          3965168.0,
+          3965168.0,
+          3965168.0,
+          3965168.0
+        ],
+        "pair_delta": [
+          -74768.0,
+          -74768.0,
+          -74768.0,
+          -74768.0,
+          -74768.0,
+          -74768.0,
+          -74768.0,
+          -74768.0
+        ]
+      },
+      "equivalence": {
+        "wire_fingerprint": "fnv1a64:8c1bf19c892f8dd4",
+        "diag_fingerprint": "fnv1a64:09612b07b5ecb5a5",
+        "diag_count": 0
+      }
+    },
+    {
+      "name": "select-explicit-small",
+      "alloc_count": {
+        "base_median_of_run_medians": 1719.0,
+        "cand_median_of_run_medians": 1536.0,
+        "median_pair_delta": -183.0,
+        "min_pair_delta": -183.0,
+        "max_pair_delta": -183.0,
+        "median_pair_ratio": 0.893542757417103,
+        "min_pair_ratio": 0.893542757417103,
+        "max_pair_ratio": 0.893542757417103,
+        "base_run_medians": [
+          1719.0,
+          1719.0,
+          1719.0,
+          1719.0,
+          1719.0,
+          1719.0,
+          1719.0,
+          1719.0
+        ],
+        "cand_run_medians": [
+          1536.0,
+          1536.0,
+          1536.0,
+          1536.0,
+          1536.0,
+          1536.0,
+          1536.0,
+          1536.0
+        ],
+        "pair_delta": [
+          -183.0,
+          -183.0,
+          -183.0,
+          -183.0,
+          -183.0,
+          -183.0,
+          -183.0,
+          -183.0
+        ]
+      },
+      "alloc_bytes": {
+        "base_median_of_run_medians": 74212.0,
+        "cand_median_of_run_medians": 74586.0,
+        "median_pair_delta": 374.0,
+        "min_pair_delta": 374.0,
+        "max_pair_delta": 374.0,
+        "median_pair_ratio": 1.0050396162345712,
+        "min_pair_ratio": 1.0050396162345712,
+        "max_pair_ratio": 1.0050396162345712,
+        "base_run_medians": [
+          74212.0,
+          74212.0,
+          74212.0,
+          74212.0,
+          74212.0,
+          74212.0,
+          74212.0,
+          74212.0
+        ],
+        "cand_run_medians": [
+          74586.0,
+          74586.0,
+          74586.0,
+          74586.0,
+          74586.0,
+          74586.0,
+          74586.0,
+          74586.0
+        ],
+        "pair_delta": [
+          374.0,
+          374.0,
+          374.0,
+          374.0,
+          374.0,
+          374.0,
+          374.0,
+          374.0
+        ]
+      },
+      "equivalence": {
+        "wire_fingerprint": "fnv1a64:544fdd04d04afd85",
+        "diag_fingerprint": "fnv1a64:09612b07b5ecb5a5",
+        "diag_count": 0
+      }
+    },
+    {
+      "name": "select-multiset",
+      "alloc_count": {
+        "base_median_of_run_medians": 236139.0,
+        "cand_median_of_run_medians": 39788.0,
+        "median_pair_delta": -196351.0,
+        "min_pair_delta": -196351.0,
+        "max_pair_delta": -196351.0,
+        "median_pair_ratio": 0.1684939802404516,
+        "min_pair_ratio": 0.1684939802404516,
+        "max_pair_ratio": 0.1684939802404516,
+        "base_run_medians": [
+          236139.0,
+          236139.0,
+          236139.0,
+          236139.0,
+          236139.0,
+          236139.0,
+          236139.0,
+          236139.0
+        ],
+        "cand_run_medians": [
+          39788.0,
+          39788.0,
+          39788.0,
+          39788.0,
+          39788.0,
+          39788.0,
+          39788.0,
+          39788.0
+        ],
+        "pair_delta": [
+          -196351.0,
+          -196351.0,
+          -196351.0,
+          -196351.0,
+          -196351.0,
+          -196351.0,
+          -196351.0,
+          -196351.0
+        ]
+      },
+      "alloc_bytes": {
+        "base_median_of_run_medians": 2769509.0,
+        "cand_median_of_run_medians": 2014112.0,
+        "median_pair_delta": -755397.0,
+        "min_pair_delta": -755397.0,
+        "max_pair_delta": -755397.0,
+        "median_pair_ratio": 0.7272451542854708,
+        "min_pair_ratio": 0.7272451542854708,
+        "max_pair_ratio": 0.7272451542854708,
+        "base_run_medians": [
+          2769509.0,
+          2769509.0,
+          2769509.0,
+          2769509.0,
+          2769509.0,
+          2769509.0,
+          2769509.0,
+          2769509.0
+        ],
+        "cand_run_medians": [
+          2014112.0,
+          2014112.0,
+          2014112.0,
+          2014112.0,
+          2014112.0,
+          2014112.0,
+          2014112.0,
+          2014112.0
+        ],
+        "pair_delta": [
+          -755397.0,
+          -755397.0,
+          -755397.0,
+          -755397.0,
+          -755397.0,
+          -755397.0,
+          -755397.0,
+          -755397.0
+        ]
+      },
+      "equivalence": {
+        "wire_fingerprint": "fnv1a64:faf66d4978c3ce42",
+        "diag_fingerprint": "fnv1a64:09612b07b5ecb5a5",
+        "diag_count": 0
+      }
+    },
+    {
+      "name": "select-rawstep",
+      "alloc_count": {
+        "base_median_of_run_medians": 1411.0,
+        "cand_median_of_run_medians": 1411.0,
+        "median_pair_delta": 0.0,
+        "min_pair_delta": 0.0,
+        "max_pair_delta": 0.0,
+        "median_pair_ratio": 1.0,
+        "min_pair_ratio": 1.0,
+        "max_pair_ratio": 1.0,
+        "base_run_medians": [
+          1411.0,
+          1411.0,
+          1411.0,
+          1411.0,
+          1411.0,
+          1411.0,
+          1411.0,
+          1411.0
+        ],
+        "cand_run_medians": [
+          1411.0,
+          1411.0,
+          1411.0,
+          1411.0,
+          1411.0,
+          1411.0,
+          1411.0,
+          1411.0
+        ],
+        "pair_delta": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "alloc_bytes": {
+        "base_median_of_run_medians": 83807.0,
+        "cand_median_of_run_medians": 83807.0,
+        "median_pair_delta": 0.0,
+        "min_pair_delta": 0.0,
+        "max_pair_delta": 0.0,
+        "median_pair_ratio": 1.0,
+        "min_pair_ratio": 1.0,
+        "max_pair_ratio": 1.0,
+        "base_run_medians": [
+          83807.0,
+          83807.0,
+          83807.0,
+          83807.0,
+          83807.0,
+          83807.0,
+          83807.0,
+          83807.0
+        ],
+        "cand_run_medians": [
+          83807.0,
+          83807.0,
+          83807.0,
+          83807.0,
+          83807.0,
+          83807.0,
+          83807.0,
+          83807.0
+        ],
+        "pair_delta": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "equivalence": {
+        "wire_fingerprint": "fnv1a64:fbc3df9943e954ed",
+        "diag_fingerprint": "fnv1a64:09612b07b5ecb5a5",
+        "diag_count": 0
+      }
+    }
+  ],
+  "fingerprint_issues": []
+}
