@@ -2695,19 +2695,7 @@ fn check_select_names(
         .iter()
         .filter_map(|f| f.get("name").and_then(Value::as_str).map(str::to_string))
         .collect();
-    let mut remaining = current.clone();
-    let mut matched = true;
-    'outer: for en in &exp_names {
-        for (i, dn) in remaining.iter().enumerate() {
-            if field_eq(en, dn) {
-                remaining.remove(i);
-                continue 'outer;
-            }
-        }
-        matched = false;
-        break;
-    }
-    if !matched || !remaining.is_empty() {
+    if !name_multiset_eq(&exp_names, &current) {
         diags.push(Diag::spec(
             format!("/nodes/{}/fields", d.idx),
             "field.mismatch",
@@ -4687,17 +4675,23 @@ fn name_multiset_eq(a: &[String], b: &[String]) -> bool {
     if a.len() != b.len() {
         return false;
     }
-    let mut remaining = b.to_vec();
-    'outer: for x in a {
-        for (i, y) in remaining.iter().enumerate() {
-            if field_eq(x, y) {
-                remaining.remove(i);
-                continue 'outer;
-            }
-        }
-        return false;
+    // Counts, not a set: folded-name multiplicity must match exactly. With
+    // equal lengths, matching every `a` entry consumes all `b` counts.
+    let mut counts: HashMap<String, usize> = HashMap::with_capacity(b.len());
+    for y in b {
+        *counts.entry(y.to_uppercase()).or_insert(0) += 1;
     }
-    remaining.is_empty()
+    for x in a {
+        let key = x.to_uppercase();
+        let Some(count) = counts.get_mut(&key) else {
+            return false;
+        };
+        if *count == 0 {
+            return false;
+        }
+        *count -= 1;
+    }
+    true
 }
 
 /// Select field computation: the sequential simulation provides lineage,
@@ -4834,18 +4828,22 @@ fn compute_select_fields(
                     )),
                 );
             }
+            // First folded-name index preserves the previous linear scan's
+            // first match; declared order still determines output order.
+            let mut sim_by_name: HashMap<String, usize> = HashMap::with_capacity(res.fields.len());
+            for (si, sf) in res.fields.iter().enumerate() {
+                if let Some(name) = sf.get("name").and_then(Value::as_str) {
+                    sim_by_name.entry(name.to_uppercase()).or_insert(si);
+                }
+            }
             // project each declaration onto its simulated field: declared
             // order + presentation keys, simulated
             // inputField/exp/original* enforced by name
             let mut out = Vec::with_capacity(decl.len());
             for df in decl {
                 let dn = df.get("name").and_then(Value::as_str).unwrap_or("");
-                if let Some(sf) = res.fields.iter().find(|sf| {
-                    sf.get("name")
-                        .and_then(Value::as_str)
-                        .map(|n| field_eq(n, dn))
-                        .unwrap_or(false)
-                }) {
+                if let Some(&si) = sim_by_name.get(&dn.to_uppercase()) {
+                    let sf = &res.fields[si];
                     let mut m = sf.as_object().cloned().unwrap_or_default();
                     if let Some(do_) = df.as_object() {
                         for (k, v) in do_ {

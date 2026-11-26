@@ -97,6 +97,18 @@ fn default_cases() -> Vec<Case> {
             warmup: 3,
         },
         Case {
+            name: "select-explicit-small",
+            path: fixture("select-explicit-small"),
+            repeats: 300,
+            warmup: 5,
+        },
+        Case {
+            name: "select-multiset",
+            path: fixture("select-multiset"),
+            repeats: 24,
+            warmup: 3,
+        },
+        Case {
             name: "select-rawstep",
             path: fixture("select-rawstep"),
             repeats: 300,

@@ -498,6 +498,53 @@ def select_rawstep() -> dict:
     ])
 
 
+def select_explicit_small() -> dict:
+    """Small explicit Select projection: reversed order and mixed case."""
+    names = ["Alpha", "beta", "Gamma", "delta", "epsilon", "zeta", "Eta", "Theta"]
+    declared = [
+        "theta",
+        "ETA",
+        "ZETA",
+        "Epsilon",
+        "DELTA",
+        "gamma",
+        "Beta",
+        "ALPHA",
+    ]
+    return base([
+        file_input("src", [field(n, "C", True) for n in names], file_name="small-explicit.xlsx#S"),
+        select("sel", "src", fields=[field(n, "C", True) for n in declared]),
+        output("sel"),
+    ])
+
+
+def select_multiset(width: int = 256) -> dict:
+    """Wide explicit Select projection with reversed, case-folded names.
+
+    The declared multiset is the same as the derived one but in reverse order
+    with case variants, including Unicode names whose `to_uppercase()` form is
+    what `field_eq` compares. This isolates the name-matching cost from step
+    simulation.
+    """
+    names = [f"m{i:03d}" for i in range(width - 3)] + ["Straße", "Ångström", "中文"]
+    overrides = {
+        "Straße": "STRASSE",
+        "Ångström": "ångström",
+        "中文": "中文",
+    }
+    declared = []
+    for pos, name in enumerate(reversed(names)):
+        if name.startswith("m"):
+            declared.append(name.upper() if pos % 2 == 0 else name)
+        else:
+            declared.append(overrides[name])
+    return base([
+        file_input("src", [field(n, "C", True) for n in names], file_name="multiset.xlsx#S"),
+        select("sel", "src", fields=[field(n, "C", True) for n in declared]),
+        output("sel"),
+    ])
+
+
 CASES = {
     "small": small,
     "wide": wide,
@@ -507,6 +554,8 @@ CASES = {
     "union-map": union_map,
     "error-dense": error_dense,
     "select-heavy": select_heavy,
+    "select-explicit-small": select_explicit_small,
+    "select-multiset": select_multiset,
     "select-rawstep": select_rawstep,
 }
 

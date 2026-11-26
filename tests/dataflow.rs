@@ -386,6 +386,64 @@ fn select_explicit_fields_project_lineage() {
 }
 
 #[test]
+fn select_explicit_fields_multiset_semantics() {
+    let field = |name: &str| json!({"name": name, "dataType": "C", "isDimension": true});
+    let mk = |src: &[&str], decl: &[&str]| {
+        json!({
+            "format": 1,
+            "properties": {"extractDataEnabled": false},
+            "nodes": [
+                {"key":"src","type":"FileInput","alias":"src","config":{"fileName":"d.xlsx#S"},
+                 "fields": src.iter().map(|n| field(n)).collect::<Vec<_>>()},
+                {"key":"sel","type":"Select","alias":"sel","inputs":["src"],
+                 "fields": decl.iter().map(|n| field(n)).collect::<Vec<_>>()},
+                {"key":"out","type":"Output","alias":"out","inputs":["sel"]}
+            ]
+        })
+    };
+
+    for decl in [&["ID", "SKU", "Amount"][..], &["Amount", "SKU", "ID"][..]] {
+        let spec = mk(&["ID", "SKU", "Amount"], decl);
+        assert!(spec_errors(&spec).is_empty(), "{:?}", spec_errors(&spec));
+        let tbl = generate(&spec).expect("generate");
+        let got: Vec<&str> = node(&tbl, "sel")["fields"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|f| f["name"].as_str().unwrap())
+            .collect();
+        assert_eq!(got, decl);
+        assert!(wire_errors(&tbl).is_empty(), "{:?}", wire_errors(&tbl));
+    }
+
+    // Folded duplicates are a multiset: replacing one SKU occurrence with a
+    // second ID changes the counts even though every name still exists.
+    let bad = mk(&["ID", "SKU", "sku"], &["ID", "SKU", "ID"]);
+    let ds = spec_errors(&bad);
+    assert!(
+        ds.iter()
+            .any(|d| d.rule == "field.mismatch" && d.path == "/nodes/1/fields"),
+        "{:?}",
+        ds.iter().map(|d| (&d.path, &d.rule)).collect::<Vec<_>>()
+    );
+    assert!(generate(&bad).is_err());
+
+    // ß and SS collide only after Unicode uppercasing; both occurrences must
+    // be counted, and the declared reverse order still wins.
+    let uni = mk(&["Straße", "STRASSE", "ID"], &["id", "strasse", "STRASSE"]);
+    assert!(spec_errors(&uni).is_empty(), "{:?}", spec_errors(&uni));
+    let tbl = generate(&uni).expect("generate unicode multiset");
+    let got: Vec<&str> = node(&tbl, "sel")["fields"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|f| f["name"].as_str().unwrap())
+        .collect();
+    assert_eq!(got, vec!["id", "strasse", "STRASSE"]);
+    assert!(wire_errors(&tbl).is_empty(), "{:?}", wire_errors(&tbl));
+}
+
+#[test]
 fn transform_is_derivable_and_rename_after_add_works() {
     // TransformToCalculatedField preserves names (Java edits the field's
     // expression in place); an AddField without a fields operand is still
