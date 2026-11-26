@@ -1,0 +1,2745 @@
+{
+  "task": "S1",
+  "created": "2026-11-26",
+  "platform": "Linux 6.8.0-1060-aws x86_64 GNU/Linux",
+  "rustc": "1.99.1 (58cf8f9c3 2026-10-13), host x86_64-unknown-linux-gnu",
+  "base_commit": "1bc4173bc930d47d94b4eeb825a5547914efd5b2",
+  "cargo_lock_sha256": "596ae35bfbd60bc991318e54a507ab56ba66f1939ad0f4e89de7f79dc984bfc9",
+  "case_generator_sha256": "467e82c010f673ec0d3ddee02f90dff7753b7c66e0b60dd4ced97a5406e00c1c",
+  "input_sha256": {
+    "filter-1x1.tbl": "3fd31986fbc554b0c6d0e89d79b6990c36a75c748a5d320222c5125342d25029",
+    "filter-8x1.tbl": "ec57f185716cfa20074d442fc9f81440a1b2e8b4c159c73c80f86b10c6edf186",
+    "rename-8x4.tbl": "71df5cb1343b9b99534710a734dc292797234b44bd2e215b3e8337590e06fb8b",
+    "filter-256x128.tbl": "6f87907b96b37d78d2ba9d482d52993cf07f04591012337e08c3d5d216c4fbff",
+    "filter-1024x64.tbl": "4e73b36e3924b449c620c78f6a473e67125821bed58fdda54ff67937d36ff525",
+    "rename-256x128.tbl": "41fbd1914ba69e28c2c0aa8509c0af025aedf68b2c3fcfbfe02faaf7aeac752b",
+    "removeadd-256x128.tbl": "55789fb1fd76c34c6a4dc06800b99c84572cfa7b8db1791f4549b79f22998ab1",
+    "uniqueexpr-256x128.tbl": "a06a014c3c302b8710a7d5464d591fdb3d7a871c2df025dfbf70d10885e2eb79",
+    "missingexpr-256x128.tbl": "57fc6576c252193f95e5c062bd3f621195e5d32fcdfd78ddc76d951aab73aba4",
+    "experiment.tbl": "3cfdc125ec31da38c8a8112c9d07fa500fbbd1debcce4f9636481d8eaa31d92b"
+  },
+  "binary_sha256": {
+    "before": "9d192ea89700b6f49ecfcffc66525b96fed67ea7368c2a6acc180cf57f37c288",
+    "after": "ae5d09ed10b7a407186a8d5e0ba063c87c1fe11b1bd701ddaa4c7e42627a49e9"
+  },
+  "static_counts_per_check": {
+    "filter-1x1.tbl": {
+      "cmp_step_operand": 0,
+      "cmp_expression": 2,
+      "cmp_removed_scan": 0,
+      "cmp_rename_find": 0,
+      "cmp_evolve": 0,
+      "clone_steps": 1,
+      "clone_strings": 1,
+      "exp_parse_calls": 1,
+      "exp_refs": 2,
+      "tracked_steps": 1
+    },
+    "filter-8x1.tbl": {
+      "cmp_step_operand": 0,
+      "cmp_expression": 6,
+      "cmp_removed_scan": 0,
+      "cmp_rename_find": 0,
+      "cmp_evolve": 0,
+      "clone_steps": 1,
+      "clone_strings": 8,
+      "exp_parse_calls": 1,
+      "exp_refs": 2,
+      "tracked_steps": 1
+    },
+    "rename-8x4.tbl": {
+      "cmp_step_operand": 4,
+      "cmp_expression": 0,
+      "cmp_removed_scan": 0,
+      "cmp_rename_find": 4,
+      "cmp_evolve": 32,
+      "clone_steps": 4,
+      "clone_strings": 32,
+      "exp_parse_calls": 0,
+      "exp_refs": 0,
+      "tracked_steps": 4
+    },
+    "filter-256x128.tbl": {
+      "cmp_step_operand": 0,
+      "cmp_expression": 32896,
+      "cmp_removed_scan": 0,
+      "cmp_rename_find": 0,
+      "cmp_evolve": 0,
+      "clone_steps": 128,
+      "clone_strings": 32768,
+      "exp_parse_calls": 128,
+      "exp_refs": 256,
+      "tracked_steps": 128
+    },
+    "filter-1024x64.tbl": {
+      "cmp_step_operand": 0,
+      "cmp_expression": 36928,
+      "cmp_removed_scan": 0,
+      "cmp_rename_find": 0,
+      "cmp_evolve": 0,
+      "clone_steps": 64,
+      "clone_strings": 65536,
+      "exp_parse_calls": 64,
+      "exp_refs": 128,
+      "tracked_steps": 64
+    },
+    "rename-256x128.tbl": {
+      "cmp_step_operand": 128,
+      "cmp_expression": 0,
+      "cmp_removed_scan": 0,
+      "cmp_rename_find": 128,
+      "cmp_evolve": 32768,
+      "clone_steps": 128,
+      "clone_strings": 32768,
+      "exp_parse_calls": 0,
+      "exp_refs": 0,
+      "tracked_steps": 128
+    },
+    "removeadd-256x128.tbl": {
+      "cmp_step_operand": 0,
+      "cmp_expression": 64,
+      "cmp_removed_scan": 2105280,
+      "cmp_rename_find": 0,
+      "cmp_evolve": 32704,
+      "clone_steps": 128,
+      "clone_strings": 32704,
+      "exp_parse_calls": 64,
+      "exp_refs": 64,
+      "tracked_steps": 128
+    },
+    "uniqueexpr-256x128.tbl": {
+      "cmp_step_operand": 0,
+      "cmp_expression": 8256,
+      "cmp_removed_scan": 0,
+      "cmp_rename_find": 0,
+      "cmp_evolve": 0,
+      "clone_steps": 128,
+      "clone_strings": 32768,
+      "exp_parse_calls": 128,
+      "exp_refs": 128,
+      "tracked_steps": 128
+    },
+    "missingexpr-256x128.tbl": {
+      "cmp_step_operand": 0,
+      "cmp_expression": 32768,
+      "cmp_removed_scan": 0,
+      "cmp_rename_find": 0,
+      "cmp_evolve": 0,
+      "clone_steps": 128,
+      "clone_strings": 32768,
+      "exp_parse_calls": 128,
+      "exp_refs": 128,
+      "tracked_steps": 128
+    },
+    "experiment.tbl": {
+      "cmp_step_operand": 64,
+      "cmp_expression": 883,
+      "cmp_removed_scan": 895,
+      "cmp_rename_find": 55,
+      "cmp_evolve": 1445,
+      "clone_steps": 47,
+      "clone_strings": 560,
+      "exp_parse_calls": 22,
+      "exp_refs": 80,
+      "tracked_steps": 47
+    }
+  },
+  "diagnostic_counts_per_check": {
+    "filter-1x1.tbl": {
+      "total_diagnostics": 0,
+      "select_step_diagnostics": 0,
+      "errors": 0,
+      "warnings": 0
+    },
+    "filter-8x1.tbl": {
+      "total_diagnostics": 0,
+      "select_step_diagnostics": 0,
+      "errors": 0,
+      "warnings": 0
+    },
+    "rename-8x4.tbl": {
+      "total_diagnostics": 0,
+      "select_step_diagnostics": 0,
+      "errors": 0,
+      "warnings": 0
+    },
+    "filter-256x128.tbl": {
+      "total_diagnostics": 0,
+      "select_step_diagnostics": 0,
+      "errors": 0,
+      "warnings": 0
+    },
+    "filter-1024x64.tbl": {
+      "total_diagnostics": 0,
+      "select_step_diagnostics": 0,
+      "errors": 0,
+      "warnings": 0
+    },
+    "rename-256x128.tbl": {
+      "total_diagnostics": 0,
+      "select_step_diagnostics": 0,
+      "errors": 0,
+      "warnings": 0
+    },
+    "removeadd-256x128.tbl": {
+      "total_diagnostics": 0,
+      "select_step_diagnostics": 0,
+      "errors": 0,
+      "warnings": 0
+    },
+    "uniqueexpr-256x128.tbl": {
+      "total_diagnostics": 0,
+      "select_step_diagnostics": 0,
+      "errors": 0,
+      "warnings": 0
+    },
+    "missingexpr-256x128.tbl": {
+      "total_diagnostics": 128,
+      "select_step_diagnostics": 128,
+      "errors": 0,
+      "warnings": 128
+    },
+    "experiment.tbl": {
+      "total_diagnostics": 10,
+      "select_step_diagnostics": 0,
+      "errors": 0,
+      "warnings": 10
+    }
+  },
+  "wire_samples": {
+    "width:1": {
+      "documents": 1,
+      "diagnostics_sha256": "8ba7f9b6a1343e1058db15117301db6964403aba521159589b58a9835c420953",
+      "pairs": [
+        {
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 18617025,
+            "repeats": 4096,
+            "wall_ns": 19514825
+          },
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 19702236,
+            "repeats": 4096,
+            "wall_ns": 20759068
+          }
+        },
+        {
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 19066772,
+            "repeats": 4096,
+            "wall_ns": 20019870
+          },
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 19479112,
+            "repeats": 4096,
+            "wall_ns": 20342977
+          }
+        },
+        {
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 18371260,
+            "repeats": 4096,
+            "wall_ns": 19566326
+          },
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 18127971,
+            "repeats": 4096,
+            "wall_ns": 19004478
+          }
+        },
+        {
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 18284169,
+            "repeats": 4096,
+            "wall_ns": 19153815
+          },
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 18741289,
+            "repeats": 4096,
+            "wall_ns": 19728810
+          }
+        },
+        {
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 18411089,
+            "repeats": 4096,
+            "wall_ns": 19529289
+          },
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 18168584,
+            "repeats": 4096,
+            "wall_ns": 19322052
+          }
+        },
+        {
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 18244686,
+            "repeats": 4096,
+            "wall_ns": 19372982
+          },
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 18733458,
+            "repeats": 4096,
+            "wall_ns": 19741803
+          }
+        },
+        {
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 18485446,
+            "repeats": 4096,
+            "wall_ns": 19507647
+          },
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 18077320,
+            "repeats": 4096,
+            "wall_ns": 19210855
+          }
+        },
+        {
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 18014010,
+            "repeats": 4096,
+            "wall_ns": 19064060
+          },
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 18499680,
+            "repeats": 4096,
+            "wall_ns": 19574237
+          }
+        }
+      ]
+    },
+    "width:32": {
+      "documents": 1,
+      "diagnostics_sha256": "623b5a44b594373dcd99190101857ee14e7e82a1a0fd48f27d6bb9907c0abea2",
+      "pairs": [
+        {
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 6591886,
+            "repeats": 256,
+            "wall_ns": 7565059
+          },
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 6631610,
+            "repeats": 256,
+            "wall_ns": 7757582
+          }
+        },
+        {
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 6663125,
+            "repeats": 256,
+            "wall_ns": 7679630
+          },
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 6867071,
+            "repeats": 256,
+            "wall_ns": 8069612
+          }
+        },
+        {
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 6733663,
+            "repeats": 256,
+            "wall_ns": 7812105
+          },
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 6706341,
+            "repeats": 256,
+            "wall_ns": 7628141
+          }
+        },
+        {
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 6457489,
+            "repeats": 256,
+            "wall_ns": 7564532
+          },
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 6485226,
+            "repeats": 256,
+            "wall_ns": 7644929
+          }
+        },
+        {
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 6687103,
+            "repeats": 256,
+            "wall_ns": 7942198
+          },
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 6615745,
+            "repeats": 256,
+            "wall_ns": 7931930
+          }
+        },
+        {
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 6580400,
+            "repeats": 256,
+            "wall_ns": 7761057
+          },
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 6579039,
+            "repeats": 256,
+            "wall_ns": 7699608
+          }
+        },
+        {
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 6481489,
+            "repeats": 256,
+            "wall_ns": 7650718
+          },
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 6652822,
+            "repeats": 256,
+            "wall_ns": 7796769
+          }
+        },
+        {
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 6710947,
+            "repeats": 256,
+            "wall_ns": 7966247
+          },
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 6903363,
+            "repeats": 256,
+            "wall_ns": 7872333
+          }
+        }
+      ]
+    },
+    "width:256": {
+      "documents": 1,
+      "diagnostics_sha256": "bbd643ca91eb86415f44d40ecdb82713c50ccc49fc3523e8785dbf7e30781e1b",
+      "pairs": [
+        {
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 2312003,
+            "repeats": 12,
+            "wall_ns": 4399744
+          },
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 2303998,
+            "repeats": 12,
+            "wall_ns": 4232330
+          }
+        },
+        {
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 2280561,
+            "repeats": 12,
+            "wall_ns": 4100679
+          },
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 2401191,
+            "repeats": 12,
+            "wall_ns": 4384538
+          }
+        },
+        {
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 2492105,
+            "repeats": 12,
+            "wall_ns": 4389087
+          },
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 2257949,
+            "repeats": 12,
+            "wall_ns": 4257459
+          }
+        },
+        {
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 2262511,
+            "repeats": 12,
+            "wall_ns": 4152188
+          },
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 2294499,
+            "repeats": 12,
+            "wall_ns": 4183595
+          }
+        },
+        {
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 2300666,
+            "repeats": 12,
+            "wall_ns": 4149781
+          },
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 2286884,
+            "repeats": 12,
+            "wall_ns": 4140701
+          }
+        },
+        {
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 2260002,
+            "repeats": 12,
+            "wall_ns": 4166159
+          },
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 2323147,
+            "repeats": 12,
+            "wall_ns": 4264182
+          }
+        },
+        {
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 2315069,
+            "repeats": 12,
+            "wall_ns": 4059092
+          },
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 2360661,
+            "repeats": 12,
+            "wall_ns": 4084582
+          }
+        },
+        {
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 2373394,
+            "repeats": 12,
+            "wall_ns": 4139966
+          },
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 2526321,
+            "repeats": 12,
+            "wall_ns": 4369995
+          }
+        }
+      ]
+    },
+    "width:1024": {
+      "documents": 1,
+      "diagnostics_sha256": "6a4673ca48705f29c0efc149bfef8a7a1c306f5b60dabbd78b3581b29d6cc8d7",
+      "pairs": [
+        {
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 1723092,
+            "repeats": 2,
+            "wall_ns": 6513209
+          },
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 2310219,
+            "repeats": 2,
+            "wall_ns": 7730080
+          }
+        },
+        {
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 1686434,
+            "repeats": 2,
+            "wall_ns": 6400230
+          },
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 1805468,
+            "repeats": 2,
+            "wall_ns": 6444010
+          }
+        },
+        {
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 2243801,
+            "repeats": 2,
+            "wall_ns": 7471157
+          },
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 1657894,
+            "repeats": 2,
+            "wall_ns": 6044738
+          }
+        },
+        {
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 1663384,
+            "repeats": 2,
+            "wall_ns": 6421667
+          },
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 1876373,
+            "repeats": 2,
+            "wall_ns": 6859554
+          }
+        },
+        {
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 1665045,
+            "repeats": 2,
+            "wall_ns": 6422550
+          },
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 1644317,
+            "repeats": 2,
+            "wall_ns": 6389315
+          }
+        },
+        {
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 1964478,
+            "repeats": 2,
+            "wall_ns": 6989218
+          },
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 1665098,
+            "repeats": 2,
+            "wall_ns": 6300523
+          }
+        },
+        {
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 2089841,
+            "repeats": 2,
+            "wall_ns": 6919140
+          },
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 1813126,
+            "repeats": 2,
+            "wall_ns": 6192085
+          }
+        },
+        {
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 1649279,
+            "repeats": 2,
+            "wall_ns": 5984886
+          },
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 1694709,
+            "repeats": 2,
+            "wall_ns": 6353643
+          }
+        }
+      ]
+    },
+    "filter-1x1.tbl": {
+      "documents": 1,
+      "diagnostics_sha256": "32929365274852e606f160aad231151c90d72ce585a088381880eebcdf80d8d6",
+      "pairs": [
+        {
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 10422222,
+            "repeats": 2000,
+            "wall_ns": 11538664
+          },
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 10267037,
+            "repeats": 2000,
+            "wall_ns": 11272472
+          }
+        },
+        {
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 10307706,
+            "repeats": 2000,
+            "wall_ns": 11283644
+          },
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 10503814,
+            "repeats": 2000,
+            "wall_ns": 11522460
+          }
+        },
+        {
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 10857833,
+            "repeats": 2000,
+            "wall_ns": 11952697
+          },
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 10461315,
+            "repeats": 2000,
+            "wall_ns": 11314648
+          }
+        },
+        {
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 10330386,
+            "repeats": 2000,
+            "wall_ns": 11404554
+          },
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 10378756,
+            "repeats": 2000,
+            "wall_ns": 11567686
+          }
+        },
+        {
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 10387069,
+            "repeats": 2000,
+            "wall_ns": 11619898
+          },
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 10312502,
+            "repeats": 2000,
+            "wall_ns": 11310455
+          }
+        },
+        {
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 10282073,
+            "repeats": 2000,
+            "wall_ns": 11341397
+          },
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 10448600,
+            "repeats": 2000,
+            "wall_ns": 11547731
+          }
+        },
+        {
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 10503712,
+            "repeats": 2000,
+            "wall_ns": 11491257
+          },
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 10354205,
+            "repeats": 2000,
+            "wall_ns": 11451502
+          }
+        },
+        {
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 10716020,
+            "repeats": 2000,
+            "wall_ns": 11806810
+          },
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 10365777,
+            "repeats": 2000,
+            "wall_ns": 11410679
+          }
+        }
+      ]
+    },
+    "filter-8x1.tbl": {
+      "documents": 1,
+      "diagnostics_sha256": "8b4d828057ae6acafd4add3fe4e055c04c37a9d0c64f3c4e8769b32580e593f4",
+      "pairs": [
+        {
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 11425750,
+            "repeats": 1000,
+            "wall_ns": 12601692
+          },
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 11291492,
+            "repeats": 1000,
+            "wall_ns": 12427782
+          }
+        },
+        {
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 11292886,
+            "repeats": 1000,
+            "wall_ns": 12449386
+          },
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 11523191,
+            "repeats": 1000,
+            "wall_ns": 12517469
+          }
+        },
+        {
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 12872668,
+            "repeats": 1000,
+            "wall_ns": 13857116
+          },
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 11351807,
+            "repeats": 1000,
+            "wall_ns": 12862926
+          }
+        },
+        {
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 11327819,
+            "repeats": 1000,
+            "wall_ns": 12184929
+          },
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 11516771,
+            "repeats": 1000,
+            "wall_ns": 12689003
+          }
+        },
+        {
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 11414961,
+            "repeats": 1000,
+            "wall_ns": 12543119
+          },
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 11306486,
+            "repeats": 1000,
+            "wall_ns": 12368928
+          }
+        },
+        {
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 11400892,
+            "repeats": 1000,
+            "wall_ns": 12689098
+          },
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 11410426,
+            "repeats": 1000,
+            "wall_ns": 12562854
+          }
+        },
+        {
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 11464474,
+            "repeats": 1000,
+            "wall_ns": 12386039
+          },
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 11373733,
+            "repeats": 1000,
+            "wall_ns": 12567017
+          }
+        },
+        {
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 11492484,
+            "repeats": 1000,
+            "wall_ns": 12660541
+          },
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 11476143,
+            "repeats": 1000,
+            "wall_ns": 12598963
+          }
+        }
+      ]
+    },
+    "rename-8x4.tbl": {
+      "documents": 1,
+      "diagnostics_sha256": "59ada5d000c941cf638d0eb8ab43f3acb89c3f8253faa3e92b8cf99334486311",
+      "pairs": [
+        {
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 15941161,
+            "repeats": 1000,
+            "wall_ns": 17079531
+          },
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 16913572,
+            "repeats": 1000,
+            "wall_ns": 18095154
+          }
+        },
+        {
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 16674831,
+            "repeats": 1000,
+            "wall_ns": 17577355
+          },
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 15926822,
+            "repeats": 1000,
+            "wall_ns": 17047537
+          }
+        },
+        {
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 16005203,
+            "repeats": 1000,
+            "wall_ns": 16993802
+          },
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 16751043,
+            "repeats": 1000,
+            "wall_ns": 17669459
+          }
+        },
+        {
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 16788818,
+            "repeats": 1000,
+            "wall_ns": 18049763
+          },
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 15870625,
+            "repeats": 1000,
+            "wall_ns": 17019535
+          }
+        },
+        {
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 16081344,
+            "repeats": 1000,
+            "wall_ns": 17120267
+          },
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 16833429,
+            "repeats": 1000,
+            "wall_ns": 18035169
+          }
+        },
+        {
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 16601945,
+            "repeats": 1000,
+            "wall_ns": 17817046
+          },
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 16054369,
+            "repeats": 1000,
+            "wall_ns": 17067335
+          }
+        },
+        {
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 16092417,
+            "repeats": 1000,
+            "wall_ns": 17200781
+          },
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 16859379,
+            "repeats": 1000,
+            "wall_ns": 18022605
+          }
+        },
+        {
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 16778604,
+            "repeats": 1000,
+            "wall_ns": 17824097
+          },
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 16151308,
+            "repeats": 1000,
+            "wall_ns": 17291400
+          }
+        }
+      ]
+    },
+    "filter-256x128.tbl": {
+      "documents": 1,
+      "diagnostics_sha256": "df7e20664b1567b5387b829d7bfaf9a62dc18b53f78cab8b621a6021a4bedd36",
+      "pairs": [
+        {
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 40302190,
+            "repeats": 20,
+            "wall_ns": 42215149
+          },
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 5904939,
+            "repeats": 20,
+            "wall_ns": 7869021
+          }
+        },
+        {
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 5918632,
+            "repeats": 20,
+            "wall_ns": 8003757
+          },
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 40176968,
+            "repeats": 20,
+            "wall_ns": 42049967
+          }
+        },
+        {
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 40950816,
+            "repeats": 20,
+            "wall_ns": 42922177
+          },
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 5907177,
+            "repeats": 20,
+            "wall_ns": 7850808
+          }
+        },
+        {
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 5966338,
+            "repeats": 20,
+            "wall_ns": 7908900
+          },
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 40282602,
+            "repeats": 20,
+            "wall_ns": 42146037
+          }
+        },
+        {
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 40643643,
+            "repeats": 20,
+            "wall_ns": 42586465
+          },
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 6009405,
+            "repeats": 20,
+            "wall_ns": 7854262
+          }
+        },
+        {
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 5886136,
+            "repeats": 20,
+            "wall_ns": 7562340
+          },
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 40017310,
+            "repeats": 20,
+            "wall_ns": 42021641
+          }
+        },
+        {
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 40058198,
+            "repeats": 20,
+            "wall_ns": 41774276
+          },
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 5991458,
+            "repeats": 20,
+            "wall_ns": 8049073
+          }
+        },
+        {
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 6004997,
+            "repeats": 20,
+            "wall_ns": 7832097
+          },
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 40052953,
+            "repeats": 20,
+            "wall_ns": 41840910
+          }
+        }
+      ]
+    },
+    "filter-1024x64.tbl": {
+      "documents": 1,
+      "diagnostics_sha256": "ce59614ca41e2cc14f60e3fa31323cc86e9d36be594b86ce2c80b2b5aef5effa",
+      "pairs": [
+        {
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 36180426,
+            "repeats": 10,
+            "wall_ns": 40310692
+          },
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 10902141,
+            "repeats": 10,
+            "wall_ns": 14772223
+          }
+        },
+        {
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 10304334,
+            "repeats": 10,
+            "wall_ns": 14244269
+          },
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 36307195,
+            "repeats": 10,
+            "wall_ns": 40247812
+          }
+        },
+        {
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 35988584,
+            "repeats": 10,
+            "wall_ns": 40087619
+          },
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 10176181,
+            "repeats": 10,
+            "wall_ns": 14055015
+          }
+        },
+        {
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 10057885,
+            "repeats": 10,
+            "wall_ns": 13810615
+          },
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 36204642,
+            "repeats": 10,
+            "wall_ns": 39980289
+          }
+        },
+        {
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 36123243,
+            "repeats": 10,
+            "wall_ns": 40138971
+          },
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 10276709,
+            "repeats": 10,
+            "wall_ns": 14129381
+          }
+        },
+        {
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 9969960,
+            "repeats": 10,
+            "wall_ns": 13848317
+          },
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 36300525,
+            "repeats": 10,
+            "wall_ns": 40202990
+          }
+        },
+        {
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 35545354,
+            "repeats": 10,
+            "wall_ns": 39268044
+          },
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 9980960,
+            "repeats": 10,
+            "wall_ns": 13769395
+          }
+        },
+        {
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 10285121,
+            "repeats": 10,
+            "wall_ns": 14169925
+          },
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 35747961,
+            "repeats": 10,
+            "wall_ns": 39437494
+          }
+        }
+      ]
+    },
+    "rename-256x128.tbl": {
+      "documents": 1,
+      "diagnostics_sha256": "96515361b551251ac70501f5630c4e951023c5d4c3f98143339bfbdbff787072",
+      "pairs": [
+        {
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 53353540,
+            "repeats": 20,
+            "wall_ns": 55191298
+          },
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 40818413,
+            "repeats": 20,
+            "wall_ns": 42971928
+          }
+        },
+        {
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 37559048,
+            "repeats": 20,
+            "wall_ns": 39455182
+          },
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 52691077,
+            "repeats": 20,
+            "wall_ns": 54806404
+          }
+        },
+        {
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 52826061,
+            "repeats": 20,
+            "wall_ns": 54828047
+          },
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 37377561,
+            "repeats": 20,
+            "wall_ns": 39360185
+          }
+        },
+        {
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 38327968,
+            "repeats": 20,
+            "wall_ns": 40450306
+          },
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 53965371,
+            "repeats": 20,
+            "wall_ns": 56440456
+          }
+        },
+        {
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 53926721,
+            "repeats": 20,
+            "wall_ns": 55957191
+          },
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 37227400,
+            "repeats": 20,
+            "wall_ns": 39296592
+          }
+        },
+        {
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 37253083,
+            "repeats": 20,
+            "wall_ns": 39355989
+          },
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 53583333,
+            "repeats": 20,
+            "wall_ns": 55594271
+          }
+        },
+        {
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 56469734,
+            "repeats": 20,
+            "wall_ns": 58663611
+          },
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 41102620,
+            "repeats": 20,
+            "wall_ns": 43363295
+          }
+        },
+        {
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 38883376,
+            "repeats": 20,
+            "wall_ns": 40958558
+          },
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 53237601,
+            "repeats": 20,
+            "wall_ns": 55279561
+          }
+        }
+      ]
+    },
+    "removeadd-256x128.tbl": {
+      "documents": 1,
+      "diagnostics_sha256": "c8aa7ff0af9ecfca60d497f785eefe5da18dfca0f670537522fdbcae2aeda87b",
+      "pairs": [
+        {
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 115519559,
+            "repeats": 2,
+            "wall_ns": 117442714
+          },
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 2582352,
+            "repeats": 2,
+            "wall_ns": 4664008
+          }
+        },
+        {
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 2441146,
+            "repeats": 2,
+            "wall_ns": 4336452
+          },
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 114836432,
+            "repeats": 2,
+            "wall_ns": 116808584
+          }
+        },
+        {
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 114256309,
+            "repeats": 2,
+            "wall_ns": 116176481
+          },
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 2409693,
+            "repeats": 2,
+            "wall_ns": 4481440
+          }
+        },
+        {
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 2507277,
+            "repeats": 2,
+            "wall_ns": 4726781
+          },
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 114226492,
+            "repeats": 2,
+            "wall_ns": 116050322
+          }
+        },
+        {
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 113859630,
+            "repeats": 2,
+            "wall_ns": 115878430
+          },
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 2395962,
+            "repeats": 2,
+            "wall_ns": 4311494
+          }
+        },
+        {
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 2510703,
+            "repeats": 2,
+            "wall_ns": 4357346
+          },
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 115240191,
+            "repeats": 2,
+            "wall_ns": 117105953
+          }
+        },
+        {
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 153019138,
+            "repeats": 2,
+            "wall_ns": 155083079
+          },
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 2421139,
+            "repeats": 2,
+            "wall_ns": 4673006
+          }
+        },
+        {
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 2456701,
+            "repeats": 2,
+            "wall_ns": 4455196
+          },
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 115735780,
+            "repeats": 2,
+            "wall_ns": 117650092
+          }
+        }
+      ]
+    },
+    "uniqueexpr-256x128.tbl": {
+      "documents": 1,
+      "diagnostics_sha256": "e31419cc6b0611769a7e8140aaee798ea735812146fe2cd0a0900bc409541435",
+      "pairs": [
+        {
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 27403812,
+            "repeats": 20,
+            "wall_ns": 29324866
+          },
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 5753239,
+            "repeats": 20,
+            "wall_ns": 7630730
+          }
+        },
+        {
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 5700949,
+            "repeats": 20,
+            "wall_ns": 7644868
+          },
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 26820272,
+            "repeats": 20,
+            "wall_ns": 28812988
+          }
+        },
+        {
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 27220656,
+            "repeats": 20,
+            "wall_ns": 29217468
+          },
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 5810195,
+            "repeats": 20,
+            "wall_ns": 7733300
+          }
+        },
+        {
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 6042699,
+            "repeats": 20,
+            "wall_ns": 8098767
+          },
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 27623594,
+            "repeats": 20,
+            "wall_ns": 29518851
+          }
+        },
+        {
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 29162526,
+            "repeats": 20,
+            "wall_ns": 30974104
+          },
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 6066588,
+            "repeats": 20,
+            "wall_ns": 8002245
+          }
+        },
+        {
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 5997583,
+            "repeats": 20,
+            "wall_ns": 7994710
+          },
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 27256810,
+            "repeats": 20,
+            "wall_ns": 29096752
+          }
+        },
+        {
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 26950279,
+            "repeats": 20,
+            "wall_ns": 28776725
+          },
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 5887741,
+            "repeats": 20,
+            "wall_ns": 7812148
+          }
+        },
+        {
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 5823537,
+            "repeats": 20,
+            "wall_ns": 7814652
+          },
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 27194724,
+            "repeats": 20,
+            "wall_ns": 29049945
+          }
+        }
+      ]
+    },
+    "missingexpr-256x128.tbl": {
+      "documents": 1,
+      "diagnostics_sha256": "9ce5726479b4144bec6961d263dc117930e186aa19ad86453e4e667aabf4eaa3",
+      "pairs": [
+        {
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 46446213,
+            "repeats": 20,
+            "wall_ns": 48386553
+          },
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 7263184,
+            "repeats": 20,
+            "wall_ns": 9598942
+          }
+        },
+        {
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 7626119,
+            "repeats": 20,
+            "wall_ns": 9691734
+          },
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 44922390,
+            "repeats": 20,
+            "wall_ns": 46865117
+          }
+        },
+        {
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 44566693,
+            "repeats": 20,
+            "wall_ns": 46553604
+          },
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 7157711,
+            "repeats": 20,
+            "wall_ns": 9068160
+          }
+        },
+        {
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 8442559,
+            "repeats": 20,
+            "wall_ns": 10415242
+          },
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 44988063,
+            "repeats": 20,
+            "wall_ns": 47212646
+          }
+        },
+        {
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 44913061,
+            "repeats": 20,
+            "wall_ns": 46976887
+          },
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 7088282,
+            "repeats": 20,
+            "wall_ns": 9014698
+          }
+        },
+        {
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 7098959,
+            "repeats": 20,
+            "wall_ns": 9089404
+          },
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 45079731,
+            "repeats": 20,
+            "wall_ns": 47084950
+          }
+        },
+        {
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 44730653,
+            "repeats": 20,
+            "wall_ns": 46627045
+          },
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 7123945,
+            "repeats": 20,
+            "wall_ns": 9061028
+          }
+        },
+        {
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 7087317,
+            "repeats": 20,
+            "wall_ns": 9209587
+          },
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 45055002,
+            "repeats": 20,
+            "wall_ns": 47285631
+          }
+        }
+      ]
+    },
+    "experiment.tbl": {
+      "documents": 1,
+      "diagnostics_sha256": "594406e8e137efad18c67fed4742f77c8ca5bead8984cb47d83ce140a37466d6",
+      "pairs": [
+        {
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 131802661,
+            "repeats": 100,
+            "wall_ns": 133939634
+          },
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 98417350,
+            "repeats": 100,
+            "wall_ns": 100383339
+          }
+        },
+        {
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 112508313,
+            "repeats": 100,
+            "wall_ns": 114668136
+          },
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 139422608,
+            "repeats": 100,
+            "wall_ns": 141402859
+          }
+        },
+        {
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 133578464,
+            "repeats": 100,
+            "wall_ns": 135699274
+          },
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 97786364,
+            "repeats": 100,
+            "wall_ns": 100005255
+          }
+        },
+        {
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 103192951,
+            "repeats": 100,
+            "wall_ns": 105400155
+          },
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 140703113,
+            "repeats": 100,
+            "wall_ns": 143013709
+          }
+        },
+        {
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 132166366,
+            "repeats": 100,
+            "wall_ns": 134397821
+          },
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 98290535,
+            "repeats": 100,
+            "wall_ns": 100354441
+          }
+        },
+        {
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 101082458,
+            "repeats": 100,
+            "wall_ns": 104802625
+          },
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 131703068,
+            "repeats": 100,
+            "wall_ns": 133807090
+          }
+        },
+        {
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 135815342,
+            "repeats": 100,
+            "wall_ns": 137880760
+          },
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 99674497,
+            "repeats": 100,
+            "wall_ns": 101661123
+          }
+        },
+        {
+          "after": {
+            "documents": 1,
+            "elapsed_ns": 99017131,
+            "repeats": 100,
+            "wall_ns": 101096800
+          },
+          "before": {
+            "documents": 1,
+            "elapsed_ns": 131948609,
+            "repeats": 100,
+            "wall_ns": 133757582
+          }
+        }
+      ]
+    }
+  },
+  "cli_samples": {
+    "filter-256x128.tbl": {
+      "pairs": [
+        {
+          "before": {
+            "wall_ns": 4220890,
+            "exit_code": 0,
+            "stdout_bytes": 137
+          },
+          "after": {
+            "wall_ns": 2155853,
+            "exit_code": 0,
+            "stdout_bytes": 137
+          }
+        },
+        {
+          "after": {
+            "wall_ns": 2144292,
+            "exit_code": 0,
+            "stdout_bytes": 137
+          },
+          "before": {
+            "wall_ns": 3928820,
+            "exit_code": 0,
+            "stdout_bytes": 137
+          }
+        },
+        {
+          "before": {
+            "wall_ns": 4138371,
+            "exit_code": 0,
+            "stdout_bytes": 137
+          },
+          "after": {
+            "wall_ns": 2183866,
+            "exit_code": 0,
+            "stdout_bytes": 137
+          }
+        },
+        {
+          "after": {
+            "wall_ns": 3067306,
+            "exit_code": 0,
+            "stdout_bytes": 137
+          },
+          "before": {
+            "wall_ns": 4495110,
+            "exit_code": 0,
+            "stdout_bytes": 137
+          }
+        },
+        {
+          "before": {
+            "wall_ns": 4114941,
+            "exit_code": 0,
+            "stdout_bytes": 137
+          },
+          "after": {
+            "wall_ns": 4506526,
+            "exit_code": 0,
+            "stdout_bytes": 137
+          }
+        },
+        {
+          "after": {
+            "wall_ns": 2307283,
+            "exit_code": 0,
+            "stdout_bytes": 137
+          },
+          "before": {
+            "wall_ns": 4156235,
+            "exit_code": 0,
+            "stdout_bytes": 137
+          }
+        },
+        {
+          "before": {
+            "wall_ns": 6967978,
+            "exit_code": 0,
+            "stdout_bytes": 137
+          },
+          "after": {
+            "wall_ns": 2460407,
+            "exit_code": 0,
+            "stdout_bytes": 137
+          }
+        },
+        {
+          "after": {
+            "wall_ns": 2462627,
+            "exit_code": 0,
+            "stdout_bytes": 137
+          },
+          "before": {
+            "wall_ns": 4159124,
+            "exit_code": 0,
+            "stdout_bytes": 137
+          }
+        }
+      ],
+      "exit_code": 0,
+      "stdout_sha256": "eba45114b12050aa730a5163c94b3fffaf70baf690a4aff28d0f11aca22e0ece"
+    },
+    "filter-1024x64.tbl": {
+      "pairs": [
+        {
+          "before": {
+            "wall_ns": 8715397,
+            "exit_code": 0,
+            "stdout_bytes": 137
+          },
+          "after": {
+            "wall_ns": 5322613,
+            "exit_code": 0,
+            "stdout_bytes": 137
+          }
+        },
+        {
+          "after": {
+            "wall_ns": 6338440,
+            "exit_code": 0,
+            "stdout_bytes": 137
+          },
+          "before": {
+            "wall_ns": 8479981,
+            "exit_code": 0,
+            "stdout_bytes": 137
+          }
+        },
+        {
+          "before": {
+            "wall_ns": 7970100,
+            "exit_code": 0,
+            "stdout_bytes": 137
+          },
+          "after": {
+            "wall_ns": 5435299,
+            "exit_code": 0,
+            "stdout_bytes": 137
+          }
+        },
+        {
+          "after": {
+            "wall_ns": 5414024,
+            "exit_code": 0,
+            "stdout_bytes": 137
+          },
+          "before": {
+            "wall_ns": 7924820,
+            "exit_code": 0,
+            "stdout_bytes": 137
+          }
+        },
+        {
+          "before": {
+            "wall_ns": 8778177,
+            "exit_code": 0,
+            "stdout_bytes": 137
+          },
+          "after": {
+            "wall_ns": 5546414,
+            "exit_code": 0,
+            "stdout_bytes": 137
+          }
+        },
+        {
+          "after": {
+            "wall_ns": 5746562,
+            "exit_code": 0,
+            "stdout_bytes": 137
+          },
+          "before": {
+            "wall_ns": 7793093,
+            "exit_code": 0,
+            "stdout_bytes": 137
+          }
+        },
+        {
+          "before": {
+            "wall_ns": 7945747,
+            "exit_code": 0,
+            "stdout_bytes": 137
+          },
+          "after": {
+            "wall_ns": 5340740,
+            "exit_code": 0,
+            "stdout_bytes": 137
+          }
+        },
+        {
+          "after": {
+            "wall_ns": 5344875,
+            "exit_code": 0,
+            "stdout_bytes": 137
+          },
+          "before": {
+            "wall_ns": 7769401,
+            "exit_code": 0,
+            "stdout_bytes": 137
+          }
+        }
+      ],
+      "exit_code": 0,
+      "stdout_sha256": "1ced2e49e74c78053908ab57fad0ded936ec98d735fac8142781f05dfd33b9fa"
+    },
+    "rename-256x128.tbl": {
+      "pairs": [
+        {
+          "before": {
+            "wall_ns": 5132444,
+            "exit_code": 0,
+            "stdout_bytes": 137
+          },
+          "after": {
+            "wall_ns": 3972335,
+            "exit_code": 0,
+            "stdout_bytes": 137
+          }
+        },
+        {
+          "after": {
+            "wall_ns": 4215255,
+            "exit_code": 0,
+            "stdout_bytes": 137
+          },
+          "before": {
+            "wall_ns": 4712782,
+            "exit_code": 0,
+            "stdout_bytes": 137
+          }
+        },
+        {
+          "before": {
+            "wall_ns": 4929929,
+            "exit_code": 0,
+            "stdout_bytes": 137
+          },
+          "after": {
+            "wall_ns": 3825123,
+            "exit_code": 0,
+            "stdout_bytes": 137
+          }
+        },
+        {
+          "after": {
+            "wall_ns": 4133966,
+            "exit_code": 0,
+            "stdout_bytes": 137
+          },
+          "before": {
+            "wall_ns": 4862060,
+            "exit_code": 0,
+            "stdout_bytes": 137
+          }
+        },
+        {
+          "before": {
+            "wall_ns": 4610391,
+            "exit_code": 0,
+            "stdout_bytes": 137
+          },
+          "after": {
+            "wall_ns": 3936033,
+            "exit_code": 0,
+            "stdout_bytes": 137
+          }
+        },
+        {
+          "after": {
+            "wall_ns": 4013144,
+            "exit_code": 0,
+            "stdout_bytes": 137
+          },
+          "before": {
+            "wall_ns": 4799676,
+            "exit_code": 0,
+            "stdout_bytes": 137
+          }
+        },
+        {
+          "before": {
+            "wall_ns": 4768256,
+            "exit_code": 0,
+            "stdout_bytes": 137
+          },
+          "after": {
+            "wall_ns": 4212828,
+            "exit_code": 0,
+            "stdout_bytes": 137
+          }
+        },
+        {
+          "after": {
+            "wall_ns": 4033618,
+            "exit_code": 0,
+            "stdout_bytes": 137
+          },
+          "before": {
+            "wall_ns": 4783343,
+            "exit_code": 0,
+            "stdout_bytes": 137
+          }
+        }
+      ],
+      "exit_code": 0,
+      "stdout_sha256": "e1a920961632e025bdc6f69ec616946b185fadc330b359d910ccddb5f3a562e4"
+    },
+    "removeadd-256x128.tbl": {
+      "pairs": [
+        {
+          "before": {
+            "wall_ns": 57842430,
+            "exit_code": 0,
+            "stdout_bytes": 140
+          },
+          "after": {
+            "wall_ns": 3082254,
+            "exit_code": 0,
+            "stdout_bytes": 140
+          }
+        },
+        {
+          "after": {
+            "wall_ns": 3373681,
+            "exit_code": 0,
+            "stdout_bytes": 140
+          },
+          "before": {
+            "wall_ns": 62224896,
+            "exit_code": 0,
+            "stdout_bytes": 140
+          }
+        },
+        {
+          "before": {
+            "wall_ns": 59887512,
+            "exit_code": 0,
+            "stdout_bytes": 140
+          },
+          "after": {
+            "wall_ns": 3592750,
+            "exit_code": 0,
+            "stdout_bytes": 140
+          }
+        },
+        {
+          "after": {
+            "wall_ns": 3362067,
+            "exit_code": 0,
+            "stdout_bytes": 140
+          },
+          "before": {
+            "wall_ns": 59800538,
+            "exit_code": 0,
+            "stdout_bytes": 140
+          }
+        },
+        {
+          "before": {
+            "wall_ns": 60374690,
+            "exit_code": 0,
+            "stdout_bytes": 140
+          },
+          "after": {
+            "wall_ns": 3309124,
+            "exit_code": 0,
+            "stdout_bytes": 140
+          }
+        },
+        {
+          "after": {
+            "wall_ns": 3377503,
+            "exit_code": 0,
+            "stdout_bytes": 140
+          },
+          "before": {
+            "wall_ns": 58931047,
+            "exit_code": 0,
+            "stdout_bytes": 140
+          }
+        },
+        {
+          "before": {
+            "wall_ns": 69851272,
+            "exit_code": 0,
+            "stdout_bytes": 140
+          },
+          "after": {
+            "wall_ns": 3571317,
+            "exit_code": 0,
+            "stdout_bytes": 140
+          }
+        },
+        {
+          "after": {
+            "wall_ns": 3452006,
+            "exit_code": 0,
+            "stdout_bytes": 140
+          },
+          "before": {
+            "wall_ns": 60457880,
+            "exit_code": 0,
+            "stdout_bytes": 140
+          }
+        }
+      ],
+      "exit_code": 0,
+      "stdout_sha256": "b3a8803f8901e34d370c871673a86ac37333fbf4b7c7c54fc26698c81d05223d"
+    },
+    "uniqueexpr-256x128.tbl": {
+      "pairs": [
+        {
+          "before": {
+            "wall_ns": 3308422,
+            "exit_code": 0,
+            "stdout_bytes": 141
+          },
+          "after": {
+            "wall_ns": 2378979,
+            "exit_code": 0,
+            "stdout_bytes": 141
+          }
+        },
+        {
+          "after": {
+            "wall_ns": 2197604,
+            "exit_code": 0,
+            "stdout_bytes": 141
+          },
+          "before": {
+            "wall_ns": 3219738,
+            "exit_code": 0,
+            "stdout_bytes": 141
+          }
+        },
+        {
+          "before": {
+            "wall_ns": 3514351,
+            "exit_code": 0,
+            "stdout_bytes": 141
+          },
+          "after": {
+            "wall_ns": 2253778,
+            "exit_code": 0,
+            "stdout_bytes": 141
+          }
+        },
+        {
+          "after": {
+            "wall_ns": 2298267,
+            "exit_code": 0,
+            "stdout_bytes": 141
+          },
+          "before": {
+            "wall_ns": 3263437,
+            "exit_code": 0,
+            "stdout_bytes": 141
+          }
+        },
+        {
+          "before": {
+            "wall_ns": 3427194,
+            "exit_code": 0,
+            "stdout_bytes": 141
+          },
+          "after": {
+            "wall_ns": 2593337,
+            "exit_code": 0,
+            "stdout_bytes": 141
+          }
+        },
+        {
+          "after": {
+            "wall_ns": 2193424,
+            "exit_code": 0,
+            "stdout_bytes": 141
+          },
+          "before": {
+            "wall_ns": 3102127,
+            "exit_code": 0,
+            "stdout_bytes": 141
+          }
+        },
+        {
+          "before": {
+            "wall_ns": 3092372,
+            "exit_code": 0,
+            "stdout_bytes": 141
+          },
+          "after": {
+            "wall_ns": 2352353,
+            "exit_code": 0,
+            "stdout_bytes": 141
+          }
+        },
+        {
+          "after": {
+            "wall_ns": 2387266,
+            "exit_code": 0,
+            "stdout_bytes": 141
+          },
+          "before": {
+            "wall_ns": 3560971,
+            "exit_code": 0,
+            "stdout_bytes": 141
+          }
+        }
+      ],
+      "exit_code": 0,
+      "stdout_sha256": "3f30b7dc01c34db508ed822a988e31e11050661b0fdc87e4c46393e415bba92f"
+    },
+    "missingexpr-256x128.tbl": {
+      "pairs": [
+        {
+          "before": {
+            "wall_ns": 4550025,
+            "exit_code": 0,
+            "stdout_bytes": 60088
+          },
+          "after": {
+            "wall_ns": 2420911,
+            "exit_code": 0,
+            "stdout_bytes": 60088
+          }
+        },
+        {
+          "after": {
+            "wall_ns": 2725988,
+            "exit_code": 0,
+            "stdout_bytes": 60088
+          },
+          "before": {
+            "wall_ns": 4372171,
+            "exit_code": 0,
+            "stdout_bytes": 60088
+          }
+        },
+        {
+          "before": {
+            "wall_ns": 5381602,
+            "exit_code": 0,
+            "stdout_bytes": 60088
+          },
+          "after": {
+            "wall_ns": 2456435,
+            "exit_code": 0,
+            "stdout_bytes": 60088
+          }
+        },
+        {
+          "after": {
+            "wall_ns": 2796662,
+            "exit_code": 0,
+            "stdout_bytes": 60088
+          },
+          "before": {
+            "wall_ns": 4534304,
+            "exit_code": 0,
+            "stdout_bytes": 60088
+          }
+        },
+        {
+          "before": {
+            "wall_ns": 4543133,
+            "exit_code": 0,
+            "stdout_bytes": 60088
+          },
+          "after": {
+            "wall_ns": 2439475,
+            "exit_code": 0,
+            "stdout_bytes": 60088
+          }
+        },
+        {
+          "after": {
+            "wall_ns": 2570527,
+            "exit_code": 0,
+            "stdout_bytes": 60088
+          },
+          "before": {
+            "wall_ns": 4530875,
+            "exit_code": 0,
+            "stdout_bytes": 60088
+          }
+        },
+        {
+          "before": {
+            "wall_ns": 4265211,
+            "exit_code": 0,
+            "stdout_bytes": 60088
+          },
+          "after": {
+            "wall_ns": 2355974,
+            "exit_code": 0,
+            "stdout_bytes": 60088
+          }
+        },
+        {
+          "after": {
+            "wall_ns": 2607061,
+            "exit_code": 0,
+            "stdout_bytes": 60088
+          },
+          "before": {
+            "wall_ns": 5028163,
+            "exit_code": 0,
+            "stdout_bytes": 60088
+          }
+        }
+      ],
+      "exit_code": 0,
+      "stdout_sha256": "472d49f249f98b5ec75c42d15b7029bc084526af5c0520e4fe04411db1d70663"
+    },
+    "experiment.tbl": {
+      "pairs": [
+        {
+          "before": {
+            "wall_ns": 3572309,
+            "exit_code": 0,
+            "stdout_bytes": 3355
+          },
+          "after": {
+            "wall_ns": 3299922,
+            "exit_code": 0,
+            "stdout_bytes": 3355
+          }
+        },
+        {
+          "after": {
+            "wall_ns": 3090770,
+            "exit_code": 0,
+            "stdout_bytes": 3355
+          },
+          "before": {
+            "wall_ns": 3445757,
+            "exit_code": 0,
+            "stdout_bytes": 3355
+          }
+        },
+        {
+          "before": {
+            "wall_ns": 3418361,
+            "exit_code": 0,
+            "stdout_bytes": 3355
+          },
+          "after": {
+            "wall_ns": 3543357,
+            "exit_code": 0,
+            "stdout_bytes": 3355
+          }
+        },
+        {
+          "after": {
+            "wall_ns": 3115388,
+            "exit_code": 0,
+            "stdout_bytes": 3355
+          },
+          "before": {
+            "wall_ns": 3488029,
+            "exit_code": 0,
+            "stdout_bytes": 3355
+          }
+        },
+        {
+          "before": {
+            "wall_ns": 3274722,
+            "exit_code": 0,
+            "stdout_bytes": 3355
+          },
+          "after": {
+            "wall_ns": 2959424,
+            "exit_code": 0,
+            "stdout_bytes": 3355
+          }
+        },
+        {
+          "after": {
+            "wall_ns": 3043559,
+            "exit_code": 0,
+            "stdout_bytes": 3355
+          },
+          "before": {
+            "wall_ns": 3615087,
+            "exit_code": 0,
+            "stdout_bytes": 3355
+          }
+        },
+        {
+          "before": {
+            "wall_ns": 3489441,
+            "exit_code": 0,
+            "stdout_bytes": 3355
+          },
+          "after": {
+            "wall_ns": 3030522,
+            "exit_code": 0,
+            "stdout_bytes": 3355
+          }
+        },
+        {
+          "after": {
+            "wall_ns": 3304880,
+            "exit_code": 0,
+            "stdout_bytes": 3355
+          },
+          "before": {
+            "wall_ns": 3419490,
+            "exit_code": 0,
+            "stdout_bytes": 3355
+          }
+        }
+      ],
+      "exit_code": 0,
+      "stdout_sha256": "4e7154b5087a22aa8fc8ca9afbba42c4b612affd654964c4515b5e892c527cb0"
+    }
+  },
+  "rss_samples_kib": {
+    "filter-256x128.tbl": {
+      "before": [
+        3456,
+        3456,
+        3456,
+        3584,
+        3456
+      ],
+      "after": [
+        3456,
+        3456,
+        3456,
+        3456,
+        3328
+      ]
+    },
+    "filter-1024x64.tbl": {
+      "before": [
+        6420,
+        6428,
+        6424,
+        6300,
+        6424
+      ],
+      "after": [
+        6420,
+        6424,
+        6424,
+        6420,
+        6420
+      ]
+    },
+    "rename-256x128.tbl": {
+      "before": [
+        3712,
+        3712,
+        3712,
+        3712,
+        3712
+      ],
+      "after": [
+        3712,
+        3712,
+        3712,
+        3712,
+        3712
+      ]
+    },
+    "removeadd-256x128.tbl": {
+      "before": [
+        3584,
+        3584,
+        3584,
+        3584,
+        3584
+      ],
+      "after": [
+        3456,
+        3584,
+        3584,
+        3584,
+        3584
+      ]
+    },
+    "uniqueexpr-256x128.tbl": {
+      "before": [
+        3456,
+        3456,
+        3456,
+        3456,
+        3456
+      ],
+      "after": [
+        3456,
+        3456,
+        3456,
+        3456,
+        3456
+      ]
+    },
+    "missingexpr-256x128.tbl": {
+      "before": [
+        3584,
+        3584,
+        3584,
+        3584,
+        3584
+      ],
+      "after": [
+        3584,
+        3584,
+        3584,
+        3584,
+        3584
+      ]
+    },
+    "experiment.tbl": {
+      "before": [
+        3200,
+        3200,
+        3200,
+        3072,
+        3200
+      ],
+      "after": [
+        3200,
+        3200,
+        3200,
+        3200,
+        3200
+      ]
+    }
+  },
+  "fixture_diagnostics_equivalence": {
+    "examples/budget.tbl": {
+      "input_sha256": "ea1f78da487849ebda100396bce8912a13bf2b15d517186f12f280c6cf464f8f",
+      "diagnostics_sha256": "2bb49e008f5f91e2bdce78a3e7978e614964d76eb890c4e23500a8e16debab34",
+      "exit_code": 0
+    },
+    "examples/property-model-long.tbl": {
+      "input_sha256": "542f13bb2b2a917000938f76b87fd349c8fc7c270748840241dab80e15afd571",
+      "diagnostics_sha256": "7e3a88a023d2c40d8efc90c8f5d294b62bc547455b04655633ae20bf5d3c5bdd",
+      "exit_code": 0
+    },
+    "tests/fixtures/ads_owner_repair_history.tbl": {
+      "input_sha256": "db83723e3b88307c5c81c9c813c9c8030688bb84f6430afd15ae34124f1113ae",
+      "diagnostics_sha256": "2ce786b82b4c16f714a68db1438a572dd04040f8818f50699aebce24e247e48b",
+      "exit_code": 0
+    },
+    "tests/fixtures/cx/id_collision.tbl": {
+      "input_sha256": "0ffe690c0627b3a6d07f73b52b8f96a52aacc683e880b17cf0753a89fe73d3b9",
+      "diagnostics_sha256": "dacf8fb865fd66897ab6d3270a0d879a0d2020791e9b91e343cebf0d633cff72",
+      "exit_code": 0
+    },
+    "tests/fixtures/cx/join_key_alias.tbl": {
+      "input_sha256": "a513c74e9c04ab1efadfe71857d7fddee465558fbcb603d23ecdd54b07a22d86",
+      "diagnostics_sha256": "99ff965b2d2d56dbd7de60e222a97cc7afa617ced4955cdebb9a207a24b2a3db",
+      "exit_code": 0
+    },
+    "tests/fixtures/cx/raw_default_output.tbl": {
+      "input_sha256": "5c25e432686a90028079261e623c6dd524dcde54ef015515fbd4fafc9657e045",
+      "diagnostics_sha256": "32cbda8bc81ec5fe04d42aa1b7d9d13da5bca540ff5e447f099012147a3a3cf1",
+      "exit_code": 0
+    },
+    "tests/fixtures/cx/removefield_case.tbl": {
+      "input_sha256": "ae8c01d45c35d37cc83825522f2185a17db577e2b886a9a1e5358836b42cf41f",
+      "diagnostics_sha256": "1dd9a6c3b0bdba32de2c6148669e405594d439ec727a49275f1bb65e7392a846",
+      "exit_code": 0
+    },
+    "tests/fixtures/cx/rename_collision.tbl": {
+      "input_sha256": "007baed0292149ed2ffeb313e8751e9ccf3dabac5c24a927ecb371135c1375bf",
+      "diagnostics_sha256": "b8095c769ff1d831969e4ed9d2b5ebc1bcaab287a25807a3c8659e3bfbe92677",
+      "exit_code": 0
+    },
+    "tests/fixtures/dataflow_pres.tbl": {
+      "input_sha256": "73313b17aafaaa667900e3489976c0ea944cd015738d6795641f7e43fc16b5dc",
+      "diagnostics_sha256": "d2cbe791e1df015025124312b63cd7a4df13f4b8eefd8f1bd49a5fde39e86eee",
+      "exit_code": 0
+    },
+    "tests/fixtures/dataflow_sql.tbl": {
+      "input_sha256": "4274996e0d902eea4dfe160a08d4f2454e260d6d7f21ab0c15d2f6a996a55aa0",
+      "diagnostics_sha256": "4156b19d1f413b23644a87f174d330e85412121a56e9542a90a460d0ec464cec",
+      "exit_code": 0
+    }
+  }
+}

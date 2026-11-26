@@ -1387,6 +1387,86 @@ fn check_node_condition_keys(diags: &mut Vec<Diag>, node: &Value, base: &str) {
     }
 }
 
+/// Ordered Select-step names plus a multiset index for existence lookups.
+/// `evolve_names` remains the authority for list mutation; the index updates
+/// only for the three step kinds that can change membership.
+struct TrackedNames {
+    ordered: Vec<String>,
+    counts: HashMap<String, usize>,
+}
+
+impl TrackedNames {
+    fn new(ordered: Vec<String>) -> Self {
+        let mut counts = HashMap::new();
+        for name in &ordered {
+            *counts.entry(name.to_uppercase()).or_insert(0) += 1;
+        }
+        Self { ordered, counts }
+    }
+
+    fn contains(&self, name: &str) -> bool {
+        self.counts.contains_key(&name.to_uppercase())
+    }
+
+    fn evolve(&mut self, step: &Value, step_fields: &[String]) -> Result<bool, &'static str> {
+        let ty = step.get("type").and_then(Value::as_str).unwrap_or("");
+        let mut remove_keys = Vec::new();
+        if ty == "RemoveField" {
+            for name in step_fields {
+                let key = name.to_uppercase();
+                if self.counts.contains_key(&key) && !remove_keys.contains(&key) {
+                    remove_keys.push(key);
+                }
+            }
+        }
+        let rename_keys = if ty == "Refactor" {
+            let rename = step
+                .pointer("/refactor/rename")
+                .and_then(Value::as_str)
+                .filter(|rn| !rn.is_empty());
+            match (step_fields.first(), rename) {
+                (Some(old), Some(new)) if self.contains(old) => {
+                    Some((old.to_uppercase(), new.to_uppercase()))
+                }
+                _ => None,
+            }
+        } else {
+            None
+        };
+        let add_key = if ty == "AddField" {
+            step.pointer("/addField/name")
+                .and_then(Value::as_str)
+                .filter(|name| !name.is_empty())
+                .map(str::to_uppercase)
+        } else {
+            None
+        };
+
+        let result = evolve_names(&mut self.ordered, step);
+        if !matches!(result, Ok(true)) {
+            return result;
+        }
+        for key in remove_keys {
+            self.counts.remove(&key);
+        }
+        if let Some((old, new)) = rename_keys {
+            if old != new {
+                if let Some(left) = self.counts.get_mut(&old) {
+                    *left -= 1;
+                    if *left == 0 {
+                        self.counts.remove(&old);
+                    }
+                }
+                *self.counts.entry(new).or_insert(0) += 1;
+            }
+        }
+        if let Some(key) = add_key {
+            *self.counts.entry(key).or_insert(0) += 1;
+        }
+        result
+    }
+}
+
 /// Select step field-existence tracking across earlier transformations.
 /// The pre-step field set comes from the *input node's* declared `fields`
 /// output — never from the Select's own final `fields`. When the set cannot
@@ -1413,10 +1493,11 @@ fn check_select_steps(
         // field set is provable from predecessor `fields`. Structural step
         // validation (object/type/enum/payload/fields operand) always runs,
         // even when the predecessor exposes no fields.
-        let mut current: Option<Vec<String>> = infos
+        let mut current: Option<TrackedNames> = infos
             .get(pred_key)
             .and_then(|i| i.field_names.clone())
-            .filter(|n| !n.is_empty());
+            .filter(|n| !n.is_empty())
+            .map(TrackedNames::new);
         // names provably removed by a step and not reintroduced — used to
         // flag stale declared fields without requiring full projection
         // equality on real-world wires
@@ -1679,7 +1760,7 @@ fn check_select_steps(
                     .unwrap_or(true));
             if operated {
                 for (fi, name) in step_fields.iter().enumerate() {
-                    if ty != "RemoveField" && !cur.iter().any(|c| field_eq(c, name)) {
+                    if ty != "RemoveField" && !cur.contains(name) {
                         diags.push(err(
                             format!("{}/fields/{}", spath, fi),
                             "err.dataflow.stepField.notfound",
@@ -1717,8 +1798,7 @@ fn check_select_steps(
                         continue;
                     }
                     let upper = name.to_uppercase();
-                    let known =
-                        cur.iter().any(|c| field_eq(c, &name)) || param_names.contains(&upper);
+                    let known = cur.contains(&name) || param_names.contains(&upper);
                     if !known {
                         diags.push(warn(
                             format!("{}/{}", spath, epath),
@@ -1741,14 +1821,29 @@ fn check_select_steps(
             // semantics; `removed` remembers names a step took away so a
             // stale declared field can be flagged without requiring full
             // projection equality (opaque shapes drop all tracking).
-            let before = cur.clone();
-            match evolve_names(cur, step) {
+            let removed_operands: Vec<&str> = if ty == "RemoveField" {
+                step_fields
+                    .iter()
+                    .filter(|name| cur.contains(name))
+                    .map(String::as_str)
+                    .collect()
+            } else {
+                Vec::new()
+            };
+            let rename_old = if ty == "Refactor" {
+                step_fields
+                    .first()
+                    .filter(|sel| cur.contains(sel))
+                    .and_then(|sel| cur.ordered.iter().find(|c| field_eq(c, sel)))
+                    .cloned()
+            } else {
+                None
+            };
+            match cur.evolve(step, &step_fields) {
                 Ok(true) => match ty {
                     "RemoveField" => {
-                        for b in before {
-                            if !cur.iter().any(|c| field_eq(c, &b)) {
-                                removed.push(b);
-                            }
+                        for name in removed_operands {
+                            removed.push(name.to_string());
                         }
                     }
                     "Refactor" => {
@@ -1758,18 +1853,14 @@ fn check_select_steps(
                             .and_then(Value::as_str)
                         {
                             if !rn.is_empty() {
-                                if let Some(sel) = step_fields.first() {
-                                    if let Some(old) =
-                                        before.iter().find(|c| field_eq(c, sel)).cloned()
-                                    {
-                                        // case-only self rename keeps the
-                                        // name alive; a real rename removes
-                                        // the old name and reintroduces rn
-                                        if !field_eq(&old, rn) {
-                                            removed.push(old);
-                                        }
-                                        removed.retain(|r| !field_eq(r, rn));
+                                if let Some(old) = rename_old {
+                                    // case-only self rename keeps the
+                                    // name alive; a real rename removes
+                                    // the old name and reintroduces rn
+                                    if !field_eq(&old, rn) {
+                                        removed.push(old);
                                     }
+                                    removed.retain(|r| !field_eq(r, rn));
                                 }
                             }
                         }
@@ -1825,11 +1916,8 @@ fn check_select_steps(
         // Declared names absent from the provable set are tolerated (steps
         // can produce shapes the projection does not model); names PRESENT
         // in the set may not be declared more times than the steps produce.
-        if current.is_some() {
-            let mut budget: HashMap<String, usize> = HashMap::new();
-            for n in current.iter().flatten() {
-                *budget.entry(n.to_uppercase()).or_insert(0) += 1;
-            }
+        if let Some(tracked) = current {
+            let mut budget = tracked.counts;
             if let Some(farr) = node.get("fields").and_then(Value::as_array) {
                 for (fi, f) in farr.iter().enumerate() {
                     if f.get("hidden").and_then(Value::as_bool) == Some(true) {
