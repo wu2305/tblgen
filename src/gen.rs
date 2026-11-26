@@ -3219,12 +3219,17 @@ fn compute_generated_fields<'a>(
 /// value alongside the descriptors for wire-diag mapping.
 fn emit_generated_wire<'a>(
     spec: &Value,
-    descs: Vec<NodeDesc<'a>>,
+    mut descs: Vec<NodeDesc<'a>>,
     diags: &mut Vec<Diag>,
 ) -> (Option<Value>, Vec<NodeDesc<'a>>) {
+    // Typed emission consumes `out_fields`; collect the read-only default
+    // Output partition and extract warnings before that consuming pass.
+    let (top_dims, top_measures, partition_diag) = default_output_partition(&descs);
+    let extract_diags = extract_dbfield_diags(spec, &descs);
+
     // emit nodes
     let mut nodes_map = Map::new();
-    for d in &descs {
+    for d in &mut descs {
         let body = if let Some(rn) = d.raw_body {
             rn.clone() // verbatim, never mutated
         } else {
@@ -3287,39 +3292,15 @@ fn emit_generated_wire<'a>(
     }
     // top dimensions/measures from the default Output; empty partitions are
     // omitted entirely (the platform writes no empty arrays)
-    let (dims, measures) = default_output_partition(&descs, diags);
-    // extraction needs a physical column name per top field; the wire check
-    // flags it on /dimensions//measures — report it here on the spec side,
-    // routed to the default Output's fields.
-    let extract = spec
-        .pointer("/properties/extractDataEnabled")
-        .and_then(Value::as_bool)
-        .unwrap_or(false);
-    if extract {
-        if let Some(d) = descs.iter().find(|d| is_default_output(d)) {
-            if let Some(fields) = &d.out_fields {
-                for (fi, f) in fields.iter().enumerate() {
-                    let ok = f
-                        .get("dbfield")
-                        .and_then(Value::as_str)
-                        .map(|s| !s.trim().is_empty() && s.chars().all(|c| c.is_ascii()))
-                        .unwrap_or(false);
-                    if !ok {
-                        diags.push(Diag::spec(
-                            format!("/nodes/{}/fields/{}/dbfield", d.idx, fi),
-                            "warn.extract.dbfield",
-                            "extractDataEnabled is set but this output field has no ASCII dbfield",
-                        ));
-                    }
-                }
-            }
-        }
+    if let Some(d) = partition_diag {
+        diags.push(d);
     }
-    if !dims.is_empty() {
-        tbl.insert("dimensions".into(), Value::Array(dims));
+    diags.extend(extract_diags);
+    if !top_dims.is_empty() {
+        tbl.insert("dimensions".into(), Value::Array(top_dims));
     }
-    if !measures.is_empty() {
-        tbl.insert("measures".into(), Value::Array(measures));
+    if !top_measures.is_empty() {
+        tbl.insert("measures".into(), Value::Array(top_measures));
     }
     tbl.insert("dataFlow".into(), Value::Object(flow));
     // top raw merge (collisions already validated)
@@ -4944,7 +4925,7 @@ fn fill_fileinput_identity(fields: &mut [Value]) {
     }
 }
 
-fn emit_typed_node(d: &NodeDesc) -> Result<Value, Diag> {
+fn emit_typed_node(d: &mut NodeDesc) -> Result<Value, Diag> {
     let sn = d.spec.unwrap();
     let ty = d.ty.as_deref().unwrap_or("");
     let mut body = Map::new();
@@ -4963,10 +4944,15 @@ fn emit_typed_node(d: &NodeDesc) -> Result<Value, Diag> {
         body.insert("inputNodes".into(), Value::Array(ids));
     }
     // fields partition: fields:[] is retained for known-empty outputs, but
-    // empty dimensions/measures lists are omitted entirely
-    if let Some(fields) = &d.out_fields {
-        let (dims, meas) = partition_fields(fields);
-        body.insert("fields".into(), Value::Array(fields.clone()));
+    // empty dimensions/measures lists are omitted entirely. The computed
+    // fields are moved into the wire body; partitions still need owned copies.
+    let mut fileinput_original_fields = None;
+    if let Some(fields) = d.out_fields.take() {
+        let (dims, meas) = partition_fields(&fields);
+        if sn.get("originalFields").is_none() && ty == "FileInput" {
+            fileinput_original_fields = Some(fields.clone());
+        }
+        body.insert("fields".into(), Value::Array(fields));
         if !dims.is_empty() {
             body.insert("dimensions".into(), Value::Array(dims));
         }
@@ -4976,11 +4962,9 @@ fn emit_typed_node(d: &NodeDesc) -> Result<Value, Diag> {
     }
     if let Some(of) = sn.get("originalFields") {
         body.insert("originalFields".into(), of.clone());
-    } else if ty == "FileInput" {
+    } else if let Some(fields) = fileinput_original_fields {
         // source nodes copy source fields into originalFields by default
-        if let Some(fields) = &d.out_fields {
-            body.insert("originalFields".into(), Value::Array(fields.clone()));
-        }
+        body.insert("originalFields".into(), Value::Array(fields));
     }
     if ty == "Select" {
         // steps: typed verbatim / rawStep verbatim; empty lists omitted.
@@ -5086,13 +5070,18 @@ fn is_default_output(d: &NodeDesc) -> bool {
     d.wire_key == "default" && d.ty.as_deref() == Some("Output")
 }
 
-fn default_output_partition(descs: &[NodeDesc], diags: &mut Vec<Diag>) -> (Vec<Value>, Vec<Value>) {
+fn default_output_partition(descs: &[NodeDesc]) -> (Vec<Value>, Vec<Value>, Option<Diag>) {
     for d in descs {
         if is_default_output(d) {
-            match &d.out_fields {
-                Some(fields) => return partition_fields(fields),
-                None => {
-                    diags.push(Diag::spec(
+            return match &d.out_fields {
+                Some(fields) => {
+                    let (dims, meas) = partition_fields(fields);
+                    (dims, meas, None)
+                }
+                None => (
+                    vec![],
+                    vec![],
+                    Some(Diag::spec(
                         if d.raw_body.is_some() {
                             format!("/nodes/{}/rawNode/fields", d.idx)
                         } else {
@@ -5100,13 +5089,45 @@ fn default_output_partition(descs: &[NodeDesc], diags: &mut Vec<Diag>) -> (Vec<V
                         },
                         "field.required",
                         "default Output fields are required to build the top-level partition",
+                    )),
+                ),
+            };
+        }
+    }
+    (vec![], vec![], None)
+}
+
+/// Extraction needs a physical column name per top field; the wire check
+/// flags it on /dimensions//measures — report it here on the spec side,
+/// routed to the default Output's fields.
+fn extract_dbfield_diags(spec: &Value, descs: &[NodeDesc]) -> Vec<Diag> {
+    let mut diags = Vec::new();
+    let extract = spec
+        .pointer("/properties/extractDataEnabled")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    if !extract {
+        return diags;
+    }
+    if let Some(d) = descs.iter().find(|d| is_default_output(d)) {
+        if let Some(fields) = &d.out_fields {
+            for (fi, f) in fields.iter().enumerate() {
+                let ok = f
+                    .get("dbfield")
+                    .and_then(Value::as_str)
+                    .map(|s| !s.trim().is_empty() && s.chars().all(|c| c.is_ascii()))
+                    .unwrap_or(false);
+                if !ok {
+                    diags.push(Diag::spec(
+                        format!("/nodes/{}/fields/{}/dbfield", d.idx, fi),
+                        "warn.extract.dbfield",
+                        "extractDataEnabled is set but this output field has no ASCII dbfield",
                     ));
-                    return (vec![], vec![]);
                 }
             }
         }
     }
-    (vec![], vec![])
+    diags
 }
 
 fn emit_properties(spec: &Value) -> Result<Value, Diag> {
