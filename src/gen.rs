@@ -3240,15 +3240,8 @@ fn emit_generated_wire<'a>(
     let mut flow = Map::new();
     flow.insert("nodes".into(), Value::Object(nodes_map));
     if let Some(sp) = spec.get("subProcesses") {
-        match emit_subprocesses(sp) {
-            Ok(v) => {
-                flow.insert("subProcesses".into(), v);
-            }
-            Err(e) => {
-                diags.push(e);
-                return (None, descs);
-            }
-        }
+        let subprocesses = sp.as_object().expect("validated subProcesses is an object");
+        flow.insert("subProcesses".into(), emit_subprocesses(subprocesses));
     }
 
     // top-level
@@ -3269,15 +3262,8 @@ fn emit_generated_wire<'a>(
         }
     }
     if let Some(p) = spec.get("parameters") {
-        match emit_parameters(p) {
-            Ok(v) => {
-                tbl.insert("parameters".into(), v);
-            }
-            Err(e) => {
-                diags.push(e);
-                return (None, descs);
-            }
-        }
+        let parameters = p.as_array().expect("validated parameters is an array");
+        tbl.insert("parameters".into(), emit_parameters(parameters));
     }
     // top dimensions/measures from the default Output; empty partitions are
     // omitted entirely (the platform writes no empty arrays)
@@ -5149,38 +5135,43 @@ fn emit_properties(spec: &Value) -> Result<Value, Diag> {
     Ok(Value::Object(m))
 }
 
-fn emit_parameters(p: &Value) -> Result<Value, Diag> {
-    let arr = p.as_array().cloned().unwrap_or_default();
-    let mut out = Vec::new();
-    for item in arr {
-        let mut m = item.as_object().cloned().unwrap_or_default();
-        m.remove("raw");
-        if let Some(raw) = item.get("raw").and_then(Value::as_object) {
-            for (k, v) in raw {
-                m.insert(k.clone(), v.clone());
-            }
+fn emit_parameters(parameters: &[Value]) -> Value {
+    let mut out = Vec::with_capacity(parameters.len());
+    for item in parameters {
+        let mut parameter = item
+            .as_object()
+            .expect("validated parameter is an object")
+            .clone();
+        if let Some(raw) = parameter.remove("raw") {
+            let Value::Object(raw) = raw else {
+                unreachable!("validated parameter.raw is an object");
+            };
+            parameter.extend(raw);
         }
-        out.push(Value::Object(m));
+        out.push(Value::Object(parameter));
     }
-    Ok(Value::Array(out))
+    Value::Array(out)
 }
 
-fn emit_subprocesses(sp: &Value) -> Result<Value, Diag> {
-    let obj = sp.as_object().cloned().unwrap_or_default();
+fn emit_subprocesses(subprocesses: &Map<String, Value>) -> Value {
     let mut out = Map::new();
-    for (key, item) in obj {
-        let mut m = item.as_object().cloned().unwrap_or_default();
-        let raw = m.remove("raw");
+    for (key, item) in subprocesses {
+        let mut subprocess = item
+            .as_object()
+            .expect("validated subProcesses entry is an object")
+            .clone();
+        let raw = subprocess.remove("raw");
         // id defaults to map key
-        if !m.contains_key("id") {
-            m.insert("id".into(), Value::String(key.clone()));
+        if !subprocess.contains_key("id") {
+            subprocess.insert("id".into(), Value::String(key.clone()));
         }
-        if let Some(Value::Object(r)) = raw {
-            for (k, v) in r {
-                m.insert(k, v);
-            }
+        if let Some(raw) = raw {
+            let Value::Object(raw) = raw else {
+                unreachable!("validated subProcesses entry raw is an object");
+            };
+            subprocess.extend(raw);
         }
-        out.insert(key, Value::Object(m));
+        out.insert(key.clone(), Value::Object(subprocess));
     }
-    Ok(Value::Object(out))
+    Value::Object(out)
 }
