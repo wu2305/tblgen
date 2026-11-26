@@ -182,6 +182,113 @@ fn generate_is_deterministic() {
 }
 
 #[test]
+fn generated_parameters_and_subprocesses_preserve_raw_overrides() {
+    let mut spec = budget_spec();
+    spec["parameters"] = json!([
+        {"name":"first","dataType":"C","defaultValue":"typed",
+         "raw":{"defaultValue":"raw","extra":true}},
+        {"name":"second","dataType":"C"}
+    ]);
+    spec["subProcesses"] = json!({
+        "defaulted":{"rootNodeId":"src","nodeIds":["src"]},
+        "explicit":{"id":"explicit-id","rootNodeId":"src","nodeIds":["src"]},
+        "overridden":{"rootNodeId":"src","nodeIds":["src"],
+                      "raw":{"id":"raw-id","nodeIds":["src","flt"],"extra":true}}
+    });
+
+    let tbl = generate(&spec).unwrap();
+    assert_eq!(
+        tbl["parameters"],
+        json!([
+            {"name":"first","dataType":"C","defaultValue":"raw","extra":true},
+            {"name":"second","dataType":"C"}
+        ])
+    );
+    assert_eq!(
+        tbl["dataFlow"]["subProcesses"],
+        json!({
+            "defaulted":{"id":"defaulted","rootNodeId":"src","nodeIds":["src"]},
+            "explicit":{"id":"explicit-id","rootNodeId":"src","nodeIds":["src"]},
+            "overridden":{"id":"raw-id","rootNodeId":"src","nodeIds":["src","flt"],"extra":true}
+        })
+    );
+
+    spec["parameters"] = json!([]);
+    spec["subProcesses"] = json!({});
+    let tbl = generate(&spec).unwrap();
+    assert_eq!(tbl["parameters"], json!([]));
+    assert_eq!(tbl["dataFlow"]["subProcesses"], json!({}));
+
+    let obj = spec.as_object_mut().unwrap();
+    obj.remove("parameters");
+    obj.remove("subProcesses");
+    let tbl = generate(&spec).unwrap();
+    assert!(tbl.get("parameters").is_none());
+    assert!(tbl.pointer("/dataFlow/subProcesses").is_none());
+}
+
+#[test]
+fn generated_parameters_and_subprocesses_report_invalid_shapes() {
+    let cases = [
+        (
+            json!({}),
+            json!([]),
+            vec![
+                Diag::spec(
+                    "/parameters",
+                    "structure.parameters",
+                    "parameters must be an array",
+                ),
+                Diag::spec(
+                    "/subProcesses",
+                    "structure.subprocesses",
+                    "subProcesses must be an object",
+                ),
+            ],
+        ),
+        (
+            json!([false, {"name":"valid","dataType":"C","raw":[]}]),
+            json!({"a/b~":false,"raw":{"rootNodeId":"src","nodeIds":["src"],"raw":[]}}),
+            vec![
+                Diag::spec(
+                    "/parameters/0",
+                    "structure.parameter",
+                    "parameter must be an object",
+                ),
+                Diag::spec(
+                    "/parameters/1/raw",
+                    "structure.parameter.raw",
+                    "parameter.raw must be an object",
+                ),
+                Diag::spec(
+                    "/subProcesses/a~1b~0",
+                    "structure.subprocess",
+                    "subProcesses entries must be objects",
+                ),
+                Diag::spec(
+                    "/subProcesses/raw/raw",
+                    "structure.subprocess.raw",
+                    "subProcesses.raw must be an object",
+                ),
+            ],
+        ),
+    ];
+    for (parameters, subprocesses, expected) in cases {
+        let mut spec = budget_spec();
+        spec["parameters"] = parameters;
+        spec["subProcesses"] = subprocesses;
+        let (wire, diags) = generate_with_diagnostics(&spec);
+        assert!(wire.is_none());
+        let errors: Vec<_> = diags
+            .iter()
+            .filter(|d| !d.is_warning())
+            .map(Diag::to_json)
+            .collect();
+        assert_eq!(errors, expected.iter().map(Diag::to_json).collect::<Vec<_>>());
+    }
+}
+
+#[test]
 fn lineage_identity_clone_rules() {
     // FileInput -> Select(no steps) -> Output: fields cloned with lineage
     let spec = json!({
