@@ -6,10 +6,48 @@
 //! diagnostic as `Err`; `validate_spec` is exposed for `check` on spec input.
 
 use std::collections::{HashMap, HashSet};
+use std::time::Instant;
 
 use serde_json::{Map, Value};
 
 use crate::model::*;
+
+/// Optional stage timings for the generated-form compile path. The public
+/// generator never collects these; the hidden profile entry point is for
+/// benchmarks only.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct GeneratedCompileProfile {
+    pub validate_ns: u128,
+    pub spec_validation_ns: u128,
+    pub node_entry_validation_ns: u128,
+    pub prepare_ns: u128,
+    pub topo_sort_ns: u128,
+    pub graph_semantics_ns: u128,
+    pub field_compute_ns: u128,
+    pub wire_emit_ns: u128,
+    pub wire_check_ns: u128,
+    pub diag_remap_ns: u128,
+    pub nodes: usize,
+    pub fields: usize,
+    pub steps: usize,
+    pub input_edges: usize,
+    pub wire_diagnostics: usize,
+    pub mapped_diagnostics: usize,
+}
+
+fn profile_start(profile: &Option<&mut GeneratedCompileProfile>) -> Option<Instant> {
+    profile.as_ref().map(|_| Instant::now())
+}
+
+macro_rules! profile_stage {
+    ($profile:ident, $field:ident, $start:expr) => {
+        if let Some(__start) = $start {
+            if let Some(__p) = $profile.as_mut().map(|__p| &mut **__p) {
+                __p.$field += __start.elapsed().as_nanos();
+            }
+        }
+    };
+}
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -19,6 +57,24 @@ use crate::model::*;
 /// succeeds) plus ALL diagnostics — warnings included. Single entry for
 /// the `gen`/`new` CLI so validation and emission share one compile pass.
 pub fn generate_with_diagnostics(spec: &Value) -> (Option<Value>, Vec<Diag>) {
+    generate_impl(spec, None)
+}
+
+/// Benchmark-only entry point: same diagnostics and wire output as
+/// [`generate_with_diagnostics`], plus generated-form stage timings.
+#[doc(hidden)]
+pub fn generate_with_diagnostics_profile(
+    spec: &Value,
+) -> (Option<Value>, Vec<Diag>, GeneratedCompileProfile) {
+    let mut profile = GeneratedCompileProfile::default();
+    let (wire, diags) = generate_impl(spec, Some(&mut profile));
+    (wire, diags, profile)
+}
+
+fn generate_impl(
+    spec: &Value,
+    profile: Option<&mut GeneratedCompileProfile>,
+) -> (Option<Value>, Vec<Diag>) {
     let mut diags = Vec::new();
     if !spec.is_object() {
         diags.push(Diag::spec(
@@ -70,7 +126,7 @@ pub fn generate_with_diagnostics(spec: &Value) -> (Option<Value>, Vec<Diag>) {
             }
         }
         (false, false, true) => {
-            let wire = compile_generated(spec, &mut diags);
+            let wire = compile_generated(spec, &mut diags, profile);
             (wire, diags)
         }
         _ => {
@@ -122,7 +178,7 @@ pub fn validate_spec(spec: &Value) -> Vec<Diag> {
         (true, false, false) => validate_archive(spec, &mut d),
         (false, true, false) => validate_rawtable(spec, &mut d),
         (false, false, true) => {
-            compile_generated(spec, &mut d);
+            compile_generated(spec, &mut d, None);
         }
         _ => d.push(Diag::spec(
             "",
@@ -138,21 +194,35 @@ pub fn validate_spec(spec: &Value) -> Vec<Diag> {
 /// `check` so errors only visible on the wire (rawNode bodies, emitted step
 /// payloads, top-level partition) surface with spec paths. Returns the wire
 /// document when no hard diagnostic was produced.
-fn compile_generated(spec: &Value, diags: &mut Vec<Diag>) -> Option<Value> {
+fn compile_generated(
+    spec: &Value,
+    diags: &mut Vec<Diag>,
+    mut profile: Option<&mut GeneratedCompileProfile>,
+) -> Option<Value> {
     // one prepare pass shared by validation, build and wire-diag mapping
-    let descs = validate_generated(spec, diags);
+    let validate_start = profile_start(&profile);
+    let descs = validate_generated_inner(spec, diags, profile.as_mut().map(|p| &mut **p));
+    profile_stage!(profile, validate_ns, validate_start);
     if diags.iter().any(|d| !d.is_warning()) {
         return None;
     }
-    let (wire, descs) = build_generated_collect(spec, descs, diags);
+    let (wire, descs) =
+        build_generated_collect_inner(spec, descs, diags, profile.as_mut().map(|p| &mut **p));
     let Some(wire) = wire else {
         return None;
     };
     // wire invariants: pure check, no filesystem, no recursion into generate
+    let check_start = profile_start(&profile);
     let wire_diags = crate::check::check(&wire);
+    profile_stage!(profile, wire_check_ns, check_start);
+    if let Some(p) = profile.as_mut().map(|p| &mut **p) {
+        p.wire_diagnostics = wire_diags.len();
+    }
     if wire_diags.is_empty() {
         return Some(wire);
     }
+    let remap_start = profile_start(&profile);
+    let mut mapped = 0usize;
     for wd in wire_diags {
         // warnings the spec side already reports with better paths
         if matches!(
@@ -164,6 +234,11 @@ fn compile_generated(spec: &Value, diags: &mut Vec<Diag>) -> Option<Value> {
             continue;
         }
         diags.push(map_wire_diag(wd, &descs));
+        mapped += 1;
+    }
+    profile_stage!(profile, diag_remap_ns, remap_start);
+    if let Some(p) = profile.as_mut().map(|p| &mut **p) {
+        p.mapped_diagnostics = mapped;
     }
     if diags.iter().any(|d| !d.is_warning()) {
         None
@@ -307,7 +382,11 @@ fn node_ty(spec_node: &Value) -> Option<String> {
         .map(str::to_string)
 }
 
-fn prepare_nodes<'a>(spec: &'a Value, diags: &mut Vec<Diag>) -> Vec<NodeDesc<'a>> {
+fn prepare_nodes_inner<'a>(
+    spec: &'a Value,
+    diags: &mut Vec<Diag>,
+    profile: Option<&mut GeneratedCompileProfile>,
+) -> Vec<NodeDesc<'a>> {
     // borrow the spec's node array (lifetime 'a) — do not clone
     let nodes: &[Value] = spec
         .get("nodes")
@@ -474,7 +553,13 @@ fn prepare_nodes<'a>(spec: &'a Value, diags: &mut Vec<Diag>) -> Vec<NodeDesc<'a>
     }
 
     // topo order (stable: declaration order among ready nodes)
+    let topo_start = profile_start(&profile);
     topo_sort(&mut descs, diags);
+    if let Some(p) = profile {
+        if let Some(start) = topo_start {
+            p.topo_sort_ns += start.elapsed().as_nanos();
+        }
+    }
     descs
 }
 
@@ -557,7 +642,12 @@ impl<'a> NodeDesc<'a> {
 /// Validate the generated form, returning the prepared node descriptors
 /// (topo-sorted, wire keys resolved) for reuse by build + diag mapping.
 /// Empty when structural validation failed before preparation.
-fn validate_generated<'a>(spec: &'a Value, diags: &mut Vec<Diag>) -> Vec<NodeDesc<'a>> {
+fn validate_generated_inner<'a>(
+    spec: &'a Value,
+    diags: &mut Vec<Diag>,
+    mut profile: Option<&mut GeneratedCompileProfile>,
+) -> Vec<NodeDesc<'a>> {
+    let spec_start = profile_start(&profile);
     // closed top-level keys for generated form
     const ALLOWED_TOP: [&str; 7] = [
         "format",
@@ -596,6 +686,7 @@ fn validate_generated<'a>(spec: &'a Value, diags: &mut Vec<Diag>) -> Vec<NodeDes
             diags.push(Diag::spec("/raw", "structure.raw", "raw must be an object"));
         }
     }
+    profile_stage!(profile, spec_validation_ns, spec_start);
 
     let nodes = spec.get("nodes").and_then(Value::as_array);
     let Some(nodes) = nodes else {
@@ -607,16 +698,22 @@ fn validate_generated<'a>(spec: &'a Value, diags: &mut Vec<Diag>) -> Vec<NodeDes
         return Vec::new();
     };
 
+    let entry_start = profile_start(&profile);
     // per-node structural validation
     for (i, n) in nodes.iter().enumerate() {
         validate_node_entry(n, i, diags);
     }
+    profile_stage!(profile, node_entry_validation_ns, entry_start);
 
     // graph + semantic validation needs prepared descriptors
     let mut graph_diags = Vec::new();
-    let descs = prepare_nodes(spec, &mut graph_diags);
+    let prepare_start = profile_start(&profile);
+    let descs = prepare_nodes_inner(spec, &mut graph_diags, profile.as_mut().map(|p| &mut **p));
+    profile_stage!(profile, prepare_ns, prepare_start);
     diags.extend(graph_diags);
+    let graph_start = profile_start(&profile);
     validate_graph_semantics(spec, &descs, diags);
+    profile_stage!(profile, graph_semantics_ns, graph_start);
     descs
 }
 
@@ -3103,14 +3200,12 @@ struct ComputedNode {
     step_hints: Vec<Option<Value>>,
 }
 
-/// Build the wire document from already-prepared descriptors; returns the
-/// (possibly field-annotated) descriptors alongside for wire-diag mapping.
-fn build_generated_collect<'a>(
-    spec: &Value,
+/// Compute output fields in topo order; returns the field-annotated
+/// descriptors for wire-diag mapping.
+fn compute_generated_fields<'a>(
     descs: Vec<NodeDesc<'a>>,
     diags: &mut Vec<Diag>,
-) -> (Option<Value>, Vec<NodeDesc<'a>>) {
-    // compute output fields in topo order
+) -> Vec<NodeDesc<'a>> {
     let key_to_idx: HashMap<String, usize> = descs
         .iter()
         .enumerate()
@@ -3128,10 +3223,16 @@ fn build_generated_collect<'a>(
             (None, None) => {}
         }
     }
-    if diags.iter().any(|d| !d.is_warning()) {
-        return (None, descs);
-    }
+    descs
+}
 
+/// Emit the wire document from field-annotated descriptors; returns the wire
+/// value alongside the descriptors for wire-diag mapping.
+fn emit_generated_wire<'a>(
+    spec: &Value,
+    descs: Vec<NodeDesc<'a>>,
+    diags: &mut Vec<Diag>,
+) -> (Option<Value>, Vec<NodeDesc<'a>>) {
     // emit nodes
     let mut nodes_map = Map::new();
     for d in &descs {
@@ -3242,6 +3343,41 @@ fn build_generated_collect<'a>(
         return (None, descs);
     }
     (Some(Value::Object(tbl)), descs)
+}
+
+/// Build the wire document from already-prepared descriptors; returns the
+/// (possibly field-annotated) descriptors alongside for wire-diag mapping.
+fn build_generated_collect_inner<'a>(
+    spec: &Value,
+    descs: Vec<NodeDesc<'a>>,
+    diags: &mut Vec<Diag>,
+    mut profile: Option<&mut GeneratedCompileProfile>,
+) -> (Option<Value>, Vec<NodeDesc<'a>>) {
+    let field_start = profile_start(&profile);
+    let descs = compute_generated_fields(descs, diags);
+    profile_stage!(profile, field_compute_ns, field_start);
+    if let Some(p) = profile.as_mut().map(|p| &mut **p) {
+        p.nodes = descs.len();
+        p.input_edges = descs.iter().map(|d| d.inputs.len()).sum();
+        p.fields = descs
+            .iter()
+            .map(|d| d.out_fields.as_ref().map_or(0, Vec::len))
+            .sum();
+        p.steps = descs
+            .iter()
+            .filter_map(|d| d.spec)
+            .filter_map(|sn| sn.get("steps").and_then(Value::as_array))
+            .map(Vec::len)
+            .sum();
+    }
+    if diags.iter().any(|d| !d.is_warning()) {
+        return (None, descs);
+    }
+
+    let emit_start = profile_start(&profile);
+    let result = emit_generated_wire(spec, descs, diags);
+    profile_stage!(profile, wire_emit_ns, emit_start);
+    result
 }
 
 /// Resolve a spec input key to its prepared descriptor.

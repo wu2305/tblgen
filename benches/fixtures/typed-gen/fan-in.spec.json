@@ -1,0 +1,521 @@
+{
+  "format": 1,
+  "version": "4.19.0",
+  "properties": {
+    "datasource": "defdw",
+    "extractDataEnabled": false
+  },
+  "nodes": [
+    {
+      "key": "a0",
+      "type": "FileInput",
+      "alias": "a0",
+      "config": {
+        "fileName": "fan0.xlsx#S"
+      },
+      "fields": [
+        {
+          "name": "k",
+          "dataType": "C",
+          "isDimension": true,
+          "dbfield": "K0"
+        },
+        {
+          "name": "v0_00",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "v0_01",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "v0_02",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "v0_03",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "v0_04",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "v0_05",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "v0_06",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "v0_07",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "v0_08",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "v0_09",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "v0_10",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "v0_11",
+          "dataType": "N",
+          "isDimension": false
+        }
+      ]
+    },
+    {
+      "key": "a1",
+      "type": "FileInput",
+      "alias": "a1",
+      "config": {
+        "fileName": "fan1.xlsx#S"
+      },
+      "fields": [
+        {
+          "name": "k",
+          "dataType": "C",
+          "isDimension": true,
+          "dbfield": "K1"
+        },
+        {
+          "name": "v1_00",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "v1_01",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "v1_02",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "v1_03",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "v1_04",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "v1_05",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "v1_06",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "v1_07",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "v1_08",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "v1_09",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "v1_10",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "v1_11",
+          "dataType": "N",
+          "isDimension": false
+        }
+      ]
+    },
+    {
+      "key": "a2",
+      "type": "FileInput",
+      "alias": "a2",
+      "config": {
+        "fileName": "fan2.xlsx#S"
+      },
+      "fields": [
+        {
+          "name": "k",
+          "dataType": "C",
+          "isDimension": true,
+          "dbfield": "K2"
+        },
+        {
+          "name": "v2_00",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "v2_01",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "v2_02",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "v2_03",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "v2_04",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "v2_05",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "v2_06",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "v2_07",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "v2_08",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "v2_09",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "v2_10",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "v2_11",
+          "dataType": "N",
+          "isDimension": false
+        }
+      ]
+    },
+    {
+      "key": "a3",
+      "type": "FileInput",
+      "alias": "a3",
+      "config": {
+        "fileName": "fan3.xlsx#S"
+      },
+      "fields": [
+        {
+          "name": "k",
+          "dataType": "C",
+          "isDimension": true,
+          "dbfield": "K3"
+        },
+        {
+          "name": "v3_00",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "v3_01",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "v3_02",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "v3_03",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "v3_04",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "v3_05",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "v3_06",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "v3_07",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "v3_08",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "v3_09",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "v3_10",
+          "dataType": "N",
+          "isDimension": false
+        },
+        {
+          "name": "v3_11",
+          "dataType": "N",
+          "isDimension": false
+        }
+      ]
+    },
+    {
+      "key": "j",
+      "type": "Join",
+      "inputs": [
+        "a0",
+        "a1",
+        "a2",
+        "a3"
+      ],
+      "config": {
+        "joinConditions": [
+          {
+            "joinType": "InnerJoin",
+            "leftTable": "a0",
+            "rightTable": "a1",
+            "clauses": [
+              {
+                "leftExp": "[a0].[k]",
+                "operator": "=",
+                "rightExp": "[a1].[k]"
+              }
+            ]
+          },
+          {
+            "joinType": "InnerJoin",
+            "leftTable": "a1",
+            "rightTable": "a2",
+            "clauses": [
+              {
+                "leftExp": "[a1].[k]",
+                "operator": "=",
+                "rightExp": "[a2].[k]"
+              }
+            ]
+          },
+          {
+            "joinType": "InnerJoin",
+            "leftTable": "a2",
+            "rightTable": "a3",
+            "clauses": [
+              {
+                "leftExp": "[a2].[k]",
+                "operator": "=",
+                "rightExp": "[a3].[k]"
+              }
+            ]
+          }
+        ]
+      },
+      "fields": [
+        {
+          "name": "k",
+          "inputNode": "a0"
+        },
+        {
+          "name": "v0_00"
+        },
+        {
+          "name": "v0_01"
+        },
+        {
+          "name": "v0_02"
+        },
+        {
+          "name": "v0_03"
+        },
+        {
+          "name": "v0_04"
+        },
+        {
+          "name": "v0_05"
+        },
+        {
+          "name": "v0_06"
+        },
+        {
+          "name": "v0_07"
+        },
+        {
+          "name": "v0_08"
+        },
+        {
+          "name": "v0_09"
+        },
+        {
+          "name": "v0_10"
+        },
+        {
+          "name": "v0_11"
+        },
+        {
+          "name": "v1_00"
+        },
+        {
+          "name": "v1_01"
+        },
+        {
+          "name": "v1_02"
+        },
+        {
+          "name": "v1_03"
+        },
+        {
+          "name": "v1_04"
+        },
+        {
+          "name": "v1_05"
+        },
+        {
+          "name": "v1_06"
+        },
+        {
+          "name": "v1_07"
+        },
+        {
+          "name": "v1_08"
+        },
+        {
+          "name": "v1_09"
+        },
+        {
+          "name": "v1_10"
+        },
+        {
+          "name": "v1_11"
+        },
+        {
+          "name": "v2_00"
+        },
+        {
+          "name": "v2_01"
+        },
+        {
+          "name": "v2_02"
+        },
+        {
+          "name": "v2_03"
+        },
+        {
+          "name": "v2_04"
+        },
+        {
+          "name": "v2_05"
+        },
+        {
+          "name": "v2_06"
+        },
+        {
+          "name": "v2_07"
+        },
+        {
+          "name": "v2_08"
+        },
+        {
+          "name": "v2_09"
+        },
+        {
+          "name": "v2_10"
+        },
+        {
+          "name": "v2_11"
+        },
+        {
+          "name": "v3_00"
+        },
+        {
+          "name": "v3_01"
+        },
+        {
+          "name": "v3_02"
+        },
+        {
+          "name": "v3_03"
+        },
+        {
+          "name": "v3_04"
+        },
+        {
+          "name": "v3_05"
+        },
+        {
+          "name": "v3_06"
+        },
+        {
+          "name": "v3_07"
+        },
+        {
+          "name": "v3_08"
+        },
+        {
+          "name": "v3_09"
+        },
+        {
+          "name": "v3_10"
+        },
+        {
+          "name": "v3_11"
+        }
+      ]
+    },
+    {
+      "key": "out",
+      "type": "Output",
+      "inputs": [
+        "j"
+      ]
+    }
+  ]
+}

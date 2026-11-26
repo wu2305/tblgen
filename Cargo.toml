@@ -19,3 +19,7 @@ path = "src/main.rs"
 [[bench]]
 name = "wire_check"
 harness = false
+
+[[bench]]
+name = "typed_gen"
+harness = false
