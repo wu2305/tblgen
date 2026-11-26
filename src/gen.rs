@@ -1,9 +1,8 @@
 //! `generate` — compile a spec-format v1 document into a `.tbl` wire object.
 //!
-//! Pipeline: dispatch on form (generated / archive / rawTable) →
-//! `validate_spec` (all diagnostics, spec RFC 6901 paths) → `build` (field
-//! projection, topo ordering, verbatim merges). `generate` returns the first
-//! diagnostic as `Err`; `validate_spec` is exposed for `check` on spec input.
+//! Generation and validation share form dispatch and diagnostics. The generated
+//! form compiles to check wire invariants. Archive and rawTable validation can
+//! borrow the input without materializing the wire document.
 
 use std::collections::{HashMap, HashSet};
 use std::time::Instant;
@@ -57,7 +56,7 @@ macro_rules! profile_stage {
 /// succeeds) plus ALL diagnostics — warnings included. Single entry for
 /// the `gen`/`new` CLI so validation and emission share one compile pass.
 pub fn generate_with_diagnostics(spec: &Value) -> (Option<Value>, Vec<Diag>) {
-    generate_impl(spec, None)
+    process_spec(spec, true, None)
 }
 
 /// Benchmark-only entry point: same diagnostics and wire output as
@@ -67,77 +66,51 @@ pub fn generate_with_diagnostics_profile(
     spec: &Value,
 ) -> (Option<Value>, Vec<Diag>, GeneratedCompileProfile) {
     let mut profile = GeneratedCompileProfile::default();
-    let (wire, diags) = generate_impl(spec, Some(&mut profile));
+    let (wire, diags) = process_spec(spec, true, Some(&mut profile));
     (wire, diags, profile)
 }
 
-fn generate_impl(
+fn process_spec(
     spec: &Value,
+    emit_wire: bool,
     profile: Option<&mut GeneratedCompileProfile>,
 ) -> (Option<Value>, Vec<Diag>) {
     let mut diags = Vec::new();
-    if !spec.is_object() {
+    let Some(obj) = spec.as_object() else {
         diags.push(Diag::spec(
             "",
             "structure.spec",
             "spec must be a JSON object",
         ));
         return (None, diags);
+    };
+    if obj.get("format").and_then(Value::as_u64) != Some(1) {
+        diags.push(Diag::spec(
+            "/format",
+            "structure.format",
+            "spec.format must be 1",
+        ));
+        return (None, diags);
     }
-    match spec.get("format") {
-        Some(v) if v.as_u64() == Some(1) => {}
-        _ => {
-            diags.push(Diag::spec(
-                "/format",
-                "structure.format",
-                "spec.format must be 1",
-            ));
-            return (None, diags);
-        }
-    }
-    let has_archive = spec.get("archive").is_some();
-    let has_rawtable = spec.get("rawTable").is_some();
-    let has_nodes = spec.get("nodes").is_some();
-    match (has_archive, has_rawtable, has_nodes) {
-        (true, false, false) => {
-            validate_archive(spec, &mut diags);
-            if diags.iter().any(|d| !d.is_warning()) {
-                return (None, diags);
-            }
-            match build_archive(spec) {
-                Ok(tbl) => (Some(tbl), diags),
-                Err(d) => {
-                    diags.push(d);
-                    (None, diags)
-                }
-            }
-        }
-        (false, true, false) => {
-            validate_rawtable(spec, &mut diags);
-            if diags.iter().any(|d| !d.is_warning()) {
-                return (None, diags);
-            }
-            match build_rawtable(spec) {
-                Ok(tbl) => (Some(tbl), diags),
-                Err(d) => {
-                    diags.push(d);
-                    (None, diags)
-                }
-            }
-        }
-        (false, false, true) => {
-            let wire = compile_generated(spec, &mut diags, profile);
-            (wire, diags)
-        }
+    let wire = match (obj.get("archive"), obj.get("rawTable"), obj.get("nodes")) {
+        (Some(archive), None, None) => validate_archive(obj, archive, &mut diags)
+            .filter(|_| emit_wire)
+            .map(build_archive),
+        (None, Some(rawtable), None) => validate_rawtable(obj, rawtable, &mut diags)
+            .filter(|_| emit_wire)
+            .map(|table| Value::Object(table.clone())),
+        // Generated-form validation needs the wire to check emission invariants.
+        (None, None, Some(_)) => compile_generated(spec, &mut diags, profile).filter(|_| emit_wire),
         _ => {
             diags.push(Diag::spec(
                 "",
                 "structure.form",
                 "spec must contain exactly one of: nodes (generated), archive, rawTable",
             ));
-            (None, diags)
+            None
         }
-    }
+    };
+    (wire, diags)
 }
 
 /// Compile a spec document to a `.tbl` wire `Value`.
@@ -154,39 +127,7 @@ pub fn generate(spec: &Value) -> Result<Value, Diag> {
 
 /// Full spec validation (used by `gen` and by `check` on spec input).
 pub fn validate_spec(spec: &Value) -> Vec<Diag> {
-    let mut d = Vec::new();
-    if !spec.is_object() {
-        d.push(Diag::spec(
-            "",
-            "structure.spec",
-            "spec must be a JSON object",
-        ));
-        return d;
-    }
-    match spec.get("format") {
-        Some(v) if v.as_u64() == Some(1) => {}
-        _ => d.push(Diag::spec(
-            "/format",
-            "structure.format",
-            "spec.format must be 1",
-        )),
-    }
-    let has_archive = spec.get("archive").is_some();
-    let has_rawtable = spec.get("rawTable").is_some();
-    let has_nodes = spec.get("nodes").is_some();
-    match (has_archive, has_rawtable, has_nodes) {
-        (true, false, false) => validate_archive(spec, &mut d),
-        (false, true, false) => validate_rawtable(spec, &mut d),
-        (false, false, true) => {
-            compile_generated(spec, &mut d, None);
-        }
-        _ => d.push(Diag::spec(
-            "",
-            "structure.form",
-            "spec must contain exactly one of: nodes (generated), archive, rawTable",
-        )),
-    }
-    d
+    process_spec(spec, false, None).1
 }
 
 /// Single compile path for the generated form: structural/semantic
@@ -248,9 +189,9 @@ fn compile_generated(
 }
 
 /// Translate a wire `.tbl` diagnostic path into the spec path that produced
-/// it. Node bodies map by wire map key; generated keys keep their tail,
-/// config keys route under `/config`, everything else under `/raw` (or
-/// `/rawNode` for rawNode entries whose body is verbatim).
+/// it. Node bodies map by wire map key; inputNodes maps to inputs, other
+/// generated keys keep their tail, and payload keys route under `/config`
+/// or `/raw` (`/rawNode` for verbatim node bodies).
 fn map_wire_diag(wd: Diag, descs: &[NodeDesc]) -> Diag {
     let p = wd.path;
     let remap = |path: String| Diag {
@@ -267,64 +208,54 @@ fn map_wire_diag(wd: Diag, descs: &[NodeDesc]) -> Diag {
         // wk is the escaped path segment from the wire pointer
         if let Some(d) = descs.iter().find(|d| ptr_escape(&d.wire_key) == wk) {
             let base = format!("/nodes/{}", d.idx);
-            let spec_path = if d.raw_body.is_some() {
-                match tail {
-                    None => base,
-                    Some(t) => format!("{}/rawNode/{}", base, t),
-                }
-            } else {
-                match tail {
-                    None => base,
-                    Some(t) => {
-                        let seg = t.split('/').next().unwrap_or("");
-                        if GENERATED_NODE_KEYS.contains(&seg) {
-                            // a wire step that decompiles to rawStep lives
-                            // under steps/N/rawStep in the spec
-                            if let Some((n, rest)) =
-                                t.strip_prefix("steps/").and_then(|r| r.split_once('/'))
-                            {
-                                if let Ok(si) = n.parse::<usize>() {
-                                    let is_raw = d
-                                        .spec
-                                        .and_then(|s| s.get("steps"))
-                                        .and_then(Value::as_array)
-                                        .and_then(|a| a.get(si))
-                                        .map(|s| s.get("rawStep").is_some())
-                                        .unwrap_or(false);
-                                    if is_raw {
-                                        return remap(format!(
-                                            "{}/steps/{}/rawStep/{}",
-                                            base, si, rest
-                                        ));
-                                    }
+            let spec_path = match (d.body, tail) {
+                (_, None) => base,
+                (NodeBody::Raw(_), Some(t)) => format!("{}/rawNode/{}", base, t),
+                (NodeBody::Typed(sn), Some(t)) => {
+                    let seg = t.split('/').next().unwrap_or("");
+                    if seg == "inputNodes" {
+                        format!("{}/inputs{}", base, &t[seg.len()..])
+                    } else if GENERATED_NODE_KEYS.contains(&seg) {
+                        // a wire step that decompiles to rawStep lives
+                        // under steps/N/rawStep in the spec
+                        if let Some((n, rest)) =
+                            t.strip_prefix("steps/").and_then(|r| r.split_once('/'))
+                        {
+                            if let Ok(si) = n.parse::<usize>() {
+                                let is_raw = sn
+                                    .get("steps")
+                                    .and_then(Value::as_array)
+                                    .and_then(|a| a.get(si))
+                                    .map(|s| s.get("rawStep").is_some())
+                                    .unwrap_or(false);
+                                if is_raw {
+                                    return remap(format!(
+                                        "{}/steps/{}/rawStep/{}",
+                                        base, si, rest
+                                    ));
                                 }
                             }
-                            format!("{}/{}", base, t)
-                        } else if seg == "inputNodes" {
-                            format!("{}/inputs/{}", base, &t["inputNodes/".len()..])
+                        }
+                        format!("{}/{}", base, t)
+                    } else {
+                        // route by where the spec actually put the key:
+                        // config first, then raw, then the type whitelist
+                        let in_cfg = sn
+                            .get("config")
+                            .and_then(Value::as_object)
+                            .map(|c| c.contains_key(seg))
+                            .unwrap_or(false);
+                        let in_raw = sn
+                            .get("raw")
+                            .and_then(Value::as_object)
+                            .map(|r| r.contains_key(seg))
+                            .unwrap_or(false);
+                        if in_cfg
+                            || (!in_raw && config_key_allowed(d.ty.as_deref().unwrap_or(""), seg))
+                        {
+                            format!("{}/config/{}", base, t)
                         } else {
-                            // route by where the spec actually put the key:
-                            // config first, then raw, then the type whitelist
-                            let in_cfg = d
-                                .spec
-                                .and_then(|s| s.get("config"))
-                                .and_then(Value::as_object)
-                                .map(|c| c.contains_key(seg))
-                                .unwrap_or(false);
-                            let in_raw = d
-                                .spec
-                                .and_then(|s| s.get("raw"))
-                                .and_then(Value::as_object)
-                                .map(|r| r.contains_key(seg))
-                                .unwrap_or(false);
-                            if in_cfg
-                                || (!in_raw
-                                    && config_key_allowed(d.ty.as_deref().unwrap_or(""), seg))
-                            {
-                                format!("{}/config/{}", base, t)
-                            } else {
-                                format!("{}/raw/{}", base, t)
-                            }
+                            format!("{}/raw/{}", base, t)
                         }
                     }
                 }
@@ -351,6 +282,12 @@ fn map_wire_diag(wd: Diag, descs: &[NodeDesc]) -> Diag {
 // Node preparation: keys, ids, topo
 // ---------------------------------------------------------------------------
 
+#[derive(Clone, Copy)]
+enum NodeBody<'a> {
+    Typed(&'a Value),
+    Raw(&'a Value),
+}
+
 struct NodeDesc<'a> {
     idx: usize,
     key: String,
@@ -359,10 +296,7 @@ struct NodeDesc<'a> {
     /// is the only identifier consumers may reference — a rawNode body's own
     /// `id` is verbatim payload reserved for duplicate detection only.
     wire_key: String,
-    /// spec node object (typed) — None for rawNode entries
-    spec: Option<&'a Value>,
-    /// rawNode body for raw entries
-    raw_body: Option<&'a Value>,
+    body: NodeBody<'a>,
     ty: Option<String>,
     inputs: Vec<String>,
     /// resolved wire node ids for `inputs`, filled post-resolution
@@ -427,29 +361,20 @@ fn prepare_nodes_inner<'a>(
                 format!("duplicate node key {:?}", key),
             ));
         }
+        let raw_body = n.get("rawNode");
         descs.push(NodeDesc {
             idx: i,
             key: key.clone(),
             wire_key: String::new(),
-            spec: if n.get("rawNode").is_some() {
-                None
-            } else {
-                Some(n)
-            },
-            raw_body: n.get("rawNode"),
-            ty: node_ty(n).or_else(|| {
-                n.get("rawNode")
-                    .and_then(|b| b.get("type"))
-                    .and_then(Value::as_str)
-                    .map(str::to_string)
-            }),
+            body: raw_body.map_or(NodeBody::Typed(n), NodeBody::Raw),
+            ty: node_ty(n).or_else(|| raw_body.and_then(node_ty)),
             inputs: Vec::new(),
             inputs_wire: Vec::new(),
             alias: n
                 .get("alias")
                 .and_then(Value::as_str)
                 .or_else(|| {
-                    n.get("rawNode")
+                    raw_body
                         .and_then(|b| b.get("alias"))
                         .and_then(Value::as_str)
                 })
@@ -464,7 +389,7 @@ fn prepare_nodes_inner<'a>(
     // first declared Output index (typed only)
     let first_output_idx = descs
         .iter()
-        .position(|d| d.spec.is_some() && d.ty.as_deref() == Some("Output"));
+        .position(|d| matches!(d.body, NodeBody::Typed(_)) && d.ty.as_deref() == Some("Output"));
     // single owner map over every wire-visible identifier: typed resolved
     // ids, rawNode spec keys (nodes map keys) and rawNode body ids. The same
     // owner may claim the same identifier twice (e.g. key == body.id).
@@ -484,54 +409,56 @@ fn prepare_nodes_inner<'a>(
     };
 
     for d in descs.iter_mut() {
-        if let Some(sn) = d.spec {
-            // inputs
-            if let Some(arr) = sn.get("inputs").and_then(Value::as_array) {
-                for (ii, v) in arr.iter().enumerate() {
-                    match v.as_str() {
-                        Some(s) => {
-                            d.inputs.push(s.to_string());
-                            if !key_set.contains(s) {
-                                diags.push(Diag::spec(
-                                    format!("/nodes/{}/inputs/{}", d.idx, ii),
-                                    "graph.danglingInput",
-                                    format!("inputs references unknown key {:?}", s),
-                                ));
+        match d.body {
+            NodeBody::Typed(sn) => {
+                // inputs
+                if let Some(arr) = sn.get("inputs").and_then(Value::as_array) {
+                    for (ii, v) in arr.iter().enumerate() {
+                        match v.as_str() {
+                            Some(s) => {
+                                d.inputs.push(s.to_string());
+                                if !key_set.contains(s) {
+                                    diags.push(Diag::spec(
+                                        format!("/nodes/{}/inputs/{}", d.idx, ii),
+                                        "graph.danglingInput",
+                                        format!("inputs references unknown key {:?}", s),
+                                    ));
+                                }
                             }
+                            None => diags.push(Diag::spec(
+                                format!("/nodes/{}/inputs/{}", d.idx, ii),
+                                "structure.inputs",
+                                "inputs entries must be strings (node keys)",
+                            )),
                         }
-                        None => diags.push(Diag::spec(
-                            format!("/nodes/{}/inputs/{}", d.idx, ii),
-                            "structure.inputs",
-                            "inputs entries must be strings (node keys)",
-                        )),
                     }
                 }
+                // resolved id
+                let explicit_id = sn.get("id").and_then(Value::as_str).map(str::to_string);
+                let resolved =
+                    if d.idx == first_output_idx.unwrap_or(usize::MAX) && explicit_id.is_none() {
+                        "default".to_string()
+                    } else {
+                        explicit_id.unwrap_or_else(|| d.key.clone())
+                    };
+                d.wire_key = resolved.clone();
+                claim(&resolved, d.idx, format!("/nodes/{}/id", d.idx), diags);
             }
-            // resolved id
-            let explicit_id = sn.get("id").and_then(Value::as_str).map(str::to_string);
-            let resolved =
-                if d.idx == first_output_idx.unwrap_or(usize::MAX) && explicit_id.is_none() {
-                    "default".to_string()
-                } else {
-                    explicit_id.unwrap_or_else(|| d.key.clone())
-                };
-            d.wire_key = resolved.clone();
-            claim(&resolved, d.idx, format!("/nodes/{}/id", d.idx), diags);
-        } else {
-            // rawNode: wire map key = spec key, body untouched. The body's
-            // own `id` is reserved for the duplicate-owners check only —
-            // consumers route through the map key, never through body.id.
-            d.wire_key = d.key.clone();
-            let body_id = d
-                .raw_body
-                .and_then(|b| b.get("id"))
-                .and_then(Value::as_str)
-                .filter(|s| !s.is_empty())
-                .map(str::to_string);
-            claim(&d.key, d.idx, format!("/nodes/{}/key", d.idx), diags);
-            if let Some(bid) = body_id {
-                if bid != d.key {
-                    claim(&bid, d.idx, format!("/nodes/{}/rawNode/id", d.idx), diags);
+            NodeBody::Raw(raw) => {
+                // rawNode: wire map key = spec key, body untouched. The body's
+                // own `id` is reserved for the duplicate-owners check only —
+                // consumers route through the map key, never through body.id.
+                d.wire_key = d.key.clone();
+                let body_id = raw
+                    .get("id")
+                    .and_then(Value::as_str)
+                    .filter(|s| !s.is_empty())
+                    .map(str::to_string);
+                claim(&d.key, d.idx, format!("/nodes/{}/key", d.idx), diags);
+                if let Some(bid) = body_id {
+                    if bid != d.key {
+                        claim(&bid, d.idx, format!("/nodes/{}/rawNode/id", d.idx), diags);
+                    }
                 }
             }
         }
@@ -623,8 +550,7 @@ impl<'a> NodeDesc<'a> {
             idx: self.idx,
             key: self.key.clone(),
             wire_key: self.wire_key.clone(),
-            spec: self.spec,
-            raw_body: self.raw_body,
+            body: self.body,
             ty: self.ty.clone(),
             inputs: self.inputs.clone(),
             inputs_wire: self.inputs_wire.clone(),
@@ -978,21 +904,10 @@ fn validate_config(v: &Value, ty: &str, path: &str, diags: &mut Vec<Diag>) {
             };
             if !ok {
                 diags.push(Diag::spec(
-                    kpath.clone(),
+                    kpath,
                     "structure.config.type",
                     format!("config.{} must be a {:?} scalar", k, kind),
                 ));
-            }
-            if k == "unionType" {
-                if let Some(su) = kv.as_str() {
-                    if !UNION_TYPES.contains(&su) {
-                        diags.push(Diag::spec(
-                            kpath.clone(),
-                            "enum.unionType",
-                            format!("unknown unionType {:?}", su),
-                        ));
-                    }
-                }
             }
             continue;
         }
@@ -1439,19 +1354,34 @@ fn validate_closed_config(v: &Value, kind: ClosedKind, path: &str, diags: &mut V
                                     ));
                                 }
                             }
-                            for k in ["name", "dataType"] {
-                                if co
-                                    .get(k)
-                                    .and_then(Value::as_str)
-                                    .map(|s| s.is_empty())
-                                    .unwrap_or(true)
-                                {
-                                    diags.push(Diag::spec(
-                                        format!("{}/{}", cp, k),
-                                        "field.required",
-                                        format!("field reference requires non-empty {}", k),
-                                    ));
+                            // The typed cell has an explicit field reference
+                            // shape, including metadata the wire loader can omit.
+                            match co.get("name").and_then(Value::as_str) {
+                                Some(name) => {
+                                    if let Some((rule, message)) = col_to_row_empty_name(name) {
+                                        diags.push(Diag::spec(
+                                            format!("{}/name", cp),
+                                            rule,
+                                            message,
+                                        ));
+                                    }
                                 }
+                                None => diags.push(Diag::spec(
+                                    format!("{}/name", cp),
+                                    "field.required",
+                                    "field reference requires a string name",
+                                )),
+                            }
+                            if !co
+                                .get("dataType")
+                                .and_then(Value::as_str)
+                                .is_some_and(|s| !s.is_empty())
+                            {
+                                diags.push(Diag::spec(
+                                    format!("{}/dataType", cp),
+                                    "field.required",
+                                    "field reference requires non-empty dataType",
+                                ));
                             }
                         }
                     }
@@ -2139,11 +2069,6 @@ fn validate_subprocesses(spec: &Value, diags: &mut Vec<Diag>) {
 // ---------------------------------------------------------------------------
 
 fn validate_graph_semantics(spec: &Value, descs: &[NodeDesc], diags: &mut Vec<Diag>) {
-    let key_to_idx: HashMap<&str, usize> = descs
-        .iter()
-        .enumerate()
-        .map(|(i, d)| (d.key.as_str(), i))
-        .collect();
     // name-resolution memo shared across per-node checks
     let key_to_idx_s: HashMap<String, usize> = descs
         .iter()
@@ -2164,97 +2089,19 @@ fn validate_graph_semantics(spec: &Value, descs: &[NodeDesc], diags: &mut Vec<Di
         .unwrap_or_default();
 
     for d in descs {
-        let Some(sn) = d.spec else { continue }; // rawNode: no typed semantics
+        let NodeBody::Typed(sn) = d.body else {
+            continue;
+        };
         let ty = d.ty.as_deref().unwrap_or("");
         let n = d.inputs.len();
-        // arity (mirrors check rules; spec paths)
-        let arity_path = format!("/nodes/{}/inputs", d.idx);
-        match ty {
-            "Select" | "Output" | "DbOutput" => {
-                if n != 1 {
-                    diags.push(Diag::spec(
-                        arity_path,
-                        "err.dataflow.node.input",
-                        format!("{} requires exactly 1 input, found {}", ty, n),
-                    ));
-                }
-            }
-            "Join" => {
-                if n < 2 {
-                    diags.push(Diag::spec(
-                        arity_path,
-                        "err.dataflow.node.input",
-                        format!("Join requires at least 2 inputs, found {}", n),
-                    ));
-                }
-            }
-            "Union" => {
-                if n == 0 {
-                    diags.push(Diag::spec(
-                        arity_path,
-                        "err.dataflow.node.input",
-                        "Union requires at least 1 input",
-                    ));
-                }
-            }
-            "Agg" | "Distinct" => {
-                // the contributors read the FIRST input only — extra inputs
-                // would be silently ignored
-                if n != 1 {
-                    diags.push(Diag::spec(
-                        arity_path,
-                        "err.dataflow.node.input",
-                        format!("{} requires exactly 1 input, found {}", ty, n),
-                    ));
-                }
-            }
-            "RowToCol" | "ColToRow" | "Snapshot" | "Update" => {
-                if n == 0 {
-                    diags.push(Diag::spec(
-                        arity_path,
-                        "err.dataflow.node.input",
-                        format!("{} requires at least 1 input", ty),
-                    ));
-                }
-            }
-            "FileInput" | "ModelTable" => {
-                if n > 0 {
-                    diags.push(Diag::spec(
-                        arity_path,
-                        "err.dataflow.node.input",
-                        format!("{} takes no graph inputs", ty),
-                    ));
-                }
-            }
-            "DbTable" => {
-                for inp in &d.inputs {
-                    if let Some(&j) = key_to_idx.get(inp.as_str()) {
-                        let it = descs[j].ty.as_deref().unwrap_or("");
-                        if it != "Sql" && it != "Script" {
-                            diags.push(Diag::spec(
-                                arity_path.clone(),
-                                "graph.dbtable.predecessor",
-                                format!("DbTable predecessor must be Sql or Script, found {}", it),
-                            ));
-                        }
-                    }
-                }
-            }
-            "Sql" => {
-                for inp in &d.inputs {
-                    if let Some(&j) = key_to_idx.get(inp.as_str()) {
-                        let it = descs[j].ty.as_deref().unwrap_or("");
-                        if it != "Sql" && it != "DbOutput" {
-                            diags.push(Diag::spec(
-                                arity_path.clone(),
-                                "graph.sql.predecessor",
-                                format!("Sql predecessor must be Sql or DbOutput, found {}", it),
-                            ));
-                        }
-                    }
-                }
-            }
-            _ => {}
+        // Hard input counts protect projection. Advisory topology diagnostics
+        // come from the emitted wire, including for rawNode bodies.
+        if let Some(message) = node_input_arity_error(ty, n) {
+            diags.push(Diag::spec(
+                format!("/nodes/{}/inputs", d.idx),
+                NODE_INPUT_ARITY_RULE,
+                message,
+            ));
         }
 
         // fields requirement / derivability
@@ -2295,22 +2142,11 @@ fn validate_graph_semantics(spec: &Value, descs: &[NodeDesc], diags: &mut Vec<Di
                 ));
             }
         }
-        if ty == "Join" && n >= 2 {
-            check_spec_join_conditions(sn, d, descs, &key_to_idx, diags);
-        }
         if ty == "Union" {
-            check_spec_union(sn, d, diags);
+            check_union_projection_widths(sn, d, diags);
         }
         if ty == "ColToRow" {
-            check_spec_col_to_row(sn, d.idx, diags);
-            check_col_to_row_refs(
-                d,
-                descs,
-                &key_to_idx_s,
-                &mut name_memo,
-                &mut name_visiting,
-                diags,
-            );
+            check_spec_col_to_row_headers(sn, d.idx, diags);
         }
         if ty == "Select" {
             check_select_names(
@@ -2323,24 +2159,7 @@ fn validate_graph_semantics(spec: &Value, descs: &[NodeDesc], diags: &mut Vec<Di
                 diags,
             );
         }
-        if ty == "Update" && n > 1 {
-            // updateConditions is not a closed typed config — it may arrive
-            // via node `raw` (explicit escape) or `config` (rejected earlier,
-            // tolerated here for the semantic check).
-            let ok = cfg
-                .and_then(|c| c.get("updateConditions"))
-                .or_else(|| sn.get("raw").and_then(|r| r.get("updateConditions")))
-                .and_then(Value::as_array)
-                .map(|a| !a.is_empty())
-                .unwrap_or(false);
-            if !ok {
-                diags.push(Diag::spec(
-                    format!("/nodes/{}/config/updateConditions", d.idx),
-                    "err.dataflow.update.conditions",
-                    "Update with >1 input requires updateConditions",
-                ));
-            }
-        }
+
         // raw collision with generated keys AND config keys: both are
         // emitted onto the same wire object, so an overlap would silently
         // overwrite regardless of whether the values agree.
@@ -2501,9 +2320,10 @@ fn resolve_field_names_inner(
 ) -> Option<Vec<String>> {
     let &i = key_to_idx.get(key)?;
     let d = &descs[i];
-    let Some(sn) = d.spec else {
-        // rawNode: the verbatim body's fields are the only provable names
-        return d.raw_body.and_then(|b| b.get("fields")).map(field_names_of);
+    let sn = match d.body {
+        NodeBody::Typed(sn) => sn,
+        // The verbatim body's fields are the only provable names.
+        NodeBody::Raw(raw) => return raw.get("fields").map(field_names_of),
     };
     if let Some(f) = sn.get("fields") {
         return Some(field_names_of(f));
@@ -2546,7 +2366,7 @@ fn check_select_names(
     param_names: &HashSet<String>,
     diags: &mut Vec<Diag>,
 ) {
-    let Some(sn) = d.spec else { return };
+    let NodeBody::Typed(sn) = d.body else { return };
     let Some(pred_key) = d.inputs.first() else {
         return;
     };
@@ -2580,44 +2400,14 @@ fn check_select_names(
                 break; // tracking lost
             }
             let ty = st.get("type").and_then(Value::as_str).unwrap_or("");
-            // Java checkStep exempts Text2Id only when it carries srcField
-            let operated = matches!(
-                ty,
-                "RemoveField"
-                    | "SplitField"
-                    | "Refactor"
-                    | "SubString"
-                    | "Replace"
-                    | "ToUppercase"
-                    | "ToLowercase"
-                    | "ToNumber"
-                    | "ToDate"
-                    | "ToSynonym"
-                    | "Trim"
-                    | "DeleteNumbers"
-                    | "DeleteLetters"
-                    | "DeleteSpechars"
-                    | "DeletePunctuations"
-                    | "ExcludeEmpty"
-                    | "ExtractNumber"
-                    | "TransformToCalculatedField"
-                    | "Distinct"
-                    | "GroupNumber"
-                    | "ReGroup"
-            ) || (ty == "Text2Id"
-                && st
-                    .pointer("/text2id/srcField")
-                    .and_then(Value::as_str)
-                    .map(|x| x.is_empty())
-                    .unwrap_or(true));
-            if operated {
+            if step_requires_existing_fields(ty, st) {
                 if let Some(fl) = st.get("fields").and_then(Value::as_array) {
                     for (fi, fv) in fl.iter().enumerate() {
                         if let Some(name) = fv.as_str() {
-                            if ty != "RemoveField" && !current.iter().any(|c| field_eq(c, name)) {
+                            if !current.iter().any(|c| field_eq(c, name)) {
                                 diags.push(Diag::spec(
                                     format!("/nodes/{}/steps/{}/fields/{}", d.idx, si, fi),
-                                    "err.dataflow.stepField.notfound",
+                                    STEP_FIELD_NOT_FOUND,
                                     format!("step {} references unknown field {:?}", ty, name),
                                 ));
                             }
@@ -2707,203 +2497,35 @@ fn check_select_names(
     }
 }
 
-/// ColToRow valuesArray {name,dataType} references must exist in the
-/// predecessor's provable field set.
-fn check_col_to_row_refs(
-    d: &NodeDesc,
-    descs: &[NodeDesc],
-    key_to_idx: &HashMap<String, usize>,
-    memo: &mut HashMap<String, Option<Vec<String>>>,
-    visiting: &mut HashSet<String>,
-    diags: &mut Vec<Diag>,
-) {
-    let Some(sn) = d.spec else { return };
-    let Some(pred_key) = d.inputs.first() else {
-        return;
-    };
-    let Some(pred_names) = resolve_field_names(descs, key_to_idx, pred_key, memo, visiting) else {
-        return;
-    };
-    let Some(info) = sn
-        .get("config")
-        .and_then(|c| c.get("colToRowInfo"))
-        .and_then(Value::as_object)
-    else {
-        return;
-    };
-    let Some(rows) = info.get("valuesArray").and_then(Value::as_array) else {
-        return;
-    };
-    for (ri, row) in rows.iter().enumerate() {
-        let Some(rarr) = row.as_array() else {
-            continue;
-        };
-        for (ci, cell) in rarr.iter().enumerate() {
-            if let Some(co) = cell.as_object() {
-                if let Some(nm) = co.get("name").and_then(Value::as_str) {
-                    if !pred_names.iter().any(|p| field_eq(p, nm)) {
-                        diags.push(Diag::spec(
-                            format!(
-                                "/nodes/{}/config/colToRowInfo/valuesArray/{}/{}",
-                                d.idx, ri, ci
-                            ),
-                            "field.notfound",
-                            format!(
-                                "ColToRow field reference {:?} not found in predecessor fields {:?}",
-                                nm, pred_names
-                            ),
-                        ));
-                    }
-                }
-            }
-        }
-    }
-}
-
-fn spec_node_alias<'a>(descs: &'a [NodeDesc], key: &str) -> Option<&'a str> {
-    descs
-        .iter()
-        .find(|d| d.key == key)
-        .map(|d| d.alias.as_deref().unwrap_or(d.key.as_str()))
-}
-
-fn check_spec_join_conditions(
-    sn: &Value,
-    d: &NodeDesc,
-    descs: &[NodeDesc],
-    _key_to_idx: &HashMap<&str, usize>,
-    diags: &mut Vec<Diag>,
-) {
-    let cfg = sn.get("config").and_then(Value::as_object);
-    let Some(conds) = cfg
-        .and_then(|c| c.get("joinConditions"))
+/// Projection indexes input aliases by the positions in each effective row.
+fn check_union_projection_widths(sn: &Value, d: &NodeDesc, diags: &mut Vec<Diag>) {
+    let Some(rows) = sn
+        .pointer("/config/unionMapArray")
         .and_then(Value::as_array)
     else {
         return;
     };
-    let n = d.inputs.len();
-    if conds.len() != n - 1 {
-        diags.push(Diag::spec(
-            format!("/nodes/{}/config/joinConditions", d.idx),
-            "join.conditions.count",
-            format!(
-                "joinConditions count {} != inputs-1 ({})",
-                conds.len(),
-                n - 1
-            ),
-        ));
-    }
-    // Java resolves leftTable/rightTable against node ALIASES only — the
-    // spec key is not an alias unless it was declared as one.
-    let mut aliases: HashSet<String> = HashSet::new();
-    for inp in &d.inputs {
-        if let Some(a) = spec_node_alias(descs, inp) {
-            aliases.insert(a.to_string());
+    for (i, row) in rows.iter().enumerate() {
+        if !union_row_is_visible(row) {
+            continue;
         }
-    }
-    for (i, c) in conds.iter().enumerate() {
-        for side in ["leftTable", "rightTable"] {
-            if let Some(t) = c.get(side).and_then(Value::as_str) {
-                if !t.is_empty() && !aliases.iter().any(|a| field_eq(a, t)) {
-                    diags.push(Diag::spec(
-                        format!("/nodes/{}/config/joinConditions/{}/{}", d.idx, i, side),
-                        "join.condition.alias",
-                        format!("{} {:?} does not match any input node alias", side, t),
-                    ));
-                }
-            }
-        }
-        // clause AND condition-level expressions qualify fields as
-        // [alias].[field]; a qualifier that is an input's spec KEY (but not
-        // its alias) resolves to nothing at runtime — reject it. Quoted
-        // literals are skipped by the shared scanner.
-        let mut scan = |e: &str, epath: String| {
-            for q in exp_table_qualifiers(e) {
-                let is_key = d.inputs.iter().any(|k| field_eq(k, &q));
-                let is_alias = d
-                    .inputs
-                    .iter()
-                    .filter_map(|k| spec_node_alias(descs, k))
-                    .any(|a| field_eq(a, &q));
-                if is_key && !is_alias {
-                    diags.push(Diag::spec(
-                        epath.clone(),
-                        "join.condition.qualifier",
-                        format!("expression qualifier {:?} is a node key, not an alias", q),
-                    ));
-                }
-            }
+        // The closed spec shape checks that values exists and is an array.
+        let Some(values) = row.get("values").and_then(Value::as_array) else {
+            continue;
         };
-        if let Some(e) = c.get("exp").and_then(Value::as_str) {
-            scan(
-                e,
-                format!("/nodes/{}/config/joinConditions/{}/exp", d.idx, i),
-            );
-        }
-        for (ci, cl) in c
-            .get("clauses")
-            .and_then(Value::as_array)
-            .map(|a| a.iter().enumerate().collect::<Vec<_>>())
-            .unwrap_or_default()
-        {
-            for ek in ["leftExp", "rightExp", "exp"] {
-                if let Some(e) = cl.get(ek).and_then(Value::as_str) {
-                    scan(
-                        e,
-                        format!(
-                            "/nodes/{}/config/joinConditions/{}/clauses/{}/{}",
-                            d.idx, i, ci, ek
-                        ),
-                    );
-                }
-            }
-        }
-    }
-}
-
-fn check_spec_union(sn: &Value, d: &NodeDesc, diags: &mut Vec<Diag>) {
-    let cfg = sn.get("config").and_then(Value::as_object);
-    if let Some(ut) = cfg.and_then(|c| c.get("unionType")) {
-        if let Some(s) = ut.as_str() {
-            if !["UnionAll", "Union", "Minus", "Intersect"].contains(&s) {
-                diags.push(Diag::spec(
-                    format!("/nodes/{}/config/unionType", d.idx),
-                    "enum.unionType",
-                    format!("unknown unionType {:?}", s),
-                ));
-            }
-        } else {
+        if let Some(message) = union_row_width_error(i, values.len(), d.inputs.len()) {
             diags.push(Diag::spec(
-                format!("/nodes/{}/config/unionType", d.idx),
-                "structure.unionType",
-                "unionType must be a string",
+                format!("/nodes/{}/config/unionMapArray/{}/values", d.idx, i),
+                UNION_MAP_KEY_RULE,
+                message,
             ));
         }
     }
-    if let Some(map) = cfg
-        .and_then(|c| c.get("unionMapArray"))
-        .and_then(Value::as_array)
-    {
-        for (i, item) in map.iter().enumerate() {
-            if let Some(vals) = item.get("values").and_then(Value::as_array) {
-                if vals.len() != d.inputs.len() {
-                    diags.push(Diag::spec(
-                        format!("/nodes/{}/config/unionMapArray/{}/values", d.idx, i),
-                        "structure.unionMap",
-                        format!(
-                            "unionMapArray[{}].values length {} != input count {}",
-                            i,
-                            vals.len(),
-                            d.inputs.len()
-                        ),
-                    ));
-                }
-            }
-        }
-    }
 }
 
-fn check_spec_col_to_row(sn: &Value, idx: usize, diags: &mut Vec<Diag>) {
+/// The typed spec requires pivot headers to be declared as output fields.
+/// Row widths and source references are checked on the emitted wire.
+fn check_spec_col_to_row_headers(sn: &Value, idx: usize, diags: &mut Vec<Diag>) {
     let Some(info) = sn
         .get("config")
         .and_then(|c| c.get("colToRowInfo"))
@@ -2943,53 +2565,26 @@ fn check_spec_col_to_row(sn: &Value, idx: usize, diags: &mut Vec<Diag>) {
             }
         }
     }
-    for (r, row) in v.iter().enumerate() {
-        if let Some(rarr) = row.as_array() {
-            if rarr.len() != h.len() {
-                diags.push(Diag::spec(
-                    format!("/nodes/{}/config/colToRowInfo/valuesArray/{}", idx, r),
-                    "err.dataflow.colToRow.config",
-                    format!(
-                        "valuesArray[{}] width {} != headers width {}",
-                        r,
-                        rarr.len(),
-                        h.len()
-                    ),
-                ));
-            }
-            for (c, cell) in rarr.iter().enumerate() {
-                if let Some(co) = cell.as_object() {
-                    // {name,dataType} field reference: both required non-empty
-                    for k in ["name", "dataType"] {
-                        if co
-                            .get(k)
-                            .and_then(Value::as_str)
-                            .map(|s| s.is_empty())
-                            .unwrap_or(true)
-                        {
-                            diags.push(Diag::spec(
-                                format!(
-                                    "/nodes/{}/config/colToRowInfo/valuesArray/{}/{}",
-                                    idx, r, c
-                                ),
-                                "field.required",
-                                format!("valuesArray field reference requires non-empty {}", k),
-                            ));
-                        }
-                    }
-                }
-            }
-        }
-    }
 }
 
 // ---------------------------------------------------------------------------
 // Archive / rawTable forms
 // ---------------------------------------------------------------------------
 
-fn validate_archive(spec: &Value, diags: &mut Vec<Diag>) {
-    let Some(obj) = spec.as_object() else { return };
-    for k in obj.keys() {
+/// Borrowed archive data whose node IDs and bodies have also been validated.
+struct ValidatedArchive<'a> {
+    top: &'a Map<String, Value>,
+    flow: &'a Map<String, Value>,
+    nodes: &'a [Value],
+}
+
+fn validate_archive<'a>(
+    spec: &Map<String, Value>,
+    archive: &'a Value,
+    diags: &mut Vec<Diag>,
+) -> Option<ValidatedArchive<'a>> {
+    let initial_len = diags.len();
+    for k in spec.keys() {
         if k != "format" && k != "archive" {
             diags.push(Diag::spec(
                 format!("/{}", ptr_escape(k)),
@@ -2998,23 +2593,15 @@ fn validate_archive(spec: &Value, diags: &mut Vec<Diag>) {
             ));
         }
     }
-    let Some(a) = spec.get("archive") else {
-        diags.push(Diag::spec(
-            "/archive",
-            "structure.archive",
-            "archive is required",
-        ));
-        return;
-    };
-    let Some(aobj) = a.as_object() else {
+    let Some(archive) = archive.as_object() else {
         diags.push(Diag::spec(
             "/archive",
             "structure.archive",
             "archive must be an object",
         ));
-        return;
+        return None;
     };
-    for k in aobj.keys() {
+    for k in archive.keys() {
         if !["top", "flow", "nodes"].contains(&k.as_str()) {
             diags.push(Diag::spec(
                 format!("/archive/{}", ptr_escape(k)),
@@ -3023,18 +2610,20 @@ fn validate_archive(spec: &Value, diags: &mut Vec<Diag>) {
             ));
         }
     }
-    for k in ["top", "flow"] {
-        match a.get(k) {
-            Some(v) if v.is_object() => {}
-            _ => diags.push(Diag::spec(
+    let top = archive.get("top").and_then(Value::as_object);
+    let flow = archive.get("flow").and_then(Value::as_object);
+    for (k, object) in [("top", top), ("flow", flow)] {
+        if object.is_none() {
+            diags.push(Diag::spec(
                 format!("/archive/{}", k),
                 "structure.archive",
                 format!("archive.{} must be an object", k),
-            )),
+            ));
         }
     }
-    match a.get("nodes") {
-        Some(Value::Array(arr)) => {
+    let nodes = archive.get("nodes").and_then(Value::as_array);
+    match nodes {
+        Some(arr) => {
             let mut ids = HashSet::new();
             for (i, e) in arr.iter().enumerate() {
                 let path = format!("/archive/nodes/{}", i);
@@ -3055,7 +2644,7 @@ fn validate_archive(spec: &Value, diags: &mut Vec<Diag>) {
                         ));
                     }
                 }
-                match e.get("id").and_then(Value::as_str) {
+                match eobj.get("id").and_then(Value::as_str) {
                     Some(s) if !s.is_empty() => {
                         if !ids.insert(s.to_string()) {
                             diags.push(Diag::spec(
@@ -3071,7 +2660,7 @@ fn validate_archive(spec: &Value, diags: &mut Vec<Diag>) {
                         "archive node.id must be a non-empty string",
                     )),
                 }
-                match e.get("body") {
+                match eobj.get("body") {
                     Some(v) if v.is_object() => {}
                     _ => diags.push(Diag::spec(
                         format!("{}/body", path),
@@ -3081,14 +2670,14 @@ fn validate_archive(spec: &Value, diags: &mut Vec<Diag>) {
                 }
             }
         }
-        _ => diags.push(Diag::spec(
+        None => diags.push(Diag::spec(
             "/archive/nodes",
             "structure.archive.nodes",
             "archive.nodes must be an array",
         )),
     }
     // collisions: top must not contain dataFlow; flow must not contain nodes
-    if let Some(top) = a.get("top").and_then(Value::as_object) {
+    if let Some(top) = top {
         if top.contains_key("dataFlow") {
             diags.push(Diag::spec(
                 "/archive/top/dataFlow",
@@ -3097,7 +2686,7 @@ fn validate_archive(spec: &Value, diags: &mut Vec<Diag>) {
             ));
         }
     }
-    if let Some(flow) = a.get("flow").and_then(Value::as_object) {
+    if let Some(flow) = flow {
         if flow.contains_key("nodes") {
             diags.push(Diag::spec(
                 "/archive/flow/nodes",
@@ -3106,63 +2695,53 @@ fn validate_archive(spec: &Value, diags: &mut Vec<Diag>) {
             ));
         }
     }
+    if diags.len() != initial_len {
+        return None;
+    }
+    Some(ValidatedArchive {
+        top: top?,
+        flow: flow?,
+        nodes: nodes?,
+    })
 }
 
-fn validate_rawtable(spec: &Value, diags: &mut Vec<Diag>) {
-    if let Some(obj) = spec.as_object() {
-        for k in obj.keys() {
-            if k != "format" && k != "rawTable" {
-                diags.push(Diag::spec(
-                    format!("/{}", ptr_escape(k)),
-                    "structure.rawTable.key",
-                    format!("unexpected key {:?} on rawTable form", k),
-                ));
-            }
+fn validate_rawtable<'a>(
+    spec: &Map<String, Value>,
+    rawtable: &'a Value,
+    diags: &mut Vec<Diag>,
+) -> Option<&'a Map<String, Value>> {
+    let initial_len = diags.len();
+    for k in spec.keys() {
+        if k != "format" && k != "rawTable" {
+            diags.push(Diag::spec(
+                format!("/{}", ptr_escape(k)),
+                "structure.rawTable.key",
+                format!("unexpected key {:?} on rawTable form", k),
+            ));
         }
     }
-    match spec.get("rawTable") {
-        Some(v) if v.is_object() => {}
-        _ => diags.push(Diag::spec(
+    let Some(table) = rawtable.as_object() else {
+        diags.push(Diag::spec(
             "/rawTable",
             "structure.rawTable",
             "rawTable must be a .tbl object",
-        )),
-    }
+        ));
+        return None;
+    };
+    (diags.len() == initial_len).then_some(table)
 }
 
-fn build_archive(spec: &Value) -> Result<Value, Diag> {
-    let diags = {
-        let mut d = Vec::new();
-        validate_archive(spec, &mut d);
-        d
-    };
-    if let Some(e) = diags.into_iter().next() {
-        return Err(e);
-    }
-    let a = &spec["archive"];
-    let mut tbl = a["top"].clone();
-    let mut flow = a["flow"].as_object().cloned().unwrap_or_default();
+fn build_archive(archive: ValidatedArchive<'_>) -> Value {
+    let mut tbl = archive.top.clone();
+    let mut flow = archive.flow.clone();
     let mut nodes = Map::new();
-    for e in a["nodes"].as_array().cloned().unwrap_or_default() {
-        let id = e["id"].as_str().unwrap_or_default().to_string();
-        nodes.insert(id, e["body"].clone());
+    for node in archive.nodes {
+        let id = node["id"].as_str().expect("validated archive node ID");
+        nodes.insert(id.to_owned(), node["body"].clone());
     }
     flow.insert("nodes".into(), Value::Object(nodes));
-    if let Value::Object(ref mut t) = tbl {
-        t.insert("dataFlow".into(), Value::Object(flow));
-    }
-    Ok(tbl)
-}
-
-fn build_rawtable(spec: &Value) -> Result<Value, Diag> {
-    match spec.get("rawTable") {
-        Some(v) if v.is_object() => Ok(v.clone()),
-        _ => Err(Diag::spec(
-            "/rawTable",
-            "structure.rawTable",
-            "rawTable must be a .tbl object",
-        )),
-    }
+    tbl.insert("dataFlow".into(), Value::Object(flow));
+    Value::Object(tbl)
 }
 
 // ---------------------------------------------------------------------------
@@ -3219,16 +2798,15 @@ fn emit_generated_wire<'a>(
     // emit nodes
     let mut nodes_map = Map::new();
     for d in &mut descs {
-        let body = if let Some(rn) = d.raw_body {
-            rn.clone() // verbatim, never mutated
-        } else {
-            match emit_typed_node(d) {
+        let body = match d.body {
+            NodeBody::Raw(raw) => raw.clone(), // verbatim, never mutated
+            NodeBody::Typed(sn) => match emit_typed_node(sn, d) {
                 Ok(b) => b,
                 Err(e) => {
                     diags.push(e);
                     continue;
                 }
-            }
+            },
         };
         nodes_map.insert(d.wire_key.clone(), body);
     }
@@ -3240,15 +2818,8 @@ fn emit_generated_wire<'a>(
     let mut flow = Map::new();
     flow.insert("nodes".into(), Value::Object(nodes_map));
     if let Some(sp) = spec.get("subProcesses") {
-        match emit_subprocesses(sp) {
-            Ok(v) => {
-                flow.insert("subProcesses".into(), v);
-            }
-            Err(e) => {
-                diags.push(e);
-                return (None, descs);
-            }
-        }
+        let subprocesses = sp.as_object().expect("validated subProcesses is an object");
+        flow.insert("subProcesses".into(), emit_subprocesses(subprocesses));
     }
 
     // top-level
@@ -3269,15 +2840,8 @@ fn emit_generated_wire<'a>(
         }
     }
     if let Some(p) = spec.get("parameters") {
-        match emit_parameters(p) {
-            Ok(v) => {
-                tbl.insert("parameters".into(), v);
-            }
-            Err(e) => {
-                diags.push(e);
-                return (None, descs);
-            }
-        }
+        let parameters = p.as_array().expect("validated parameters is an array");
+        tbl.insert("parameters".into(), emit_parameters(parameters));
     }
     // top dimensions/measures from the default Output; empty partitions are
     // omitted entirely (the platform writes no empty arrays)
@@ -3325,8 +2889,10 @@ fn build_generated_collect_inner<'a>(
             .sum();
         p.steps = descs
             .iter()
-            .filter_map(|d| d.spec)
-            .filter_map(|sn| sn.get("steps").and_then(Value::as_array))
+            .filter_map(|d| match d.body {
+                NodeBody::Typed(sn) => sn.get("steps").and_then(Value::as_array),
+                NodeBody::Raw(_) => None,
+            })
             .map(Vec::len)
             .sum();
     }
@@ -3355,29 +2921,13 @@ fn input_desc<'a>(
 /// The alias consumers see for a node (typed: `alias` or key; rawNode: body
 /// alias or spec key).
 fn node_alias(d: &NodeDesc) -> String {
-    if let Some(a) = &d.alias {
-        return a.clone();
-    }
-    if let Some(b) = d.raw_body {
-        if let Some(a) = b.get("alias").and_then(Value::as_str) {
-            return a.to_string();
-        }
-    }
-    d.key.clone()
+    d.alias.clone().unwrap_or_else(|| d.key.clone())
 }
 
 /// Whether the node is a lineage source, including rawNode bodies whose
 /// `type` says FileInput/ModelTable/etc.
 fn node_is_source(d: &NodeDesc) -> bool {
-    let ty =
-        d.ty.as_deref()
-            .or_else(|| {
-                d.raw_body
-                    .and_then(|b| b.get("type"))
-                    .and_then(Value::as_str)
-            })
-            .unwrap_or("");
-    is_source(ty)
+    is_source(d.ty.as_deref().unwrap_or(""))
 }
 
 /// Proven root lineage of a predecessor field: the oldest `(node, field)`
@@ -3414,8 +2964,34 @@ fn field_origin(f: &Value, pred: &NodeDesc, alias: Option<&str>) -> Option<(Stri
     None
 }
 
-/// Field keys that carry computed/lineage meaning and are always enforced
-/// by the projection rather than trusted from declarations.
+fn clear_field_origin(field: &mut Map<String, Value>) {
+    field.remove("originalNode");
+    field.remove("originalField");
+}
+
+/// Drop the root and upstream alias while keeping the field reference.
+/// Callers can retain that reference or replace it with a resolved one.
+fn clear_origin_and_input_node(field: &mut Map<String, Value>) {
+    clear_field_origin(field);
+    field.remove("inputNode");
+}
+
+/// Drop both the root origin and the entire direct input reference.
+fn clear_field_lineage(field: &mut Map<String, Value>) {
+    clear_origin_and_input_node(field);
+    field.remove("inputField");
+}
+
+/// Reset predecessor metadata that belongs to the upstream projection.
+fn clear_inherited_projection(field: &mut Map<String, Value>) {
+    clear_field_lineage(field);
+    field.remove("exp");
+    field.remove("aggType");
+}
+
+/// Resolved and simulated fields share the same declaration overlay.
+/// The caller assigns the name explicitly. The expression and lineage come
+/// from the projection, while the declaration may supply aggType.
 const ENFORCED_FIELD_KEYS: [&str; 6] = [
     "name",
     "inputField",
@@ -3424,6 +3000,16 @@ const ENFORCED_FIELD_KEYS: [&str; 6] = [
     "originalNode",
     "exp",
 ];
+
+fn overlay_declared_metadata(field: &mut Map<String, Value>, declared: &Value) {
+    if let Some(metadata) = declared.as_object() {
+        for (key, value) in metadata {
+            if !ENFORCED_FIELD_KEYS.contains(&key.as_str()) {
+                field.insert(key.clone(), value.clone());
+            }
+        }
+    }
+}
 
 /// Merge a declared field with its resolved predecessor field: upstream
 /// metadata (dataType, dbfield, isDimension, length, ...) forms the base,
@@ -3438,25 +3024,9 @@ fn merge_declared(
     origin: Option<(String, String)>,
 ) -> Value {
     let mut m = pred_field.as_object().cloned().unwrap_or_default();
-    for k in [
-        "name",
-        "exp",
-        "aggType",
-        "inputField",
-        "inputNode",
-        "originalField",
-        "originalNode",
-    ] {
-        m.remove(k);
-    }
-    if let Some(do_) = declared.as_object() {
-        for (k, v) in do_ {
-            if ENFORCED_FIELD_KEYS.contains(&k.as_str()) {
-                continue;
-            }
-            m.insert(k.clone(), v.clone());
-        }
-    }
+    m.remove("name");
+    clear_inherited_projection(&mut m);
+    overlay_declared_metadata(&mut m, declared);
     if let Some(nm) = declared.get("name") {
         m.insert("name".into(), nm.clone());
     }
@@ -3471,13 +3041,11 @@ fn merge_declared(
     Value::Object(m)
 }
 
-/// A field born by computation (`exp` present): emit the declaration minus
-/// lineage and inputNode — computed values have no proven single input.
+/// Emit a computed declaration (`exp` present), keeping its inputField but
+/// dropping the root and inputNode since no single input is proven.
 fn emit_computed(declared: &Value) -> Value {
     let mut m = declared.as_object().cloned().unwrap_or_default();
-    for k in ["originalNode", "originalField", "inputNode"] {
-        m.remove(k);
-    }
+    clear_origin_and_input_node(&mut m);
     Value::Object(m)
 }
 
@@ -3486,8 +3054,7 @@ fn emit_computed(declared: &Value) -> Value {
 /// including any explicit direct refs — but drop the original* pair.
 fn emit_unresolved(declared: &Value) -> Value {
     let mut m = declared.as_object().cloned().unwrap_or_default();
-    m.remove("originalNode");
-    m.remove("originalField");
+    clear_field_origin(&mut m);
     Value::Object(m)
 }
 
@@ -3566,25 +3133,18 @@ fn compute_node_fields(
     key_to_idx: &HashMap<String, usize>,
 ) -> (Option<ComputedNode>, Option<Diag>) {
     let d = &descs[i];
-    // rawNode: fields come from the verbatim body when present (absent =
-    // unknown shape; the default-Output partition check reports that)
-    if d.spec.is_none() {
-        let known = d.raw_body.and_then(|b| b.get("fields")).is_some();
-        let fields = d
-            .raw_body
-            .and_then(|b| b.get("fields"))
-            .and_then(Value::as_array)
-            .cloned()
-            .unwrap_or_default();
-        return (
-            known.then(|| ComputedNode {
-                fields,
+    let sn = match d.body {
+        NodeBody::Typed(sn) => sn,
+        NodeBody::Raw(raw) => {
+            // Absent fields mean unknown shape; the default Output
+            // partition check reports that when fields are required.
+            let computed = raw.get("fields").map(|f| ComputedNode {
+                fields: f.as_array().cloned().unwrap_or_default(),
                 step_hints: Vec::new(),
-            }),
-            None,
-        );
-    }
-    let sn = d.spec.unwrap();
+            });
+            return (computed, None);
+        }
+    };
     let ty = d.ty.as_deref().unwrap_or("");
     // sources: declared fields are the root of lineage — each ordinary
     // field's original* pair is seeded/rewritten to (own alias, own name);
@@ -3608,8 +3168,7 @@ fn compute_node_fields(
                     .unwrap_or("")
                     .to_string();
                 if computed || name.is_empty() {
-                    m.remove("originalNode");
-                    m.remove("originalField");
+                    clear_field_origin(m);
                 } else {
                     m.insert("originalNode".into(), Value::String(alias.clone()));
                     m.insert("originalField".into(), Value::String(name));
@@ -3628,18 +3187,19 @@ fn compute_node_fields(
         );
     }
     match ty {
-        "Select" => compute_select_fields(d, descs, key_to_idx),
-        "Output" => compute_output_fields(d, descs, key_to_idx),
-        "Distinct" => compute_distinct_fields(d, descs, key_to_idx),
-        "Join" => compute_join_fields(d, descs, key_to_idx),
-        "Union" => compute_union_fields(d, descs, key_to_idx),
-        _ => compute_reshaped_fields(d, descs, key_to_idx),
+        "Select" => compute_select_fields(sn, d, descs, key_to_idx),
+        "Output" => compute_output_fields(sn, d, descs, key_to_idx),
+        "Distinct" => compute_distinct_fields(sn, d, descs, key_to_idx),
+        "Join" => compute_join_fields(sn, d, descs, key_to_idx),
+        "Union" => compute_union_fields(sn, d, descs, key_to_idx),
+        _ => compute_reshaped_fields(sn, d, descs, key_to_idx),
     }
 }
 
 /// Output: explicit fields resolve against the single input; absent fields
 /// derive by cloning predecessor fields with rewritten direct lineage.
 fn compute_output_fields(
+    sn: &Value,
     d: &NodeDesc,
     descs: &[NodeDesc],
     key_to_idx: &HashMap<String, usize>,
@@ -3654,19 +3214,12 @@ fn compute_output_fields(
             )),
         );
     };
-    let sn = d.spec.unwrap();
-    if sn.get("fields").and_then(Value::as_array).is_some() {
+    if let Some(declared) = sn.get("fields").and_then(Value::as_array) {
         let Some(pred_fields) = &pred.out_fields else {
             // raw predecessor without declared fields: the Output's own
             // declarations ARE the shape — emit them unresolved
-            if pred.raw_body.is_some() {
-                let fields: Vec<Value> = sn
-                    .get("fields")
-                    .and_then(Value::as_array)
-                    .unwrap()
-                    .iter()
-                    .map(emit_computed)
-                    .collect();
+            if matches!(pred.body, NodeBody::Raw(_)) {
+                let fields = declared.iter().map(emit_computed).collect();
                 return (
                     Some(ComputedNode {
                         fields,
@@ -3684,7 +3237,7 @@ fn compute_output_fields(
                 )),
             );
         };
-        match resolve_declared_fields(d, &[pred], &[pred_fields], true, false) {
+        match resolve_declared_fields(sn, d, &[pred], &[pred_fields], true, false) {
             Ok(fields) => {
                 return (
                     Some(ComputedNode {
@@ -3724,16 +3277,7 @@ fn compute_output_fields(
 /// inputField = predecessor name, original* = proven origin, never inputNode.
 fn clone_passthrough(f: &Value, pred: &NodeDesc) -> Value {
     let mut m = f.as_object().cloned().unwrap_or_default();
-    for k in [
-        "exp",
-        "aggType",
-        "inputField",
-        "inputNode",
-        "originalField",
-        "originalNode",
-    ] {
-        m.remove(k);
-    }
+    clear_inherited_projection(&mut m);
     let name = field_name(f, 0);
     m.insert("name".into(), Value::String(name.clone()));
     m.insert("inputField".into(), Value::String(name));
@@ -3749,15 +3293,15 @@ fn clone_passthrough(f: &Value, pred: &NodeDesc) -> Value {
 /// the declaration minus original*. `emit_input_node` controls whether a
 /// resolved input alias is written (Join/Union yes; Output/Distinct no).
 fn resolve_declared_fields(
+    sn: &Value,
     d: &NodeDesc,
     preds: &[&NodeDesc],
     fields_of: &[&Vec<Value>],
     strict: bool,
     emit_input_node: bool,
 ) -> Result<Vec<Value>, Diag> {
-    let declared = d
-        .spec
-        .and_then(|s| s.get("fields"))
+    let declared = sn
+        .get("fields")
         .and_then(Value::as_array)
         .cloned()
         .unwrap_or_default();
@@ -3827,6 +3371,7 @@ fn resolve_declared_fields(
 /// Distinct: explicit fields resolve uniquely across inputs (declared
 /// inputNode narrows); no inputNode is emitted (single semantic stream).
 fn compute_distinct_fields(
+    sn: &Value,
     d: &NodeDesc,
     descs: &[NodeDesc],
     key_to_idx: &HashMap<String, usize>,
@@ -3860,7 +3405,7 @@ fn compute_distinct_fields(
             )),
         );
     }
-    match resolve_declared_fields(d, &preds, &fields_of, true, false) {
+    match resolve_declared_fields(sn, d, &preds, &fields_of, true, false) {
         Ok(fields) => (
             Some(ComputedNode {
                 fields,
@@ -3875,6 +3420,7 @@ fn compute_distinct_fields(
 /// Join: every declared field must resolve to exactly one predecessor
 /// field; `inputNode` (an input alias) disambiguates shared names.
 fn compute_join_fields(
+    sn: &Value,
     d: &NodeDesc,
     descs: &[NodeDesc],
     key_to_idx: &HashMap<String, usize>,
@@ -3898,7 +3444,7 @@ fn compute_join_fields(
         preds.push(pred);
         fields_of.push(pf);
     }
-    match resolve_declared_fields(d, &preds, &fields_of, true, true) {
+    match resolve_declared_fields(sn, d, &preds, &fields_of, true, true) {
         Ok(fields) => (
             Some(ComputedNode {
                 fields,
@@ -3916,6 +3462,7 @@ fn compute_join_fields(
 /// inputNode/inputField are always that canonical pair. Without a map the
 /// legacy per-input name lookup applies (inputField = declared name).
 fn compute_union_fields(
+    sn: &Value,
     d: &NodeDesc,
     descs: &[NodeDesc],
     key_to_idx: &HashMap<String, usize>,
@@ -3950,7 +3497,6 @@ fn compute_union_fields(
         );
     }
     let lookup = ProjectionLookup::new(&preds, &fields_of);
-    let sn = d.spec.unwrap();
     let map = sn
         .get("config")
         .and_then(|c| c.get("unionMapArray"))
@@ -3969,8 +3515,7 @@ fn compute_union_fields(
     let mut key_seen: HashSet<(String, String)> = HashSet::new();
     if let Some(arr) = map {
         for (ri, item) in arr.iter().enumerate() {
-            let visible = item.get("visible").and_then(Value::as_bool).unwrap_or(true);
-            if !visible {
+            if !union_row_is_visible(item) {
                 continue;
             }
             let Some(vals) = item.get("values").and_then(Value::as_array) else {
@@ -3991,7 +3536,7 @@ fn compute_union_fields(
                 continue; // all empty: Java produces no map key
             };
             if kpos >= preds.len() {
-                continue; // width mismatch already diagnosed
+                continue; // projection widths are checked before field computation
             }
             let key_alias_key = lookup.aliases[kpos].to_uppercase();
             let key_field_key = kfield.to_uppercase();
@@ -4061,9 +3606,7 @@ fn compute_union_fields(
                 .and_then(|&fi| fields_of[0].get(fi))
                 .and_then(|pf| field_origin(pf, preds[0], Some(lookup.aliases[0].as_str())));
             let mut m = df.as_object().cloned().unwrap_or_default();
-            m.remove("originalNode");
-            m.remove("originalField");
-            m.remove("inputNode");
+            clear_origin_and_input_node(&mut m);
             m.insert("inputField".into(), Value::String(want.to_string()));
             m.insert("inputNode".into(), Value::String(lookup.aliases[0].clone()));
             if let Some((on, of)) = origin {
@@ -4241,6 +3784,7 @@ fn compute_union_fields(
 /// predecessor match inherits proven passthrough lineage; anything else
 /// keeps the declaration minus the unproven original* pair.
 fn compute_reshaped_fields(
+    sn: &Value,
     d: &NodeDesc,
     descs: &[NodeDesc],
     key_to_idx: &HashMap<String, usize>,
@@ -4257,7 +3801,7 @@ fn compute_reshaped_fields(
     }
     // reshaping nodes never synthesize inputNode: an invented direct ref
     // would alter the runtime inputFieldExp (e.g. on pivot-born columns)
-    match resolve_declared_fields(d, &preds, &fields_of, false, false) {
+    match resolve_declared_fields(sn, d, &preds, &fields_of, false, false) {
         Ok(fields) => (
             Some(ComputedNode {
                 fields,
@@ -4398,15 +3942,14 @@ fn apply_step_mutation(
             }
             // the added field is born by computation: no direct lineage
             let mut m = af.as_object().cloned().unwrap_or_default();
-            for k in ["originalNode", "originalField", "inputNode", "inputField"] {
-                m.remove(k);
-            }
+            clear_field_lineage(&mut m);
             fields.push(Value::Object(m));
         }
         "TransformToCalculatedField" => {
-            // Java edits the field's expression in place — names preserved
-            // (evolve_names already confirmed); the field becomes computed
-            // so its proven origin is shed
+            // The step edits an existing field in place. Keep the simulator's
+            // direct input metadata for that field and drop its root origin.
+            // The available fixtures do not establish the platform's
+            // direct-reference key contract for this step.
             let tfi = s.get("transformFieldInfo").cloned().unwrap_or(Value::Null);
             let exp = tfi
                 .get("exp")
@@ -4435,8 +3978,7 @@ fn apply_step_mutation(
                 }
                 if let Some(m) = f.as_object_mut() {
                     m.insert("exp".into(), Value::String(exp.clone()));
-                    m.remove("originalNode");
-                    m.remove("originalField");
+                    clear_field_origin(m);
                     if let Some(dtv) = &dt {
                         m.insert("dataType".into(), Value::String(dtv.clone()));
                     }
@@ -4452,12 +3994,12 @@ fn apply_step_mutation(
 /// (name collisions, invalid required payloads) are `Err`; an unmodelable
 /// step stops simulation and is reported via `SimResult::opaque_at`.
 fn simulate_select(
+    sn: &Value,
     d: &NodeDesc,
     pred: &NodeDesc,
     pred_fields: &[Value],
     explicit_fields: bool,
 ) -> Result<SimResult, Diag> {
-    let sn = d.spec.unwrap();
     let mut work: Vec<Value> = pred_fields
         .iter()
         .map(|f| clone_passthrough(f, pred))
@@ -4644,11 +4186,11 @@ fn apply_escape_steps(
         let Some(m) = f.as_object_mut() else {
             continue;
         };
-        for k in ["originalNode", "originalField", "inputNode"] {
-            m.remove(k);
-        }
-        if born.contains_key(&idx) {
-            m.remove("inputField");
+        let added_field = born.get(&idx);
+        if added_field.is_some() {
+            clear_field_lineage(m);
+        } else {
+            clear_origin_and_input_node(m);
         }
         if let Some(tfi) = transformed.get(&idx) {
             if let Some(e) = tfi.get("exp").and_then(Value::as_str) {
@@ -4658,7 +4200,7 @@ fn apply_escape_steps(
                 m.insert("dataType".into(), Value::String(dt.to_string()));
             }
         }
-        if let Some(af) = born.get(&idx) {
+        if let Some(af) = added_field {
             if !transformed.contains_key(&idx) {
                 if let Some(e) = af.get("exp").and_then(Value::as_str) {
                     m.insert("exp".into(), Value::String(e.to_string()));
@@ -4701,11 +4243,11 @@ fn name_multiset_eq(a: &[String], b: &[String]) -> bool {
 /// unmodelable step falls back to the declarations (minus unproven
 /// original*) with whatever later steps remain provable on those names.
 fn compute_select_fields(
+    sn: &Value,
     d: &NodeDesc,
     descs: &[NodeDesc],
     key_to_idx: &HashMap<String, usize>,
 ) -> (Option<ComputedNode>, Option<Diag>) {
-    let sn = d.spec.unwrap();
     if d.inputs.is_empty() {
         return (
             None,
@@ -4767,7 +4309,7 @@ fn compute_select_fields(
             None,
         );
     };
-    let res = match simulate_select(d, pred, pred_fields, declared.is_some()) {
+    let res = match simulate_select(sn, d, pred, pred_fields, declared.is_some()) {
         Ok(r) => r,
         Err(e) => return (None, Some(e)),
     };
@@ -4845,14 +4387,7 @@ fn compute_select_fields(
                 if let Some(&si) = sim_by_name.get(&dn.to_uppercase()) {
                     let sf = &res.fields[si];
                     let mut m = sf.as_object().cloned().unwrap_or_default();
-                    if let Some(do_) = df.as_object() {
-                        for (k, v) in do_ {
-                            if ENFORCED_FIELD_KEYS.contains(&k.as_str()) {
-                                continue;
-                            }
-                            m.insert(k.clone(), v.clone());
-                        }
-                    }
+                    overlay_declared_metadata(&mut m, df);
                     m.insert(
                         "name".into(),
                         df.get("name").cloned().unwrap_or(Value::Null),
@@ -4925,8 +4460,7 @@ fn fill_fileinput_identity(fields: &mut [Value]) {
     }
 }
 
-fn emit_typed_node(d: &mut NodeDesc) -> Result<Value, Diag> {
-    let sn = d.spec.unwrap();
+fn emit_typed_node(sn: &Value, d: &mut NodeDesc) -> Result<Value, Diag> {
     let ty = d.ty.as_deref().unwrap_or("");
     let mut body = Map::new();
     body.insert("type".into(), Value::String(ty.to_string()));
@@ -5082,7 +4616,7 @@ fn default_output_partition(descs: &[NodeDesc]) -> (Vec<Value>, Vec<Value>, Opti
                     vec![],
                     vec![],
                     Some(Diag::spec(
-                        if d.raw_body.is_some() {
+                        if matches!(d.body, NodeBody::Raw(_)) {
                             format!("/nodes/{}/rawNode/fields", d.idx)
                         } else {
                             format!("/nodes/{}/fields", d.idx)
@@ -5149,38 +4683,43 @@ fn emit_properties(spec: &Value) -> Result<Value, Diag> {
     Ok(Value::Object(m))
 }
 
-fn emit_parameters(p: &Value) -> Result<Value, Diag> {
-    let arr = p.as_array().cloned().unwrap_or_default();
-    let mut out = Vec::new();
-    for item in arr {
-        let mut m = item.as_object().cloned().unwrap_or_default();
-        m.remove("raw");
-        if let Some(raw) = item.get("raw").and_then(Value::as_object) {
-            for (k, v) in raw {
-                m.insert(k.clone(), v.clone());
-            }
+fn emit_parameters(parameters: &[Value]) -> Value {
+    let mut out = Vec::with_capacity(parameters.len());
+    for item in parameters {
+        let mut parameter = item
+            .as_object()
+            .expect("validated parameter is an object")
+            .clone();
+        if let Some(raw) = parameter.remove("raw") {
+            let Value::Object(raw) = raw else {
+                unreachable!("validated parameter.raw is an object");
+            };
+            parameter.extend(raw);
         }
-        out.push(Value::Object(m));
+        out.push(Value::Object(parameter));
     }
-    Ok(Value::Array(out))
+    Value::Array(out)
 }
 
-fn emit_subprocesses(sp: &Value) -> Result<Value, Diag> {
-    let obj = sp.as_object().cloned().unwrap_or_default();
+fn emit_subprocesses(subprocesses: &Map<String, Value>) -> Value {
     let mut out = Map::new();
-    for (key, item) in obj {
-        let mut m = item.as_object().cloned().unwrap_or_default();
-        let raw = m.remove("raw");
+    for (key, item) in subprocesses {
+        let mut subprocess = item
+            .as_object()
+            .expect("validated subProcesses entry is an object")
+            .clone();
+        let raw = subprocess.remove("raw");
         // id defaults to map key
-        if !m.contains_key("id") {
-            m.insert("id".into(), Value::String(key.clone()));
+        if !subprocess.contains_key("id") {
+            subprocess.insert("id".into(), Value::String(key.clone()));
         }
-        if let Some(Value::Object(r)) = raw {
-            for (k, v) in r {
-                m.insert(k, v);
-            }
+        if let Some(raw) = raw {
+            let Value::Object(raw) = raw else {
+                unreachable!("validated subProcesses entry raw is an object");
+            };
+            subprocess.extend(raw);
         }
-        out.insert(key, Value::Object(m));
+        out.insert(key.clone(), Value::Object(subprocess));
     }
-    Ok(Value::Object(out))
+    Value::Object(out)
 }

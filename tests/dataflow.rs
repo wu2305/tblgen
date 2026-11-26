@@ -8,7 +8,7 @@
 use serde_json::{json, Value};
 use tblgen::check::check;
 use tblgen::decompile::decompile;
-use tblgen::gen::{generate, validate_spec};
+use tblgen::gen::{generate, generate_with_diagnostics, validate_spec};
 use tblgen::model::Diag;
 
 fn fixture(rel: &str) -> Value {
@@ -34,6 +34,16 @@ fn rules(diags: &[Diag]) -> Vec<String> {
 
 fn wire_errors(tbl: &Value) -> Vec<Diag> {
     check(tbl).into_iter().filter(|d| !d.is_warning()).collect()
+}
+
+fn assert_single_diag<'a>(diags: &'a [Diag], rule: &str, path: &str, warning: bool) -> &'a Diag {
+    let matches: Vec<_> = diags
+        .iter()
+        .filter(|d| d.rule == rule && d.path == path)
+        .collect();
+    assert_eq!(matches.len(), 1, "{rule} @ {path}: {diags:?}");
+    assert_eq!(matches[0].is_warning(), warning);
+    matches[0]
 }
 
 fn node<'a>(tbl: &'a Value, key: &str) -> &'a Value {
@@ -191,6 +201,30 @@ fn raw_default_output_partitions_top_level() {
     assert!(tbl.get("measures").is_none());
 }
 
+#[test]
+fn mixed_topology_routes_inputs_through_wire_keys() {
+    let spec = json!({
+        "format": 1,
+        "properties": {"extractDataEnabled": false},
+        "nodes": [
+            {"key":"out","type":"Output","inputs":["sel"]},
+            {"key":"sel","id":"select-wire","type":"Select","inputs":["raw/source"]},
+            {"key":"raw/source","rawNode":{"type":"ModelTable","id":"verbatim-id","alias":"src",
+                "moduleTablePath":"m.tbl","fields":[{"name":"ID","dataType":"C","isDimension":true}]}}
+        ]
+    });
+    let tbl = generate(&spec).expect("generate");
+    assert_eq!(node(&tbl, "raw/source"), &spec["nodes"][2]["rawNode"]);
+    assert_eq!(
+        node(&tbl, "select-wire")["inputNodes"],
+        json!(["raw/source"])
+    );
+    assert_eq!(node(&tbl, "default")["inputNodes"], json!(["select-wire"]));
+    assert_eq!(field(&tbl, "default", "ID")["originalNode"], json!("src"));
+    let decompiled = decompile(&tbl).expect("decompile");
+    assert_eq!(generate(&decompiled).expect("regenerate"), tbl);
+}
+
 // ---------------------------------------------------------------------------
 // join conditions: aliases, not keys; clause qualifiers
 // ---------------------------------------------------------------------------
@@ -257,14 +291,70 @@ fn join_clause_qualifier_must_be_an_alias() {
         json!([{"exp":"[left].[ID] = [right].[ID]"}]);
     assert!(generate(&expression).is_ok());
 
-    // [alias].[field].[part] (a date part, as the platform saves) is
-    // qualified by its chain head only; a key-qualified chain still fails.
-    let part = join_alias_spec("left", "right", "[left].[ID].[年]", "[right].[ID]");
-    assert!(spec_errors(&part).is_empty(), "{:?}", spec_errors(&part));
-    let tbl = generate(&part).expect("generate");
-    assert!(wire_errors(&tbl).is_empty(), "{:?}", wire_errors(&tbl));
-    let bad_part = join_alias_spec("left", "right", "[l].[ID].[年]", "[right].[ID]");
-    assert!(rules(&spec_errors(&bad_part)).contains(&"join.condition.qualifier".to_string()));
+    // 日期部件等多段引用只按链首校验别名，点号两侧允许空白。
+    for (part, bad_part) in [
+        ("[left].[ID].[年]", "[l].[ID].[年]"),
+        ("[left] . [ID].\t[年]", "[l] . [ID].\t[年]"),
+    ] {
+        let spec = join_alias_spec("left", "right", part, "[right].[ID]");
+        assert!(spec_errors(&spec).is_empty(), "{:?}", spec_errors(&spec));
+        let mut tbl = generate(&spec).expect("生成应成功");
+        assert!(wire_errors(&tbl).is_empty(), "{:?}", wire_errors(&tbl));
+        let bad_spec = join_alias_spec("left", "right", bad_part, "[right].[ID]");
+        assert!(spec_errors(&bad_spec)
+            .iter()
+            .any(|d| d.rule == "join.condition.qualifier"));
+        tbl["dataFlow"]["nodes"]["j"]["joinConditions"][0]["clauses"][0]["leftExp"] = json!(bad_part);
+        assert!(wire_errors(&tbl)
+            .iter()
+            .any(|d| d.rule == "join.condition.qualifier"));
+    }
+}
+
+#[test]
+fn join_condition_diagnostics_follow_the_emitted_aliases_and_map_back_to_config() {
+    let mut valid = join_alias_spec("LEFT", "right", "[left].[ID]", "[RIGHT].[ID]");
+    valid["nodes"][2]["id"] = json!("j/~wire");
+    valid["nodes"][2]["config"]["joinConditions"][0]["exp"] = json!("[LEFT].[ID] = [RIGHT].[ID]");
+    let valid_wire = generate(&valid).unwrap();
+    for (tail, value, rule) in [
+        ("/0/leftTable", json!("l"), "join.condition.alias"),
+        (
+            "/0/clauses/0/leftExp",
+            json!("[unknown].[ID]"),
+            "join.condition.qualifier",
+        ),
+        (
+            "/0/exp",
+            json!("[l].[ID] = [right].[ID]"),
+            "join.condition.qualifier",
+        ),
+        (
+            "/0/exp",
+            json!("[unknown].[ID] = [right].[ID]"),
+            "join.condition.qualifier",
+        ),
+        ("", json!([]), "join.conditions.count"),
+    ] {
+        let spec_path = format!("/nodes/2/config/joinConditions{tail}");
+        let wire_path = format!("/dataFlow/nodes/j~1~0wire/joinConditions{tail}");
+        let (mut spec, mut wire) = (valid.clone(), valid_wire.clone());
+        *spec.pointer_mut(&spec_path).unwrap() = value.clone();
+        *wire.pointer_mut(&wire_path).unwrap() = value;
+        let (generated, diags) = generate_with_diagnostics(&spec);
+        assert!(generated.is_none());
+        assert_eq!(
+            diags.iter().filter(|d| d.rule == rule).count(),
+            1,
+            "{diags:?}"
+        );
+        let spec_diag = assert_single_diag(&diags, rule, &spec_path, false);
+        let wire_diags = check(&wire);
+        let wire_diag = assert_single_diag(&wire_diags, rule, &wire_path, false);
+        assert_eq!(spec_diag.message, wire_diag.message);
+        assert_eq!(spec_diag.source, wire_diag.source);
+        assert!(!spec_diag.source.is_empty());
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -353,8 +443,8 @@ fn select_explicit_fields_project_lineage() {
              "fields":[
                 {"name":"h","dataType":"C","isDimension":true,"desc":"declared",
                  "inputField":"bogus","inputNode":"bogus","originalNode":"bogus",
-                 "originalField":"bogus"},
-                {"name":"g","dataType":"N","isDimension":false,"desc":"second"},
+                 "originalField":"bogus","exp":"'stale'"},
+                {"name":"g","dataType":"N","isDimension":false,"desc":"second","aggType":"SUM"},
                 {"name":"f","dataType":"C","isDimension":true}
              ]},
             {"key":"out","type":"Output","alias":"out","inputs":["sel"]}
@@ -369,10 +459,9 @@ fn select_explicit_fields_project_lineage() {
     // AddField payload drives exp; declared lineage keys are overridden
     assert_eq!(fs[0]["exp"], json!("[f]"));
     assert_eq!(fs[0]["desc"], json!("declared"));
-    assert!(
-        fs[0].get("originalNode").is_none(),
-        "computed field has no origin"
-    );
+    for key in ["originalNode", "originalField", "inputNode", "inputField"] {
+        assert!(fs[0].get(key).is_none());
+    }
     // passthrough fields keep simulated lineage
     assert_eq!(fs[1]["inputField"], json!("g"));
     assert!(
@@ -382,6 +471,7 @@ fn select_explicit_fields_project_lineage() {
     assert_eq!(fs[1]["originalNode"], json!("src"));
     assert_eq!(fs[1]["originalField"], json!("g"));
     assert_eq!(fs[1]["desc"], json!("second"));
+    assert_eq!(fs[1]["aggType"], json!("SUM"));
     assert!(wire_errors(&tbl).is_empty(), "{:?}", wire_errors(&tbl));
 }
 
@@ -457,7 +547,8 @@ fn transform_is_derivable_and_rename_after_add_works() {
                        {"name":"d","dataType":"C","isDimension":true}]},
             {"key":"sel","type":"Select","alias":"sel","inputs":["src"],"steps":[
                 {"type":"AddField","addField":{"name":"t","dataType":"N",
-                   "isDimension":false,"exp":"[m] * 2"}},
+                   "isDimension":false,"exp":"[m] * 2","aggType":"SUM",
+                   "inputNode":"src","inputField":"m","originalNode":"src","originalField":"m"}},
                 {"type":"TransformToCalculatedField","fields":["m"],
                  "transformFieldInfo":{"exp":"[m] + 1","dataType":"N"}},
                 {"type":"Refactor","fields":["t"],"refactor":{"rename":"t2"}}
@@ -474,7 +565,16 @@ fn transform_is_derivable_and_rename_after_add_works() {
     assert_eq!(names, vec!["m", "d", "t2"]);
     let m = fs.iter().find(|f| f["name"] == "m").unwrap();
     assert_eq!(m["exp"], json!("[m] + 1"));
-    assert!(m.get("originalNode").is_none(), "computed -> no origin");
+    assert_eq!(m["inputField"], json!("m"));
+    for key in ["originalNode", "originalField", "inputNode"] {
+        assert!(m.get(key).is_none());
+    }
+    let added = fs.iter().find(|f| f["name"] == "t2").unwrap();
+    assert_eq!(added["exp"], json!("[m] * 2"));
+    assert_eq!(added["aggType"], json!("SUM"));
+    for key in ["originalNode", "originalField", "inputNode", "inputField"] {
+        assert!(added.get(key).is_none());
+    }
     assert!(wire_errors(&tbl).is_empty(), "{:?}", wire_errors(&tbl));
 }
 
@@ -505,12 +605,16 @@ fn union_spec(map: Value, fields: Value) -> Value {
 fn union_map_first_nonempty_input_wins() {
     // values[0] empty -> the map key is anchored on input b (index 1); the
     // emitted inputNode/inputField must be exactly that canonical pair.
-    let spec = union_spec(
+    let mut spec = union_spec(
         json!([{"values":["","Q1"],"visible":true},
                {"values":["","Q2"],"visible":true}]),
         json!([{"name":"X1","dataType":"C","isDimension":true,"inputField":"Q1","inputNode":"b"},
-               {"name":"X2","dataType":"N","isDimension":false,"inputField":"Q2","inputNode":"b"}]),
+               {"name":"X2","dataType":"N","isDimension":false,"inputField":"Q2","inputNode":"b",
+                "aggType":"MAX","desc":"declared","originalNode":"a","originalField":"P2"}]),
     );
+    spec["nodes"][1]["fields"][0]["aggType"] = json!("COUNT");
+    spec["nodes"][1]["fields"][1]["aggType"] = json!("SUM");
+    spec["nodes"][1]["fields"][1]["desc"] = json!("upstream");
     assert!(spec_errors(&spec).is_empty(), "{:?}", spec_errors(&spec));
     let tbl = generate(&spec).expect("generate");
     let f1 = field(&tbl, "u", "X1");
@@ -518,6 +622,12 @@ fn union_map_first_nonempty_input_wins() {
     assert_eq!(f1["inputField"], json!("Q1"));
     assert_eq!(f1["originalNode"], json!("b"));
     assert_eq!(f1["originalField"], json!("Q1"));
+    assert!(f1.get("aggType").is_none());
+    let f2 = field(&tbl, "u", "X2");
+    assert_eq!(f2["originalNode"], json!("b"));
+    assert_eq!(f2["originalField"], json!("Q2"));
+    assert_eq!(f2["aggType"], json!("MAX"));
+    assert_eq!(f2["desc"], json!("declared"));
     assert!(wire_errors(&tbl).is_empty(), "{:?}", wire_errors(&tbl));
 }
 
@@ -545,7 +655,7 @@ fn union_map_renamed_output_via_inputfield() {
 fn union_map_hidden_rows_and_legacy_no_map() {
     // visible:false rows produce no map key; fields never reference them.
     let spec = union_spec(
-        json!([{"values":["P1","Q1"],"visible":false},
+        json!([{"values":["P1"],"visible":false},
                {"values":["P2","Q2"],"visible":true}]),
         json!([{"name":"F2","dataType":"N","isDimension":false,"inputField":"P2"}]),
     );
@@ -553,12 +663,53 @@ fn union_map_hidden_rows_and_legacy_no_map() {
     let tbl = generate(&spec).expect("generate");
     assert_eq!(field(&tbl, "u", "F2")["inputField"], json!("P2"));
     assert!(wire_errors(&tbl).is_empty(), "{:?}", wire_errors(&tbl));
+    assert_eq!(node(&tbl, "u")["unionMapArray"][0]["values"], json!(["P1"]));
+    let round_trip = decompile(&tbl).unwrap();
+    assert!(round_trip.get("nodes").is_some(), "{round_trip:?}");
+    assert_eq!(generate(&round_trip).unwrap(), tbl);
+
+    // Hiding a row does not exempt it from the typed spec's JSON shape.
+    let mut missing_values = spec.clone();
+    missing_values["nodes"][2]["config"]["unionMapArray"][0] = json!({"visible":false});
+    assert_single_diag(
+        &spec_errors(&missing_values),
+        "field.required",
+        "/nodes/2/config/unionMapArray/0/values",
+        false,
+    );
+
+    // The same short row is an error once visible. Width is diagnosed
+    // before Union projection can emit a misleading field lookup error.
+    let (mut visible_spec, mut visible_wire) = (spec, tbl);
+    visible_spec["nodes"][2]["config"]["unionMapArray"][0]["visible"] = json!(true);
+    visible_wire["dataFlow"]["nodes"]["u"]["unionMapArray"][0]["visible"] = json!(true);
+    let errors = spec_errors(&visible_spec);
+    assert_eq!(errors.len(), 1, "{errors:?}");
+    let spec_diag = assert_single_diag(
+        &errors,
+        "union.mapkey",
+        "/nodes/2/config/unionMapArray/0/values",
+        false,
+    );
+    let wire_diags = wire_errors(&visible_wire);
+    let wire_diag = assert_single_diag(
+        &wire_diags,
+        "union.mapkey",
+        "/dataFlow/nodes/u/unionMapArray/0/values",
+        false,
+    );
+    assert_eq!(spec_diag.message, wire_diag.message);
+    assert!(spec_diag.source.is_empty());
+    assert!(!wire_diag.source.is_empty());
 
     // no unionMapArray at all -> legacy per-input name resolution; no key
     // checks apply.
     let mut legacy = union_spec(
         json!([]),
-        json!([{"name":"P1","dataType":"C","isDimension":true}]),
+        json!([{"name":"renamed","dataType":"C","isDimension":true,"inputField":"P1","inputNode":"b",
+                "originalNode":"b","originalField":"Q1","aggType":"COUNT"},
+               {"name":"C","dataType":"N","isDimension":false,"exp":"1+1","aggType":"SUM",
+                "inputNode":"a","inputField":"P1","originalNode":"a","originalField":"P1"}]),
     );
     legacy["nodes"][2]["config"]
         .as_object_mut()
@@ -570,7 +721,19 @@ fn union_map_hidden_rows_and_legacy_no_map() {
         spec_errors(&legacy)
     );
     let tbl = generate(&legacy).expect("generate");
-    assert_eq!(field(&tbl, "u", "P1")["inputField"], json!("P1"));
+    let f = field(&tbl, "u", "renamed");
+    assert_eq!(f["inputField"], json!("P1"));
+    assert_eq!(f["inputNode"], json!("a"));
+    assert_eq!(f["originalNode"], json!("a"));
+    assert_eq!(f["originalField"], json!("P1"));
+    assert_eq!(f["aggType"], json!("COUNT"));
+    let c = field(&tbl, "u", "C");
+    assert_eq!(c["inputField"], json!("P1"));
+    assert_eq!(c["exp"], json!("1+1"));
+    assert_eq!(c["aggType"], json!("SUM"));
+    for key in ["originalNode", "originalField", "inputNode"] {
+        assert!(c.get(key).is_none());
+    }
     assert!(wire_errors(&tbl).is_empty(), "{:?}", wire_errors(&tbl));
 }
 
@@ -1130,7 +1293,8 @@ fn validate_spec_covers_wire_only_errors() {
     });
     let ds = validate_spec(&spec);
     assert!(
-        ds.iter().any(|d| d.rule == "graph.danglingInput"),
+        ds.iter()
+            .any(|d| d.rule == "graph.danglingInput" && d.path == "/nodes/1/rawNode/inputNodes"),
         "validate_spec must include wire-check errors: {:?}",
         rules(&ds)
     );
@@ -1151,11 +1315,19 @@ fn validate_spec_covers_wire_only_errors() {
     });
     let ds2 = validate_spec(&spec2);
     assert!(
-        ds2.iter().any(|d| d.rule == "enum.stepType"),
+        ds2.iter()
+            .any(|d| d.rule == "enum.stepType" && d.path == "/nodes/1/steps/0/rawStep/type"),
         "validate_spec must include wire step enum errors: {:?}",
         rules(&ds2)
     );
     assert!(generate(&spec2).is_err());
+
+    let mut invalid_raw_node = spec;
+    invalid_raw_node["nodes"][1]["rawNode"] = Value::Null;
+    assert!(spec_errors(&invalid_raw_node)
+        .iter()
+        .any(|d| d.rule == "structure.node.rawNode" && d.path == "/nodes/1/rawNode"));
+    assert!(generate(&invalid_raw_node).is_err());
 }
 
 // ---------------------------------------------------------------------------
@@ -1764,16 +1936,16 @@ fn union_hidden_field_needs_no_map_row() {
     let spec = union_spec(
         json!([{"values":["P1","Q1"],"visible":true}]),
         json!([{"name":"F1","dataType":"C","isDimension":true,"inputField":"P1"},
-               {"name":"H","dataType":"C","isDimension":true,"hidden":true}]),
+               {"name":"H","dataType":"C","isDimension":true,"hidden":true,
+                "inputNode":"a","inputField":"P2","originalNode":"a","originalField":"P2"}]),
     );
     assert!(spec_errors(&spec).is_empty(), "{:?}", spec_errors(&spec));
     let tbl = generate(&spec).expect("generate");
     let h = field(&tbl, "u", "H");
-    assert!(
-        h.get("originalNode").is_none() && h.get("inputField").is_none(),
-        "hidden field carries no proven lineage: {:?}",
-        h
-    );
+    assert_eq!(h["inputNode"], json!("a"));
+    assert_eq!(h["inputField"], json!("P2"));
+    assert!(h.get("originalNode").is_none());
+    assert!(h.get("originalField").is_none());
     assert!(wire_errors(&tbl).is_empty(), "{:?}", wire_errors(&tbl));
 }
 
@@ -1789,7 +1961,10 @@ fn escape_suffix_recovers_provable_step_metadata() {
             {"key":"src","type":"FileInput","alias":"src","config":{"fileName":"d.xlsx#S"},
              "fields":[{"name":"m","dataType":"N","isDimension":false}]},
             {"key":"sel","type":"Select","alias":"sel","inputs":["src"],
-             "fields":[{"name":"x","dataType":"N","isDimension":false}],
+             "fields":[{"name":"x","dataType":"N","isDimension":false,
+                        "inputNode":"src","inputField":"m","originalNode":"src","originalField":"m"},
+                       {"name":"m","dataType":"N","isDimension":false,
+                        "inputNode":"src","inputField":"m","originalNode":"src","originalField":"m"}],
              "steps":[
                 {"rawStep":{"type":"SplitField","fields":["m"]}},
                 {"type":"AddField","fields":["x"],
@@ -1808,7 +1983,14 @@ fn escape_suffix_recovers_provable_step_metadata() {
         json!("[m] * 2"),
         "latest transform wins over addField exp"
     );
-    assert!(x.get("originalNode").is_none());
+    let m = field(&tbl, "sel", "m");
+    assert_eq!(m["inputField"], json!("m"));
+    assert!(x.get("inputField").is_none());
+    for f in [x, m] {
+        for key in ["originalNode", "originalField", "inputNode"] {
+            assert!(f.get(key).is_none());
+        }
+    }
     // no rename hint is guessed through the opaque step
     let steps = node(&tbl, "sel")["steps"].as_array().unwrap();
     assert!(steps.iter().all(|s| s.get("originFieldInfo").is_none()));
@@ -1909,6 +2091,12 @@ fn raw_pred_without_fields_explicit_shape() {
     assert_eq!(field(&tbl, "default", "A")["name"], json!("A"));
     assert!(wire_errors(&tbl).is_empty(), "{:?}", wire_errors(&tbl));
 
+    let mut known_empty = spec.clone();
+    known_empty["nodes"][0]["rawNode"]["fields"] = json!([]);
+    assert!(spec_errors(&known_empty)
+        .iter()
+        .any(|d| d.rule == "field.notfound" && d.path == "/nodes/1/fields/0"));
+
     // absent declarations remain an error
     let mut bad = spec.clone();
     bad["nodes"][1].as_object_mut().unwrap().remove("fields");
@@ -1963,4 +2151,225 @@ fn original_node_may_name_any_node_and_empty_operands_skip_steps() {
             {"key":"out","type":"Output","alias":"out","inputs":["sel"]}
         ]});
     assert!(rules(&spec_errors(&spec)).contains(&"field.required".to_string()));
+}
+
+#[test]
+fn col_to_row_uses_platform_reference_rules_and_keeps_typed_metadata() {
+    let fields = json!([{"name":"header","dataType":"C","isDimension":true}]);
+    let valid = json!({
+        "format":1, "properties":{"extractDataEnabled":false},
+        "nodes":[
+            {"key":"src","type":"FileInput","config":{"fileName":"d.xlsx#S"},
+             "fields":[{"name":"input","dataType":"C","isDimension":true}]},
+            {"key":"pivot","type":"ColToRow","inputs":["src"],"fields":fields,
+             "config":{"colToRowInfo":{"headers":["header"],
+                                      "valuesArray":[[{"name":"INPUT","dataType":"C"}]]}}},
+            {"key":"out","type":"Output","inputs":["pivot"]}
+        ]
+    });
+    let valid_wire = generate(&valid).unwrap();
+    for (row, tail, rule, has_platform_source) in [
+        (json!([[]]), "/0", "err.dataflow.colToRow.config", true),
+        (
+            json!([[{"name":"","dataType":"C"}]]),
+            "/0/0/name",
+            "field.name",
+            false,
+        ),
+        (
+            json!([[{"name":"missing","dataType":"C"}]]),
+            "/0/0/name",
+            "field.notfound",
+            true,
+        ),
+    ] {
+        let (mut spec, mut wire) = (valid.clone(), valid_wire.clone());
+        let spec_base = "/nodes/1/config/colToRowInfo/valuesArray";
+        let wire_base = "/dataFlow/nodes/pivot/colToRowInfo/valuesArray";
+        *spec.pointer_mut(spec_base).unwrap() = row.clone();
+        *wire.pointer_mut(wire_base).unwrap() = row;
+        let errors = spec_errors(&spec);
+        assert_eq!(errors.len(), 1, "{errors:?}");
+        let spec_diag = assert_single_diag(&errors, rule, &format!("{spec_base}{tail}"), false);
+        let wire_diags = wire_errors(&wire);
+        let wire_diag = assert_single_diag(&wire_diags, rule, &format!("{wire_base}{tail}"), false);
+        assert_eq!(spec_diag.message, wire_diag.message);
+        assert!(!wire_diag.source.is_empty());
+        assert_eq!(!spec_diag.source.is_empty(), has_platform_source);
+        if has_platform_source {
+            assert_eq!(spec_diag.source, wire_diag.source);
+        }
+    }
+    for cell in [
+        json!({"name":"input"}),
+        json!({"name":"input","dataType":""}),
+    ] {
+        let (mut spec, mut wire) = (valid.clone(), valid_wire.clone());
+        spec["nodes"][1]["config"]["colToRowInfo"]["valuesArray"][0][0] = cell.clone();
+        wire["dataFlow"]["nodes"]["pivot"]["colToRowInfo"]["valuesArray"][0][0] = cell;
+        let errors = spec_errors(&spec);
+        assert_eq!(errors.len(), 1, "{errors:?}");
+        assert_single_diag(
+            &errors,
+            "field.required",
+            "/nodes/1/config/colToRowInfo/valuesArray/0/0/dataType",
+            false,
+        );
+        assert!(wire_errors(&wire).is_empty());
+    }
+    let mut wrong_header = valid;
+    wrong_header["nodes"][1]["config"]["colToRowInfo"]["headers"] = json!(["undeclared"]);
+    assert_single_diag(
+        &spec_errors(&wrong_header),
+        "field.name",
+        "/nodes/1/config/colToRowInfo/headers/0",
+        false,
+    );
+}
+
+#[test]
+fn topology_keeps_hard_errors_and_remaps_platform_warnings_once() {
+    let fields = json!([{"name":"ID","dataType":"C","isDimension":true}]);
+    let spec = json!({
+        "format":1, "properties":{"extractDataEnabled":false},
+        "nodes":[
+            {"key":"src","id":"source/~wire","type":"FileInput","fields":fields,
+             "config":{"fileName":"d.xlsx#S"}},
+            {"key":"row","type":"RowToCol","fields":fields},
+            {"key":"col","type":"ColToRow","fields":fields},
+            {"key":"snap","type":"Snapshot","fields":fields},
+            {"key":"upd","type":"Update","fields":fields},
+            {"key":"db","type":"DbTable","inputs":["src"],"fields":fields},
+            {"key":"sql","type":"Sql","inputs":["src"],"fields":fields},
+            {"key":"sel","type":"Select","inputs":["src"]},
+            {"key":"out","type":"Output","inputs":["sel"]}
+        ]
+    });
+    let (wire, diags) = generate_with_diagnostics(&spec);
+    let wire = wire.unwrap_or_else(|| panic!("{diags:?}"));
+    let wire_diags = check(&wire);
+    for (index, id, rule) in [
+        (1, "row", "warn.warn.node.noInput"),
+        (2, "col", "warn.warn.node.noInput"),
+        (3, "snap", "warn.warn.node.noInput"),
+        (4, "upd", "warn.warn.node.noInput"),
+        (5, "db", "warn.editor.dbtable.predecessor"),
+        (6, "sql", "warn.editor.sql.predecessor"),
+    ] {
+        let spec_path = format!("/nodes/{index}/inputs");
+        let wire_path = format!("/dataFlow/nodes/{id}/inputNodes");
+        let spec_diag = assert_single_diag(&diags, rule, &spec_path, true);
+        let wire_diag = assert_single_diag(&wire_diags, rule, &wire_path, true);
+        assert_eq!(spec_diag.message, wire_diag.message);
+        assert_eq!(spec_diag.source, wire_diag.source);
+        assert!(!spec_diag.source.is_empty());
+    }
+    assert_eq!(
+        diags
+            .iter()
+            .filter(|d| d.rule == "warn.warn.node.noInput")
+            .count(),
+        4
+    );
+    assert_eq!(
+        diags
+            .iter()
+            .filter(|d| d.rule.starts_with("warn.editor."))
+            .count(),
+        2
+    );
+
+    let (mut update_spec, mut update_wire) = (spec.clone(), wire.clone());
+    update_spec["nodes"][4]["inputs"] = json!(["src", "db"]);
+    update_spec["nodes"][4]["raw"] = json!({"updateConditions":[]});
+    update_wire["dataFlow"]["nodes"]["upd"]["inputNodes"] = json!(["source/~wire", "db"]);
+    update_wire["dataFlow"]["nodes"]["upd"]["updateConditions"] = json!([]);
+    let rule = "err.dataflow.update.conditions";
+    let update_spec_diags = spec_errors(&update_spec);
+    let update_wire_diags = wire_errors(&update_wire);
+    let spec_diag = assert_single_diag(
+        &update_spec_diags,
+        rule,
+        "/nodes/4/raw/updateConditions",
+        false,
+    );
+    let wire_diag = assert_single_diag(
+        &update_wire_diags,
+        rule,
+        "/dataFlow/nodes/upd/updateConditions",
+        false,
+    );
+    assert_eq!(spec_diag.source, wire_diag.source);
+
+    let (mut bad_spec, mut bad_wire) = (spec, wire);
+    bad_spec["nodes"][7]["inputs"] = json!([]);
+    bad_wire["dataFlow"]["nodes"]["sel"]["inputNodes"] = json!([]);
+    let bad_spec_diags = spec_errors(&bad_spec);
+    let bad_wire_diags = wire_errors(&bad_wire);
+    let rule = "err.dataflow.node.input";
+    let spec_diag = assert_single_diag(&bad_spec_diags, rule, "/nodes/7/inputs", false);
+    let wire_diag = assert_single_diag(
+        &bad_wire_diags,
+        rule,
+        "/dataFlow/nodes/sel/inputNodes",
+        false,
+    );
+    assert_eq!(spec_diag.message, wire_diag.message);
+    assert!(spec_diag.source.is_empty());
+    assert!(!wire_diag.source.is_empty());
+}
+
+#[test]
+fn select_operand_checks_share_the_text2id_source_exception() {
+    let fields = json!([{"name":"ID","dataType":"C","isDimension":true}]);
+    let valid = json!({
+        "format":1, "properties":{"extractDataEnabled":false},
+        "nodes":[
+            {"key":"src","type":"FileInput","config":{"fileName":"d.xlsx#S"},"fields":fields},
+            {"key":"sel","type":"Select","inputs":["src"],"fields":fields,
+             "steps":[{"type":"ToUppercase","fields":["id"]}]},
+            {"key":"out","type":"Output","inputs":["sel"]}
+        ]
+    });
+    let valid_wire = generate(&valid).unwrap();
+    for (step, rejects) in [
+        (json!({"type":"ToUppercase","fields":["ghost"]}), true),
+        (json!({"type":"RemoveField","fields":["ghost"]}), false),
+        (
+            json!({"type":"Text2Id","fields":["ghost"],"text2id":{}}),
+            true,
+        ),
+        (
+            json!({"type":"Text2Id","fields":["ghost"],"text2id":{"srcField":""}}),
+            true,
+        ),
+        (
+            json!({"type":"Text2Id","fields":["ghost"],"text2id":{"srcField":"ID"}}),
+            false,
+        ),
+    ] {
+        let (mut spec, mut wire) = (valid.clone(), valid_wire.clone());
+        spec["nodes"][1]["steps"][0] = step.clone();
+        wire["dataFlow"]["nodes"]["sel"]["steps"][0] = step;
+        let (generated, spec_diags) = generate_with_diagnostics(&spec);
+        let wire_diags = check(&wire);
+        let rule = "err.dataflow.stepField.notfound";
+        if rejects {
+            assert!(generated.is_none());
+            let spec_diag =
+                assert_single_diag(&spec_diags, rule, "/nodes/1/steps/0/fields/0", false);
+            let wire_diag = assert_single_diag(
+                &wire_diags,
+                rule,
+                "/dataFlow/nodes/sel/steps/0/fields/0",
+                false,
+            );
+            assert_eq!(spec_diag.message, wire_diag.message);
+            assert!(spec_diag.source.is_empty());
+            assert!(!wire_diag.source.is_empty());
+        } else {
+            assert!(generated.is_some(), "{spec_diags:?}");
+            assert!(wire_diags.iter().all(Diag::is_warning), "{wire_diags:?}");
+        }
+    }
 }

@@ -201,6 +201,88 @@ fn check_jobs_directory_and_exclude() {
     }
 }
 
+#[cfg(unix)]
+#[test]
+fn check_jobs_reports_directory_io_errors_and_prunes_exclusions() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let bin = env!("CARGO_BIN_EXE_tblgen");
+    let sb = Sandbox::new("directory-io");
+    let left = sb.write("a.action.ts", "export function run() {}");
+    let right = sb.write("z.action.ts", "export function run() {}");
+    let blocked = sb.path("blocked");
+    let search_denied = sb.path("search-denied");
+    let hidden = sb.path(".hidden");
+    let modules = sb.path("node_modules");
+    std::fs::create_dir_all(search_denied.join("nested")).unwrap();
+    for dir in [&blocked, &hidden, &modules] {
+        std::fs::create_dir(dir).unwrap();
+        std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o000)).unwrap();
+    }
+    std::fs::set_permissions(&search_denied, std::fs::Permissions::from_mode(0o400)).unwrap();
+
+    let paths = [sb.dir.display().to_string()];
+    // Privileged runners can bypass chmod. Only assert a permission failure
+    // if the operating system enforces it for this test process.
+    let permission_enforced = std::fs::read_dir(&blocked).is_err();
+    let serial = run(bin, &check_args(&paths, Some("1")));
+    let parallel = run(bin, &check_args(&paths, Some("4")));
+    let exclude_args = |jobs| {
+        let mut args = check_args(&paths, Some(jobs));
+        // An explicitly supplied directory can be excluded too.
+        args.push(blocked.display().to_string());
+        for dir in [&blocked, &search_denied] {
+            args.extend(["--exclude".to_string(), dir.display().to_string()]);
+        }
+        args
+    };
+    let excluded = run(bin, &exclude_args("1"));
+    let excluded_parallel = run(bin, &exclude_args("4"));
+
+    for dir in [&blocked, &search_denied, &hidden, &modules] {
+        std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700)).unwrap();
+    }
+
+    assert_same(&serial, &parallel, "directory I/O error");
+    assert_same(&excluded, &excluded_parallel, "excluded directories");
+    assert_eq!(excluded.status.code(), Some(0));
+    assert!(excluded.stderr.is_empty());
+    let report: serde_json::Value = serde_json::from_slice(&excluded.stdout).unwrap();
+    let files = report["files"].as_array().unwrap();
+    assert_eq!(files.len(), 2);
+    assert_eq!(files[0]["file"], left.to_str().unwrap());
+    assert_eq!(files[1]["file"], right.to_str().unwrap());
+
+    if permission_enforced {
+        assert_eq!(serial.status.code(), Some(2));
+        let report: serde_json::Value = serde_json::from_slice(&serial.stdout).unwrap();
+        let files = report["files"].as_array().unwrap();
+        assert_eq!(files.len(), 4);
+        assert_eq!(files[0]["scope"], "script");
+        assert_eq!(files[0]["file"], left.to_str().unwrap());
+        assert_eq!(files[1]["file"], blocked.to_str().unwrap());
+        assert!(Path::new(files[2]["file"].as_str().unwrap()).starts_with(&search_denied));
+        assert_eq!(files[3]["scope"], "script");
+        assert_eq!(files[3]["file"], right.to_str().unwrap());
+        for report in &files[1..3] {
+            assert_eq!(report["scope"], "unknown");
+            assert_eq!(report["errors"][0]["rule"], "io");
+        }
+        let stderr = String::from_utf8(serial.stderr).unwrap();
+        let lines: Vec<_> = stderr.lines().collect();
+        assert_eq!(lines.len(), 2);
+        for (line, report) in lines.iter().zip(&files[1..3]) {
+            assert_eq!(
+                *line,
+                format!(
+                    "tblgen: {}",
+                    report["errors"][0]["message"].as_str().unwrap()
+                )
+            );
+        }
+    }
+}
+
 #[test]
 fn check_jobs_missing_and_mixed_paths() {
     let bin = env!("CARGO_BIN_EXE_tblgen");

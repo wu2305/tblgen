@@ -4,7 +4,10 @@ use serde_json::{json, Value};
 use std::process::Command;
 use tblgen::check::check;
 use tblgen::decompile::decompile;
-use tblgen::gen::{generate, validate_spec};
+use tblgen::gen::{
+    generate, generate_with_diagnostics, generate_with_diagnostics_profile, validate_spec,
+    GeneratedCompileProfile,
+};
 use tblgen::model::*;
 use tblgen::schema::schema_document;
 
@@ -16,6 +19,72 @@ fn spec_errors(spec: &Value) -> Vec<Diag> {
 
 fn budget_spec() -> Value {
     serde_json::from_str(include_str!("../examples/budget.spec.json")).unwrap()
+}
+
+#[test]
+fn spec_entry_points_share_diagnostics() {
+    let mut generated = budget_spec();
+    generated["properties"].as_object_mut().unwrap().clear();
+    let cases: &[(&str, Value, &[&str])] = &[
+        ("non-object", json!([]), &["structure.spec"]),
+        ("missing format", json!({}), &["structure.format"]),
+        (
+            "wrong format with conflicting forms",
+            json!({"format": 2, "archive": null, "nodes": null}),
+            &["structure.format"],
+        ),
+        (
+            "wrong format with invalid archive",
+            json!({"format": "1", "archive": null}),
+            &["structure.format"],
+        ),
+        ("missing form", json!({"format": 1}), &["structure.form"]),
+        (
+            "conflicting forms",
+            json!({"format": 1, "nodes": [], "rawTable": null}),
+            &["structure.form"],
+        ),
+        (
+            "invalid archive",
+            json!({"format": 1, "archive": {"top": {"dataFlow": {}}, "flow": {}, "nodes": [
+                {"id": "same", "body": {}},
+                {"id": "same", "body": null}
+            ]}}),
+            &[
+                "structure.archive.node.id",
+                "structure.archive.node",
+                "structure.archive.collision",
+            ],
+        ),
+        (
+            "invalid rawTable",
+            json!({"format": 1, "extra": true, "rawTable": null}),
+            &["structure.rawTable.key", "structure.rawTable"],
+        ),
+        (
+            "archive",
+            json!({"format": 1, "archive": {"top": {}, "flow": {}, "nodes": []}}),
+            &[],
+        ),
+        ("rawTable", json!({"format": 1, "rawTable": {"a": 1}}), &[]),
+        ("generated", generated, &["warn.properties.runMode.unset"]),
+    ];
+
+    for (name, spec, expected_rules) in cases {
+        let (wire, diags) = generate_with_diagnostics(spec);
+        let (profiled_wire, profiled_diags, profile) = generate_with_diagnostics_profile(spec);
+        let diag_json = |diags: &[Diag]| diags.iter().map(Diag::to_json).collect::<Vec<_>>();
+        assert_eq!(rules(&diags), *expected_rules, "{name}");
+        assert_eq!(diag_json(&validate_spec(spec)), diag_json(&diags), "{name}");
+        assert_eq!(diag_json(&profiled_diags), diag_json(&diags), "{name}");
+        assert_eq!(profiled_wire, wire, "{name}");
+        assert_eq!(wire.is_some(), diags.iter().all(Diag::is_warning), "{name}");
+        if *name == "generated" {
+            assert_eq!(profile.nodes, spec["nodes"].as_array().unwrap().len());
+        } else {
+            assert_eq!(profile, GeneratedCompileProfile::default(), "{name}");
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -110,6 +179,113 @@ fn generate_is_deterministic() {
     let a = serde_json::to_string(&generate(&spec).unwrap()).unwrap();
     let b = serde_json::to_string(&generate(&spec).unwrap()).unwrap();
     assert_eq!(a, b);
+}
+
+#[test]
+fn generated_parameters_and_subprocesses_preserve_raw_overrides() {
+    let mut spec = budget_spec();
+    spec["parameters"] = json!([
+        {"name":"first","dataType":"C","defaultValue":"typed",
+         "raw":{"defaultValue":"raw","extra":true}},
+        {"name":"second","dataType":"C"}
+    ]);
+    spec["subProcesses"] = json!({
+        "defaulted":{"rootNodeId":"src","nodeIds":["src"]},
+        "explicit":{"id":"explicit-id","rootNodeId":"src","nodeIds":["src"]},
+        "overridden":{"rootNodeId":"src","nodeIds":["src"],
+                      "raw":{"id":"raw-id","nodeIds":["src","flt"],"extra":true}}
+    });
+
+    let tbl = generate(&spec).unwrap();
+    assert_eq!(
+        tbl["parameters"],
+        json!([
+            {"name":"first","dataType":"C","defaultValue":"raw","extra":true},
+            {"name":"second","dataType":"C"}
+        ])
+    );
+    assert_eq!(
+        tbl["dataFlow"]["subProcesses"],
+        json!({
+            "defaulted":{"id":"defaulted","rootNodeId":"src","nodeIds":["src"]},
+            "explicit":{"id":"explicit-id","rootNodeId":"src","nodeIds":["src"]},
+            "overridden":{"id":"raw-id","rootNodeId":"src","nodeIds":["src","flt"],"extra":true}
+        })
+    );
+
+    spec["parameters"] = json!([]);
+    spec["subProcesses"] = json!({});
+    let tbl = generate(&spec).unwrap();
+    assert_eq!(tbl["parameters"], json!([]));
+    assert_eq!(tbl["dataFlow"]["subProcesses"], json!({}));
+
+    let obj = spec.as_object_mut().unwrap();
+    obj.remove("parameters");
+    obj.remove("subProcesses");
+    let tbl = generate(&spec).unwrap();
+    assert!(tbl.get("parameters").is_none());
+    assert!(tbl.pointer("/dataFlow/subProcesses").is_none());
+}
+
+#[test]
+fn generated_parameters_and_subprocesses_report_invalid_shapes() {
+    let cases = [
+        (
+            json!({}),
+            json!([]),
+            vec![
+                Diag::spec(
+                    "/parameters",
+                    "structure.parameters",
+                    "parameters must be an array",
+                ),
+                Diag::spec(
+                    "/subProcesses",
+                    "structure.subprocesses",
+                    "subProcesses must be an object",
+                ),
+            ],
+        ),
+        (
+            json!([false, {"name":"valid","dataType":"C","raw":[]}]),
+            json!({"a/b~":false,"raw":{"rootNodeId":"src","nodeIds":["src"],"raw":[]}}),
+            vec![
+                Diag::spec(
+                    "/parameters/0",
+                    "structure.parameter",
+                    "parameter must be an object",
+                ),
+                Diag::spec(
+                    "/parameters/1/raw",
+                    "structure.parameter.raw",
+                    "parameter.raw must be an object",
+                ),
+                Diag::spec(
+                    "/subProcesses/a~1b~0",
+                    "structure.subprocess",
+                    "subProcesses entries must be objects",
+                ),
+                Diag::spec(
+                    "/subProcesses/raw/raw",
+                    "structure.subprocess.raw",
+                    "subProcesses.raw must be an object",
+                ),
+            ],
+        ),
+    ];
+    for (parameters, subprocesses, expected) in cases {
+        let mut spec = budget_spec();
+        spec["parameters"] = parameters;
+        spec["subProcesses"] = subprocesses;
+        let (wire, diags) = generate_with_diagnostics(&spec);
+        assert!(wire.is_none());
+        let errors: Vec<_> = diags
+            .iter()
+            .filter(|d| !d.is_warning())
+            .map(Diag::to_json)
+            .collect();
+        assert_eq!(errors, expected.iter().map(Diag::to_json).collect::<Vec<_>>());
+    }
 }
 
 #[test]
@@ -638,6 +814,20 @@ fn decompile_roundtrip_generated() {
     // regenerating the decompiled spec must equal the normalized input
     let wire2 = generate(&back).unwrap();
     assert_eq!(wire2, tbl, "decompile->generate must round-trip");
+}
+
+#[test]
+fn decompile_preserves_subprocess_key_and_explicit_id() {
+    let mut spec = budget_spec();
+    let subprocesses = json!({
+        "process-key": {"id": "process-id", "rootNodeId": "src", "nodeIds": ["src"]}
+    });
+    spec["subProcesses"] = subprocesses.clone();
+
+    let tbl = generate(&spec).unwrap();
+    let back = decompile(&tbl).unwrap();
+    assert_eq!(back["subProcesses"], subprocesses);
+    assert_eq!(generate(&back).unwrap(), tbl);
 }
 
 #[test]
@@ -1226,6 +1416,56 @@ fn invalid_step_enums_rejected() {
 }
 
 #[test]
+fn bracket_reference_projections_share_chain_boundaries() {
+    let cases = [
+        (
+            "[表].[字段].[年] + [裸字段] + [单个.名称]",
+            &[
+                ("表", true),
+                ("字段", true),
+                ("年", true),
+                ("裸字段", false),
+                ("单个.名称", true),
+            ][..],
+            &["表"][..],
+        ),
+        (
+            "[别]]名]\u{3000}.\t[字段] .\n[😀][另一表]. [金额][裸字段]",
+            &[
+                ("别]名", true),
+                ("字段", true),
+                ("😀", true),
+                ("另一表", true),
+                ("金额", true),
+                ("裸字段", false),
+            ],
+            &["别]名", "另一表"],
+        ),
+        (
+            r#"'[忽略].[列]' + "\"[忽略]" + [可见] . '[隔断]' [裸字段]"#,
+            &[("可见", false), ("裸字段", false)],
+            &[],
+        ),
+        ("[已有] + [未闭合]]", &[("已有", false)], &[]),
+        ("[已有] + '[未闭合引号].[列]", &[("已有", false)], &[]),
+        ("[表] . [未闭合", &[("表", true)], &["表"]),
+    ];
+    for (exp, refs, qualifiers) in cases {
+        let actual = exp_bracket_refs(exp);
+        let actual = actual
+            .iter()
+            .map(|(name, qualified)| (name.as_str(), *qualified))
+            .collect::<Vec<_>>();
+        assert_eq!(actual, refs, "表达式 {exp:?} 的引用和限定状态");
+        assert_eq!(
+            exp_table_qualifiers(exp),
+            qualifiers,
+            "表达式 {exp:?} 的限定符"
+        );
+    }
+}
+
+#[test]
 fn expression_refs_validated_conservatively() {
     // [missing] != NULL -> proved-bad unqualified ref rejected
     let bad = json!({
@@ -1318,6 +1558,28 @@ fn expression_refs_validated_conservatively() {
         wd.iter().map(|d| &d.rule).collect::<Vec<_>>()
     );
     assert!(!wd.iter().any(|d| d.rule == "err.exp.ref.notfound"));
+
+    let mut qualified_spec = bad;
+    let mut qualified_wire = wire;
+    for exp in [
+        "[别名].[字段].[年] != NULL",
+        "[别名] . [字段].\t[年] != NULL",
+    ] {
+        qualified_spec["nodes"][1]["steps"][0]["filter"] = json!(exp);
+        qualified_wire["dataFlow"]["nodes"]["s"]["steps"][0]["filter"] = json!(exp);
+        assert!(
+            !spec_errors(&qualified_spec)
+                .iter()
+                .any(|d| d.rule == "err.exp.ref.notfound"),
+            "生成校验应跳过已限定的引用 {exp:?}"
+        );
+        assert!(
+            !check(&qualified_wire)
+                .iter()
+                .any(|d| d.rule == "warn.exp.ref.notfound"),
+            "文件校验应跳过已限定的引用 {exp:?}"
+        );
+    }
 }
 
 /// The general `examples.typed` / `examples.rawOnly` arrays: every entry must
@@ -1558,6 +1820,31 @@ fn new_models_pass_project_check() {
 }
 
 #[test]
+fn generated_script_names_round_trip_through_project_check() {
+    let root = std::env::temp_dir().join(format!("tblgen-script-literals-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let tables = root.join("P/data/tables");
+    std::fs::create_dir_all(&tables).unwrap();
+    let fields = "列\"\\\n🙂 // /* */ {fields} {{fields}}\u{2028}\u{2029}名=demo:C";
+
+    for template in ["placeholder", "transform"] {
+        let table = format!("ods_{template}");
+        let tbl = tables.join(format!("{table}.tbl"));
+        let o = cli(&[
+            "new", "script", "--table", &table, "--extract", "false",
+            "--template", template, "--fields", fields, "-o", tbl.to_str().unwrap(),
+        ]);
+        assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
+    }
+
+    let o = cli(&["check", root.to_str().unwrap()]);
+    let checked = report(&o);
+    assert!(o.status.success(), "{checked:?}");
+    assert_eq!(checked.len(), 4);
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
 fn renamed_script_fields_are_caught() {
     // Chinese display names on the model while the script still declares the
     // English names: both the script name rule and the lineage rule fire
@@ -1599,6 +1886,62 @@ fn renamed_script_fields_are_caught() {
     let r = report(&cli(&["check", &t2.display().to_string()]));
     assert!(r.iter().all(|(_, e)| e.is_empty()), "{:?}", r);
     let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn script_reference_distinguishes_missing_and_unreadable_and_keeps_precedence() {
+    use std::fs;
+
+    let root = std::env::temp_dir().join(format!("tblgen-script-read-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&root);
+    let tbl = root.join("P/data/tables/ods_s.tbl");
+    fs::create_dir_all(tbl.parent().unwrap()).unwrap();
+    let model = tbl.to_str().unwrap();
+    let o = cli(&["new", "script", "--table", "ods_s", "--extract", "true",
+                  "--fields", "k:C:20", "-o", model]);
+    assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
+
+    let scripts = fs::canonicalize(root.join("P/data/script")).unwrap();
+    let key = tblgen::new::md5_hex(b"ods_s");
+    let source = scripts.join(format!("{key}.action.ts"));
+    let compiled = scripts.join(format!("{key}.action"));
+    let original = fs::read(&source).unwrap();
+    let expect_error = |rule: &str, path_suffix: &str| {
+        let o = cli(&["check", model]);
+        assert_eq!(o.status.code(), Some(1));
+        let r: Value = serde_json::from_slice(&o.stdout).unwrap();
+        let errors = r["files"][0]["errors"].as_array().unwrap();
+        assert_eq!(errors.len(), 1, "{r}");
+        assert_eq!(errors[0]["rule"], rule);
+        assert!(errors[0]["path"].as_str().unwrap().ends_with(path_suffix), "{r}");
+        errors[0]["message"].as_str().unwrap().to_owned()
+    };
+
+    fs::remove_file(&source).unwrap();
+    expect_error("ref.script.missing", "/scriptName");
+
+    fs::write(&source, [0xff]).unwrap();
+    let source_error = fs::read_to_string(&source).unwrap_err();
+    assert_eq!(source_error.kind(), std::io::ErrorKind::InvalidData);
+    let source_detail = format!("{}（{source_error}）", source.display());
+    let message = expect_error("ref.script.unreadable", "/scriptName");
+    assert!(message.contains(&source_detail), "{message}");
+
+    fs::create_dir(&compiled).unwrap();
+    let compiled_error = fs::read_to_string(&compiled).unwrap_err();
+    let message = expect_error("ref.script.unreadable", "/scriptName");
+    assert!(message.contains(&source_detail), "{message}");
+    assert!(message.contains(&format!("{}（{compiled_error}）", compiled.display())), "{message}");
+    fs::remove_dir(&compiled).unwrap();
+
+    fs::write(&compiled, "const fields = [{ name: 'compiled', dbfield: 'K' }];").unwrap();
+    let message = expect_error("ref.script.fieldName", "/fields/0/name");
+    assert!(message.contains("compiled"), "{message}");
+
+    fs::write(&source, original).unwrap();
+    let o = cli(&["check", model]);
+    assert!(o.status.success(), "{:?}", report(&o));
+    let _ = fs::remove_dir_all(&root);
 }
 
 #[test]
