@@ -79,6 +79,12 @@
 - 新增 wire 回归覆盖大小写折叠重复名的多重集语义：Refactor 只改第一个匹配项时剩余重复名仍可被后续步骤引用；RemoveField 仍删除全部大小写折叠匹配项。
 - 既有回归覆盖 case-only rename、Unicode `Straße`/`STRASSE`、AddField/Refactor 冲突、rawStep/opaque 停止跟踪、最终字段多重集预算和表达式引用边界。
 
+## xiaoshouyi 真实语料补验（2026-11-26）
+
+语料来源为 `wu2305/succbi_project_container` 的 `xiaoshouyi-corpus` 分支 `projects/xiaoshouyi`，commit `6920ac514df2d79a3df73a6447cf851abdfc954b`；稀疏检出 828 个 `.tbl`。路径 manifest SHA-256 `ccd0e7ccb9a888237eedc2c411dd09a97b98209f4e2fee80a7ae137fc8bce866`。补验仍用同一对 release `wire_check` 二进制：baseline SHA-256 `9d192ea89700b6f49ecfcffc66525b96fed67ea7368c2a6acc180cf57f37c288`，S1 SHA-256 `ae5d09ed10b7a407186a8d5e0ba063c87c1fe11b1bd701ddaa4c7e42627a49e9`；原始配对结果在 [select-step-corpus-ab.json](select-step-corpus-ab.json)（SHA-256 `b62d33de5c62d7c65930aa613aa78b06bb8a6543bd5e04f61abc7985d79b1a36`）。
+
+`taskset -c 0`、12 对 AB/BA、每对 828 个文件各完整纯 `check` 一遍；完整有序诊断 digest 相同。语料配对中位数 **−7.29%**（after/before 0.9271），**10/12** 对更快，配对范围 0.881–1.104。无步骤 width 对照也有约 −1.7% 至 −2.9%，说明仍存在二进制布局/机器漂移；但语料收益幅度更大且方向稳定，补验支持保留 S1。该结果只覆盖这 828 个文件，不外推历史文档提到的 1,062 份，也不推断 typed gen/decompile。
+
 ## 复跑
 
 ```bash
@@ -102,4 +108,4 @@ python3 scripts/compare_wire_check.py "$BEFORE_BENCH" "$AFTER_BENCH" \
 
 ## 交付记录
 
-`S1 | base 1bc4173 + lockfile 596ae35b，合成/实验输入 SHA-256 见 JSON | 唯一变量：Select 名字存在性多重集索引并去除逐步整表克隆 | src/check.rs、tests/dataflow.rs、scripts/build_select_step_cases.py、benches/select-step-spike.* | 原始结果 benches/select-step-spike.json | 实验 wire 纯 check −25.5%、CLI −10.0%；长链合成 −28.8% 至 −97.9%；微小 rename +4.7%（约 0.8 µs），RSS 无可分辨差异 | 有序诊断 digest、CLI stdout/stderr/exit、等价性回归和 cargo test | 未验证 1,062 份服务端语料；不推断 typed gen/decompile；表达式重复扫描仍未优化 | 保留；下一步建议 S2 先量化表达式重复扫描，或用 C1 分解真实 CLI 阶段后再排序`
+`S1 | base 1bc4173 + lockfile 596ae35b，合成/实验输入 SHA-256 见 JSON；xiaoshouyi 828 文件 manifest ccd0e7cc | 唯一变量：Select 名字存在性多重集索引并去除逐步整表克隆 | src/check.rs、tests/dataflow.rs、scripts/build_select_step_cases.py、benches/select-step-spike.*、benches/select-step-corpus-ab.json | 原始结果 benches/select-step-spike.json 与 benches/select-step-corpus-ab.json | 实验 wire 纯 check −25.5%、CLI −10.0%；长链合成 −28.8% 至 −97.9%；xiaoshouyi 828 文件纯 check 配对中位数 −7.29%（10/12 对更快）；微小 rename +4.7%（约 0.8 µs），RSS 无可分辨差异 | 有序诊断 digest、CLI stdout/stderr/exit、等价性回归和 cargo test | 真实语料补验只覆盖当前 828 个文件；不推断 typed gen/decompile；表达式重复扫描仍未优化 | 保留；下一步建议 S2 先量化表达式重复扫描，或用 C1 分解真实 CLI 阶段后再排序`
