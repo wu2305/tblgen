@@ -1572,6 +1572,31 @@ fn new_models_pass_project_check() {
 }
 
 #[test]
+fn generated_script_names_round_trip_through_project_check() {
+    let root = std::env::temp_dir().join(format!("tblgen-script-literals-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let tables = root.join("P/data/tables");
+    std::fs::create_dir_all(&tables).unwrap();
+    let fields = "列\"\\\n🙂 // /* */ {fields} {{fields}}\u{2028}\u{2029}名=demo:C";
+
+    for template in ["placeholder", "transform"] {
+        let table = format!("ods_{template}");
+        let tbl = tables.join(format!("{table}.tbl"));
+        let o = cli(&[
+            "new", "script", "--table", &table, "--extract", "false",
+            "--template", template, "--fields", fields, "-o", tbl.to_str().unwrap(),
+        ]);
+        assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
+    }
+
+    let o = cli(&["check", root.to_str().unwrap()]);
+    let checked = report(&o);
+    assert!(o.status.success(), "{checked:?}");
+    assert_eq!(checked.len(), 4);
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
 fn renamed_script_fields_are_caught() {
     // Chinese display names on the model while the script still declares the
     // English names: both the script name rule and the lineage rule fire
