@@ -2,6 +2,10 @@
 
 离线生成、校验和反解 SuccBI DataFlow `.tbl` 模型、并按平台规则检查整个项目的命令行工具。`examples/` 中的物业预算模型使用虚拟测试数据，不连接真实工作簿或服务。
 
+## 仓库镜像
+
+CNB 仓库 <https://cnb.cool/wu2305/tblgen> 是权威仓库；GitHub 仓库 <https://github.com/wu2305/tblgen> 是只读镜像。镜像由 `.github/workflows/cnb-mirror.yml` 每 30 分钟同步一次，也可以在 GitHub Actions 中手动触发；它会按 CNB 的分支与标签强制覆盖并裁剪 GitHub 侧引用。改动必须先提交到 CNB，不要直接在 GitHub 镜像上开发。
+
 ## 使用
 
 从对应版本的 CNB Release 下载适合当前平台的二进制（Windows 为 `tblgen.exe`），不需要安装 Rust。Release 同时提供 `SHA256SUMS` 校验文件与 `tblgen-skill-<tag>.zip` 技能包，先核对摘要再使用：

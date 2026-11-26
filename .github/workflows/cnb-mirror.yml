@@ -1,0 +1,42 @@
+# GitHub 是 CNB 的只读镜像。镜像会强制覆盖并裁剪 GitHub 侧分支与标签；
+# 改动必须先进入 CNB，不要直接在 GitHub 镜像上开发。
+name: Mirror from CNB
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: cnb-mirror
+  cancel-in-progress: false
+
+jobs:
+  mirror:
+    name: Mirror CNB refs
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mirror branches and tags
+        env:
+          CNB_REPO_URL: https://cnb.cool/wu2305/tblgen.git
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          workdir="$(mktemp -d)"
+          trap 'rm -rf "$workdir"' EXIT
+          git init --bare -q "$workdir/mirror.git"
+
+          git -C "$workdir/mirror.git" fetch "$CNB_REPO_URL" \
+            '+refs/heads/*:refs/remotes/cnb/*' \
+            '+refs/tags/*:refs/tags/*'
+
+          git \
+            -c credential.helper='!f() { echo "username=x-access-token"; echo "password=$GITHUB_TOKEN"; }; f' \
+            -C "$workdir/mirror.git" \
+            push --prune "https://github.com/${{ github.repository }}.git" \
+            '+refs/remotes/cnb/*:refs/heads/*' \
+            '+refs/tags/*:refs/tags/*'
