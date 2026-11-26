@@ -19,3 +19,7 @@ path = "src/main.rs"
 [[bench]]
 name = "wire_check"
 harness = false
+
+[[bench]]
+name = "cli_timing"
+harness = false
