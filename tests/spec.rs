@@ -1616,6 +1616,62 @@ fn renamed_script_fields_are_caught() {
 }
 
 #[test]
+fn script_reference_distinguishes_missing_and_unreadable_and_keeps_precedence() {
+    use std::fs;
+
+    let root = std::env::temp_dir().join(format!("tblgen-script-read-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&root);
+    let tbl = root.join("P/data/tables/ods_s.tbl");
+    fs::create_dir_all(tbl.parent().unwrap()).unwrap();
+    let model = tbl.to_str().unwrap();
+    let o = cli(&["new", "script", "--table", "ods_s", "--extract", "true",
+                  "--fields", "k:C:20", "-o", model]);
+    assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
+
+    let scripts = fs::canonicalize(root.join("P/data/script")).unwrap();
+    let key = tblgen::new::md5_hex(b"ods_s");
+    let source = scripts.join(format!("{key}.action.ts"));
+    let compiled = scripts.join(format!("{key}.action"));
+    let original = fs::read(&source).unwrap();
+    let expect_error = |rule: &str, path_suffix: &str| {
+        let o = cli(&["check", model]);
+        assert_eq!(o.status.code(), Some(1));
+        let r: Value = serde_json::from_slice(&o.stdout).unwrap();
+        let errors = r["files"][0]["errors"].as_array().unwrap();
+        assert_eq!(errors.len(), 1, "{r}");
+        assert_eq!(errors[0]["rule"], rule);
+        assert!(errors[0]["path"].as_str().unwrap().ends_with(path_suffix), "{r}");
+        errors[0]["message"].as_str().unwrap().to_owned()
+    };
+
+    fs::remove_file(&source).unwrap();
+    expect_error("ref.script.missing", "/scriptName");
+
+    fs::write(&source, [0xff]).unwrap();
+    let source_error = fs::read_to_string(&source).unwrap_err();
+    assert_eq!(source_error.kind(), std::io::ErrorKind::InvalidData);
+    let source_detail = format!("{}（{source_error}）", source.display());
+    let message = expect_error("ref.script.unreadable", "/scriptName");
+    assert!(message.contains(&source_detail), "{message}");
+
+    fs::create_dir(&compiled).unwrap();
+    let compiled_error = fs::read_to_string(&compiled).unwrap_err();
+    let message = expect_error("ref.script.unreadable", "/scriptName");
+    assert!(message.contains(&source_detail), "{message}");
+    assert!(message.contains(&format!("{}（{compiled_error}）", compiled.display())), "{message}");
+    fs::remove_dir(&compiled).unwrap();
+
+    fs::write(&compiled, "const fields = [{ name: 'compiled', dbfield: 'K' }];").unwrap();
+    let message = expect_error("ref.script.fieldName", "/fields/0/name");
+    assert!(message.contains("compiled"), "{message}");
+
+    fs::write(&source, original).unwrap();
+    let o = cli(&["check", model]);
+    assert!(o.status.success(), "{:?}", report(&o));
+    let _ = fs::remove_dir_all(&root);
+}
+
+#[test]
 fn schema_config_refs_and_join_field_variant() {
     let doc = schema_document();
     let defs = &doc["schema"]["$defs"];

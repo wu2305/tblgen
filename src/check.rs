@@ -2113,7 +2113,7 @@ fn check_top_level(
 /// references and Script node scripts must exist. A reference into a project
 /// that is not on disk cannot be verified and is only a warning.
 pub fn check_references(tbl: &Value, at: &crate::project::Located) -> Vec<Diag> {
-    use crate::project::{project_name, resolve_reference, script_candidates, to_disk};
+    use crate::project::{project_name, read_script, resolve_reference, to_disk, ScriptSource};
     let mut diags = Vec::new();
     let Some(nodes) = tbl.pointer("/dataFlow/nodes").and_then(Value::as_object) else {
         return diags;
@@ -2156,41 +2156,54 @@ pub fn check_references(tbl: &Value, at: &crate::project::Located) -> Vec<Diag> 
                     continue;
                 };
                 let project = project_name(&at.platform_path);
-                let cands = script_candidates(&at.projects_root, project, name);
+                let text = match read_script(&at.projects_root, project, name) {
+                    ScriptSource::Found(text) => text,
+                    ScriptSource::Missing => {
+                        diags.push(err(
+                            format!("{}/scriptName", base),
+                            "ref.script.missing",
+                            &src(cite::SCRIPT_NODE, "205", "DwDataFlowNodeContributor_script#getScript"),
+                            format!("script /{}/data/script/{}.action(.ts) does not exist", project, name),
+                        ));
+                        continue;
+                    }
+                    ScriptSource::Unreadable(errors) => {
+                        let details: Vec<_> = errors
+                            .iter()
+                            .map(|(path, error)| format!("{}（{}）", path.display(), error))
+                            .collect();
+                        diags.push(err(
+                            format!("{}/scriptName", base),
+                            "ref.script.unreadable",
+                            &src(cite::SCRIPT_NODE, "205", "DwDataFlowNodeContributor_script#getScript"),
+                            format!("无法读取脚本文件。{}", details.join("、")),
+                        ));
+                        continue;
+                    }
+                };
                 // the runner takes field names from the script (onProcessFields);
                 // a node that names a dbfield differently is out of sync
-                let source = cands.iter().rev().find_map(|p| fs::read_to_string(p).ok());
-                if let Some(text) = &source {
-                    let declared = crate::script::declared_fields(text);
-                    for (i, f) in node.get("fields").and_then(Value::as_array).into_iter().flatten().enumerate() {
-                        let (Some(db), Some(fname)) = (
-                            f.get("dbfield").and_then(Value::as_str),
-                            f.get("name").and_then(Value::as_str),
-                        ) else {
-                            continue;
-                        };
-                        if let Some(sname) = declared.get(&db.to_uppercase()) {
-                            if sname != fname {
-                                diags.push(err(
-                                    format!("{}/fields/{}/name", base, i),
-                                    "ref.script.fieldName",
-                                    &src(cite::SCRIPT_NODE, "448", "DwDataFlowNodeContributor_script#onProcessFields"),
-                                    format!(
-                                        "field {:?} (dbfield {}) is named {:?} in script {}; the script's name is used at run time",
-                                        fname, db, sname, name
-                                    ),
-                                ));
-                            }
+                let declared = crate::script::declared_fields(&text);
+                for (i, f) in node.get("fields").and_then(Value::as_array).into_iter().flatten().enumerate() {
+                    let (Some(db), Some(fname)) = (
+                        f.get("dbfield").and_then(Value::as_str),
+                        f.get("name").and_then(Value::as_str),
+                    ) else {
+                        continue;
+                    };
+                    if let Some(sname) = declared.get(&db.to_uppercase()) {
+                        if sname != fname {
+                            diags.push(err(
+                                format!("{}/fields/{}/name", base, i),
+                                "ref.script.fieldName",
+                                &src(cite::SCRIPT_NODE, "448", "DwDataFlowNodeContributor_script#onProcessFields"),
+                                format!(
+                                    "field {:?} (dbfield {}) is named {:?} in script {}; the script's name is used at run time",
+                                    fname, db, sname, name
+                                ),
+                            ));
                         }
                     }
-                }
-                if source.is_none() {
-                    diags.push(err(
-                        format!("{}/scriptName", base),
-                        "ref.script.missing",
-                        &src(cite::SCRIPT_NODE, "205", "DwDataFlowNodeContributor_script#getScript"),
-                        format!("script /{}/data/script/{}.action(.ts) does not exist", project, name),
-                    ));
                 }
             }
             _ => {}
