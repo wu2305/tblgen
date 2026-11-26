@@ -3414,8 +3414,34 @@ fn field_origin(f: &Value, pred: &NodeDesc, alias: Option<&str>) -> Option<(Stri
     None
 }
 
-/// Field keys that carry computed/lineage meaning and are always enforced
-/// by the projection rather than trusted from declarations.
+fn clear_field_origin(field: &mut Map<String, Value>) {
+    field.remove("originalNode");
+    field.remove("originalField");
+}
+
+/// Drop the root and upstream alias while keeping the field reference.
+/// Callers can retain that reference or replace it with a resolved one.
+fn clear_origin_and_input_node(field: &mut Map<String, Value>) {
+    clear_field_origin(field);
+    field.remove("inputNode");
+}
+
+/// Drop both the root origin and the entire direct input reference.
+fn clear_field_lineage(field: &mut Map<String, Value>) {
+    clear_origin_and_input_node(field);
+    field.remove("inputField");
+}
+
+/// Reset predecessor metadata that belongs to the upstream projection.
+fn clear_inherited_projection(field: &mut Map<String, Value>) {
+    clear_field_lineage(field);
+    field.remove("exp");
+    field.remove("aggType");
+}
+
+/// Resolved and simulated fields share the same declaration overlay.
+/// The caller assigns the name explicitly. The expression and lineage come
+/// from the projection, while the declaration may supply aggType.
 const ENFORCED_FIELD_KEYS: [&str; 6] = [
     "name",
     "inputField",
@@ -3424,6 +3450,16 @@ const ENFORCED_FIELD_KEYS: [&str; 6] = [
     "originalNode",
     "exp",
 ];
+
+fn overlay_declared_metadata(field: &mut Map<String, Value>, declared: &Value) {
+    if let Some(metadata) = declared.as_object() {
+        for (key, value) in metadata {
+            if !ENFORCED_FIELD_KEYS.contains(&key.as_str()) {
+                field.insert(key.clone(), value.clone());
+            }
+        }
+    }
+}
 
 /// Merge a declared field with its resolved predecessor field: upstream
 /// metadata (dataType, dbfield, isDimension, length, ...) forms the base,
@@ -3438,25 +3474,9 @@ fn merge_declared(
     origin: Option<(String, String)>,
 ) -> Value {
     let mut m = pred_field.as_object().cloned().unwrap_or_default();
-    for k in [
-        "name",
-        "exp",
-        "aggType",
-        "inputField",
-        "inputNode",
-        "originalField",
-        "originalNode",
-    ] {
-        m.remove(k);
-    }
-    if let Some(do_) = declared.as_object() {
-        for (k, v) in do_ {
-            if ENFORCED_FIELD_KEYS.contains(&k.as_str()) {
-                continue;
-            }
-            m.insert(k.clone(), v.clone());
-        }
-    }
+    m.remove("name");
+    clear_inherited_projection(&mut m);
+    overlay_declared_metadata(&mut m, declared);
     if let Some(nm) = declared.get("name") {
         m.insert("name".into(), nm.clone());
     }
@@ -3471,13 +3491,11 @@ fn merge_declared(
     Value::Object(m)
 }
 
-/// A field born by computation (`exp` present): emit the declaration minus
-/// lineage and inputNode — computed values have no proven single input.
+/// Emit a computed declaration (`exp` present), keeping its inputField but
+/// dropping the root and inputNode since no single input is proven.
 fn emit_computed(declared: &Value) -> Value {
     let mut m = declared.as_object().cloned().unwrap_or_default();
-    for k in ["originalNode", "originalField", "inputNode"] {
-        m.remove(k);
-    }
+    clear_origin_and_input_node(&mut m);
     Value::Object(m)
 }
 
@@ -3486,8 +3504,7 @@ fn emit_computed(declared: &Value) -> Value {
 /// including any explicit direct refs — but drop the original* pair.
 fn emit_unresolved(declared: &Value) -> Value {
     let mut m = declared.as_object().cloned().unwrap_or_default();
-    m.remove("originalNode");
-    m.remove("originalField");
+    clear_field_origin(&mut m);
     Value::Object(m)
 }
 
@@ -3608,8 +3625,7 @@ fn compute_node_fields(
                     .unwrap_or("")
                     .to_string();
                 if computed || name.is_empty() {
-                    m.remove("originalNode");
-                    m.remove("originalField");
+                    clear_field_origin(m);
                 } else {
                     m.insert("originalNode".into(), Value::String(alias.clone()));
                     m.insert("originalField".into(), Value::String(name));
@@ -3724,16 +3740,7 @@ fn compute_output_fields(
 /// inputField = predecessor name, original* = proven origin, never inputNode.
 fn clone_passthrough(f: &Value, pred: &NodeDesc) -> Value {
     let mut m = f.as_object().cloned().unwrap_or_default();
-    for k in [
-        "exp",
-        "aggType",
-        "inputField",
-        "inputNode",
-        "originalField",
-        "originalNode",
-    ] {
-        m.remove(k);
-    }
+    clear_inherited_projection(&mut m);
     let name = field_name(f, 0);
     m.insert("name".into(), Value::String(name.clone()));
     m.insert("inputField".into(), Value::String(name));
@@ -4061,9 +4068,7 @@ fn compute_union_fields(
                 .and_then(|&fi| fields_of[0].get(fi))
                 .and_then(|pf| field_origin(pf, preds[0], Some(lookup.aliases[0].as_str())));
             let mut m = df.as_object().cloned().unwrap_or_default();
-            m.remove("originalNode");
-            m.remove("originalField");
-            m.remove("inputNode");
+            clear_origin_and_input_node(&mut m);
             m.insert("inputField".into(), Value::String(want.to_string()));
             m.insert("inputNode".into(), Value::String(lookup.aliases[0].clone()));
             if let Some((on, of)) = origin {
@@ -4398,15 +4403,14 @@ fn apply_step_mutation(
             }
             // the added field is born by computation: no direct lineage
             let mut m = af.as_object().cloned().unwrap_or_default();
-            for k in ["originalNode", "originalField", "inputNode", "inputField"] {
-                m.remove(k);
-            }
+            clear_field_lineage(&mut m);
             fields.push(Value::Object(m));
         }
         "TransformToCalculatedField" => {
-            // Java edits the field's expression in place — names preserved
-            // (evolve_names already confirmed); the field becomes computed
-            // so its proven origin is shed
+            // The step edits an existing field in place. Keep the simulator's
+            // direct input metadata for that field and drop its root origin.
+            // The available fixtures do not establish the platform's
+            // direct-reference key contract for this step.
             let tfi = s.get("transformFieldInfo").cloned().unwrap_or(Value::Null);
             let exp = tfi
                 .get("exp")
@@ -4435,8 +4439,7 @@ fn apply_step_mutation(
                 }
                 if let Some(m) = f.as_object_mut() {
                     m.insert("exp".into(), Value::String(exp.clone()));
-                    m.remove("originalNode");
-                    m.remove("originalField");
+                    clear_field_origin(m);
                     if let Some(dtv) = &dt {
                         m.insert("dataType".into(), Value::String(dtv.clone()));
                     }
@@ -4644,11 +4647,11 @@ fn apply_escape_steps(
         let Some(m) = f.as_object_mut() else {
             continue;
         };
-        for k in ["originalNode", "originalField", "inputNode"] {
-            m.remove(k);
-        }
-        if born.contains_key(&idx) {
-            m.remove("inputField");
+        let added_field = born.get(&idx);
+        if added_field.is_some() {
+            clear_field_lineage(m);
+        } else {
+            clear_origin_and_input_node(m);
         }
         if let Some(tfi) = transformed.get(&idx) {
             if let Some(e) = tfi.get("exp").and_then(Value::as_str) {
@@ -4658,7 +4661,7 @@ fn apply_escape_steps(
                 m.insert("dataType".into(), Value::String(dt.to_string()));
             }
         }
-        if let Some(af) = born.get(&idx) {
+        if let Some(af) = added_field {
             if !transformed.contains_key(&idx) {
                 if let Some(e) = af.get("exp").and_then(Value::as_str) {
                     m.insert("exp".into(), Value::String(e.to_string()));
@@ -4845,14 +4848,7 @@ fn compute_select_fields(
                 if let Some(&si) = sim_by_name.get(&dn.to_uppercase()) {
                     let sf = &res.fields[si];
                     let mut m = sf.as_object().cloned().unwrap_or_default();
-                    if let Some(do_) = df.as_object() {
-                        for (k, v) in do_ {
-                            if ENFORCED_FIELD_KEYS.contains(&k.as_str()) {
-                                continue;
-                            }
-                            m.insert(k.clone(), v.clone());
-                        }
-                    }
+                    overlay_declared_metadata(&mut m, df);
                     m.insert(
                         "name".into(),
                         df.get("name").cloned().unwrap_or(Value::Null),
