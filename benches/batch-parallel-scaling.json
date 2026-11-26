@@ -1,0 +1,140 @@
+{
+  "note": "supplementary batch-size scaling; wall via perf_counter around subprocess, stdout/stderr to DEVNULL, hot page cache, interleaved reps",
+  "cases": {
+    "first_50": {
+      "files": 50,
+      "serial_base": {
+        "median_ms": 4.519875,
+        "min_ms": 4.375909,
+        "max_ms": 5.11576,
+        "runs": 7
+      },
+      "c5_jobs1": {
+        "median_ms": 4.449203,
+        "min_ms": 4.188892,
+        "max_ms": 4.731911,
+        "runs": 7
+      },
+      "c5_jobs4": {
+        "median_ms": 2.623205,
+        "min_ms": 2.510595,
+        "max_ms": 2.975699,
+        "runs": 7
+      },
+      "c5_auto": {
+        "median_ms": 2.74204,
+        "min_ms": 2.54033,
+        "max_ms": 3.560717,
+        "runs": 7
+      }
+    },
+    "first_100": {
+      "files": 100,
+      "serial_base": {
+        "median_ms": 7.461044,
+        "min_ms": 7.305761,
+        "max_ms": 7.759571,
+        "runs": 7
+      },
+      "c5_jobs1": {
+        "median_ms": 7.288312,
+        "min_ms": 7.051506,
+        "max_ms": 7.509703,
+        "runs": 7
+      },
+      "c5_jobs4": {
+        "median_ms": 3.976622,
+        "min_ms": 3.852164,
+        "max_ms": 4.303728,
+        "runs": 7
+      },
+      "c5_auto": {
+        "median_ms": 3.618387,
+        "min_ms": 3.474234,
+        "max_ms": 3.800511,
+        "runs": 7
+      }
+    },
+    "first_200": {
+      "files": 200,
+      "serial_base": {
+        "median_ms": 26.684032,
+        "min_ms": 26.223369,
+        "max_ms": 29.23382,
+        "runs": 7
+      },
+      "c5_jobs1": {
+        "median_ms": 26.436733,
+        "min_ms": 25.850338,
+        "max_ms": 31.911272,
+        "runs": 7
+      },
+      "c5_jobs4": {
+        "median_ms": 12.476013,
+        "min_ms": 12.230453,
+        "max_ms": 13.667328,
+        "runs": 7
+      },
+      "c5_auto": {
+        "median_ms": 10.692986,
+        "min_ms": 10.040724,
+        "max_ms": 11.766283,
+        "runs": 7
+      }
+    },
+    "first_400": {
+      "files": 400,
+      "serial_base": {
+        "median_ms": 162.084372,
+        "min_ms": 160.561907,
+        "max_ms": 163.70782,
+        "runs": 7
+      },
+      "c5_jobs1": {
+        "median_ms": 164.950008,
+        "min_ms": 163.049184,
+        "max_ms": 185.343536,
+        "runs": 7
+      },
+      "c5_jobs4": {
+        "median_ms": 53.866016,
+        "min_ms": 52.705499,
+        "max_ms": 65.758604,
+        "runs": 7
+      },
+      "c5_auto": {
+        "median_ms": 35.172726,
+        "min_ms": 34.640907,
+        "max_ms": 40.405595,
+        "runs": 7
+      }
+    },
+    "heavy_diag_50": {
+      "files": 50,
+      "serial_base": {
+        "median_ms": 55.269645,
+        "min_ms": 54.555753,
+        "max_ms": 56.331795,
+        "runs": 7
+      },
+      "c5_jobs1": {
+        "median_ms": 55.703145,
+        "min_ms": 54.603587,
+        "max_ms": 58.015506,
+        "runs": 7
+      },
+      "c5_jobs4": {
+        "median_ms": 23.055661,
+        "min_ms": 22.609172,
+        "max_ms": 32.170992,
+        "runs": 7
+      },
+      "c5_auto": {
+        "median_ms": 20.322026,
+        "min_ms": 19.029742,
+        "max_ms": 26.891297,
+        "runs": 7
+      }
+    }
+  }
+}

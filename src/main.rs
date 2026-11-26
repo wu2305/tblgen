@@ -14,6 +14,8 @@ use std::fs;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::mpsc;
 
 use serde_json::{json, Value};
 
@@ -28,7 +30,7 @@ const USAGE: &str = "tblgen — offline .tbl <-> spec-format v1 converter
 USAGE:
     tblgen gen <spec.json> [-o out.tbl]
     tblgen decompile <file.tbl> [-o out.json]
-    tblgen check <file|dir>... [--exclude <path>]...
+    tblgen check <file|dir>... [--exclude <path>]... [--jobs N]
     tblgen schema
     tblgen new script --table <name> --fields <list> --extract <true|false> -o <out.tbl>
                       [--schema S] [--datasource D] [--version V] [--script-name N]
@@ -41,6 +43,8 @@ USAGE:
 check: a directory expands to every .tbl and .action.ts below it. Inside a
 project (a directory with data/), model references and scripts are resolved.
 --exclude skips everything under a path (e.g. platform scripts you do not own).
+--jobs N checks files with N worker threads (default: available parallelism,
+1 disables); output order, diagnostics and exit codes are unchanged.
 new: --extract true = ETL into --table; false = query logic. Field list is
 name[=dbfield]:TYPE[:length[.decimal]][:m] (TYPE C/N/I/D/P, m = measure),
 e.g. 统计年月=stat_month:C:7; dbfield defaults to the upper-cased name and
@@ -243,10 +247,125 @@ fn expand_dirs(args: &[String], exclude: &[PathBuf]) -> Vec<String> {
     out
 }
 
+/// One file's check outcome plus whether the failure was an I/O error
+/// (exit-code 2), kept in input order for replay.
+enum FileOutcome {
+    Ok(CheckReport),
+    Err { report: CheckReport, io_error: bool },
+}
+
+/// Validate every expanded file. Files are independent (read-only checks), so
+/// `jobs > 1` runs them on a bounded pool; results are collected by input
+/// index and replayed in input order, keeping stdout/stderr/exit semantics
+/// identical to the serial loop.
+fn run_checks(files: &[String], jobs: usize) -> Vec<FileOutcome> {
+    let n = files.len();
+    let workers = jobs.max(1).min(n.max(1));
+    let mut outcomes: Vec<Option<FileOutcome>> = (0..n).map(|_| None).collect();
+    if workers <= 1 {
+        for (i, f) in files.iter().enumerate() {
+            outcomes[i] = Some(check_one(f));
+        }
+    } else {
+        let next = AtomicUsize::new(0);
+        let (tx, rx) = mpsc::channel::<(usize, FileOutcome)>();
+        std::thread::scope(|s| {
+            for _ in 0..workers {
+                let tx = tx.clone();
+                let next = &next;
+                s.spawn(move || loop {
+                    let i = next.fetch_add(1, Ordering::Relaxed);
+                    if i >= n {
+                        break;
+                    }
+                    // a send failure means the receiver is gone (panic path);
+                    // dropping the outcome is fine, the scope re-panics
+                    let _ = tx.send((i, check_one(&files[i])));
+                });
+            }
+            drop(tx);
+            for (i, outcome) in rx {
+                outcomes[i] = Some(outcome);
+            }
+        });
+    }
+    outcomes.into_iter().map(|o| o.unwrap()).collect()
+}
+
+fn check_one(f: &str) -> FileOutcome {
+    match check_file(Path::new(f)) {
+        Ok(r) => FileOutcome::Ok(r),
+        Err((msg, code)) => {
+            let report = CheckReport {
+                file: f.to_string(),
+                scope: "unknown".into(),
+                errors: vec![Diag::spec("", "io", msg)],
+                warnings: vec![],
+            };
+            FileOutcome::Err {
+                report,
+                io_error: code == 2,
+            }
+        }
+    }
+}
+
+fn parse_jobs_value(v: &str) -> Result<usize, String> {
+    let n = v
+        .parse::<usize>()
+        .map_err(|_| format!("--jobs: invalid value {:?}", v))?;
+    if n == 0 {
+        return Err("--jobs: must be >= 1".into());
+    }
+    Ok(n)
+}
+
+/// `--jobs N`: returns the remaining args and worker count (default:
+/// available parallelism; the caller caps it by file count).
+fn parse_jobs(args: &[String]) -> Result<(Vec<String>, usize), String> {
+    let mut jobs: Option<usize> = None;
+    let mut rest = Vec::new();
+    let mut i = 0;
+    while i < args.len() {
+        let a = args[i].as_str();
+        if a == "--jobs" {
+            let v = args.get(i + 1).ok_or("--jobs requires a value")?;
+            if jobs.is_some() {
+                return Err("duplicate --jobs".into());
+            }
+            jobs = Some(parse_jobs_value(v)?);
+            i += 2;
+        } else if let Some(v) = a.strip_prefix("--jobs=") {
+            if jobs.is_some() {
+                return Err("duplicate --jobs".into());
+            }
+            jobs = Some(parse_jobs_value(v)?);
+            i += 1;
+        } else {
+            rest.push(args[i].clone());
+            i += 1;
+        }
+    }
+    let jobs = jobs.unwrap_or_else(|| {
+        std::thread::available_parallelism()
+            .map(|n| n.get())
+            .unwrap_or(1)
+    });
+    Ok((rest, jobs))
+}
+
 fn cmd_check(args: &[String]) -> ExitCode {
+    // --jobs N (checked first so it is accepted anywhere in the arg list)
+    let (args, jobs) = match parse_jobs(args) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("tblgen check: {}\n\n{}", e, USAGE);
+            return ExitCode::from(2);
+        }
+    };
     // --exclude <path> (repeatable) skips files under that path
     let mut exclude: Vec<PathBuf> = Vec::new();
-    let mut rest: Vec<String> = Vec::new();
+    let mut kept: Vec<String> = Vec::new();
     let mut i = 0;
     while i < args.len() {
         if args[i] == "--exclude" {
@@ -263,11 +382,11 @@ fn cmd_check(args: &[String]) -> ExitCode {
             }
             i += 2;
         } else {
-            rest.push(args[i].clone());
+            kept.push(args[i].clone());
             i += 1;
         }
     }
-    let args = &rest[..];
+    let args = &kept[..];
     let (files, _) = match parse_io_args(args) {
         Ok(v) => v,
         Err(e) => {
@@ -281,20 +400,15 @@ fn cmd_check(args: &[String]) -> ExitCode {
     }
     let mut reports: Vec<CheckReport> = Vec::new();
     let mut had_io_error = false;
-    for f in expand_dirs(&files, &exclude) {
-        match check_file(Path::new(&f)) {
-            Ok(r) => reports.push(r),
-            Err((msg, code)) => {
-                eprintln!("tblgen: {}", msg);
-                if code == 2 {
-                    had_io_error = true;
-                }
-                reports.push(CheckReport {
-                    file: f.clone(),
-                    scope: "unknown".into(),
-                    errors: vec![Diag::spec("", "io", msg)],
-                    warnings: vec![],
-                });
+    // replay each file's stderr line in input order (the serial loop printed
+    // them interleaved with processing; per-stream order is preserved)
+    for outcome in run_checks(&expand_dirs(&files, &exclude), jobs) {
+        match outcome {
+            FileOutcome::Ok(r) => reports.push(r),
+            FileOutcome::Err { report, io_error } => {
+                eprintln!("tblgen: {}", report.errors[0].message);
+                had_io_error |= io_error;
+                reports.push(report);
             }
         }
     }
