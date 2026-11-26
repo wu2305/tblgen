@@ -923,13 +923,17 @@ pub fn exp_bracket_refs(exp: &str) -> Vec<(String, bool)> {
 }
 
 /// Table qualifiers of `[alias].[field]` references: the bracketed name
-/// immediately followed by `.[`. Same scanning rules as
+/// immediately followed by `.[` that heads its chain — in
+/// `[alias].[field].[attr]` (a date part or dimension attribute, as the
+/// platform saves) only `alias` is a qualifier. Same scanning rules as
 /// [`exp_bracket_refs`] — quoted literals skipped, `]]` escapes a literal
 /// `]`; anything else is unknown grammar and yields no qualifier.
 pub fn exp_table_qualifiers(exp: &str) -> Vec<String> {
     let b = exp.as_bytes();
     let mut out = Vec::new();
     let mut i = 0;
+    // the previous bracket was followed by `.[`: this one continues its chain
+    let mut in_chain = false;
     while i < b.len() {
         let c = b[i];
         if c == b'\'' || c == b'"' {
@@ -972,12 +976,13 @@ pub fn exp_table_qualifiers(exp: &str) -> Vec<String> {
             }
             // qualified iff followed by `.` + `[` (whitespace tolerated)
             let rest = exp[j + 1..].trim_start();
-            if rest
+            let chained = rest
                 .strip_prefix('.')
-                .is_some_and(|r| r.trim_start().starts_with('['))
-            {
+                .is_some_and(|r| r.trim_start().starts_with('['));
+            if chained && !in_chain {
                 out.push(name);
             }
+            in_chain = chained;
             i = j + 1;
             continue;
         }

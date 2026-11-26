@@ -256,6 +256,15 @@ fn join_clause_qualifier_must_be_an_alias() {
     expression["nodes"][2]["config"]["joinConditions"][0]["clauses"] =
         json!([{"exp":"[left].[ID] = [right].[ID]"}]);
     assert!(generate(&expression).is_ok());
+
+    // [alias].[field].[part] (a date part, as the platform saves) is
+    // qualified by its chain head only; a key-qualified chain still fails.
+    let part = join_alias_spec("left", "right", "[left].[ID].[年]", "[right].[ID]");
+    assert!(spec_errors(&part).is_empty(), "{:?}", spec_errors(&part));
+    let tbl = generate(&part).expect("generate");
+    assert!(wire_errors(&tbl).is_empty(), "{:?}", wire_errors(&tbl));
+    let bad_part = join_alias_spec("left", "right", "[l].[ID].[年]", "[right].[ID]");
+    assert!(rules(&spec_errors(&bad_part)).contains(&"join.condition.qualifier".to_string()));
 }
 
 // ---------------------------------------------------------------------------
