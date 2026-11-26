@@ -6,6 +6,7 @@ description: 离线生成、校验和反解 SuccBI 平台 DataFlow 加工模型�
 # tblgen：制作与检查 .tbl 加工模型
 
 工作方式：用 `new` 或写**规格**（spec，JSON）→ `check` → `gen` 出 `.tbl` → 再 `check` 产物。tblgen 只做离线的结构与引用校验，通过不代表平台上能执行；资源路径、数据源和 SQL 是否可用仍需用户在设计器里确认。
+声明式 DataFlow 的 `.tbl` 通过 `check` 后，可先用 `succsync preview <工作区路径.tbl> --check` 在 BI 引擎检查本地模型，再打开设计器，无需先上传。
 
 ## 调用
 
