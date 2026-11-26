@@ -268,7 +268,8 @@ def main() -> int:
     }
 
     # equivalence: every configuration must produce identical bytes/exit
-    configs = [("base", None), ("c5", "1"), ("c5", "2"), ("c5", "4"), ("c5", "auto")]
+    # "8" documents that an explicit --jobs above the default cap of 4 is honored
+    configs = [("base", None), ("c5", "1"), ("c5", "2"), ("c5", "4"), ("c5", "auto"), ("c5", "8")]
     # note: for the base binary jobs is always None; "auto" on c5 = default
     results = {}
     for case_name, case in cases.items():

@@ -43,8 +43,9 @@ USAGE:
 check: a directory expands to every .tbl and .action.ts below it. Inside a
 project (a directory with data/), model references and scripts are resolved.
 --exclude skips everything under a path (e.g. platform scripts you do not own).
---jobs N checks files with N worker threads (default: available parallelism,
-1 disables); output order, diagnostics and exit codes are unchanged.
+--jobs N checks files with N worker threads (default: up to 4, i.e.
+available parallelism capped at 4; 1 disables); an explicit N above 4 is
+honored. Output order, diagnostics and exit codes are unchanged.
 new: --extract true = ETL into --table; false = query logic. Field list is
 name[=dbfield]:TYPE[:length[.decimal]][:m] (TYPE C/N/I/D/P, m = measure),
 e.g. 统计年月=stat_month:C:7; dbfield defaults to the upper-cased name and
@@ -321,7 +322,8 @@ fn parse_jobs_value(v: &str) -> Result<usize, String> {
 }
 
 /// `--jobs N`: returns the remaining args and worker count (default:
-/// available parallelism; the caller caps it by file count).
+/// available parallelism capped at 4; the caller caps it by file count).
+/// An explicit N is honored as given, including values above 4.
 fn parse_jobs(args: &[String]) -> Result<(Vec<String>, usize), String> {
     let mut jobs: Option<usize> = None;
     let mut rest = Vec::new();
@@ -348,7 +350,7 @@ fn parse_jobs(args: &[String]) -> Result<(Vec<String>, usize), String> {
     }
     let jobs = jobs.unwrap_or_else(|| {
         std::thread::available_parallelism()
-            .map(|n| n.get())
+            .map(|n| n.get().min(4))
             .unwrap_or(1)
     });
     Ok((rest, jobs))

@@ -1,0 +1,26 @@
+{
+  "base": {
+    "median_ms": 428.5,
+    "min_ms": 413.8,
+    "max_ms": 556.7,
+    "runs": 9
+  },
+  "j4": {
+    "median_ms": 160.9,
+    "min_ms": 150.3,
+    "max_ms": 181.1,
+    "runs": 9
+  },
+  "auto": {
+    "median_ms": 167.4,
+    "min_ms": 152.1,
+    "max_ms": 183.0,
+    "runs": 9
+  },
+  "j8": {
+    "median_ms": 117.8,
+    "min_ms": 102.9,
+    "max_ms": 118.9,
+    "runs": 9
+  }
+}

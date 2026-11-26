@@ -1,138 +1,138 @@
 {
-  "note": "supplementary batch-size scaling; wall via perf_counter around subprocess, stdout/stderr to DEVNULL, hot page cache, interleaved reps",
+  "note": "supplementary batch-size scaling; wall via perf_counter around subprocess, stdout/stderr to DEVNULL, hot page cache, interleaved reps; auto = binary default (available_parallelism capped at 4)",
   "cases": {
     "first_50": {
       "files": 50,
       "serial_base": {
-        "median_ms": 4.519875,
-        "min_ms": 4.375909,
-        "max_ms": 5.11576,
+        "median_ms": 5.170849,
+        "min_ms": 4.478617,
+        "max_ms": 12.424582,
         "runs": 7
       },
       "c5_jobs1": {
-        "median_ms": 4.449203,
-        "min_ms": 4.188892,
-        "max_ms": 4.731911,
+        "median_ms": 4.934188,
+        "min_ms": 4.66175,
+        "max_ms": 6.294059,
         "runs": 7
       },
       "c5_jobs4": {
-        "median_ms": 2.623205,
-        "min_ms": 2.510595,
-        "max_ms": 2.975699,
+        "median_ms": 2.833796,
+        "min_ms": 2.674293,
+        "max_ms": 3.059494,
         "runs": 7
       },
       "c5_auto": {
-        "median_ms": 2.74204,
-        "min_ms": 2.54033,
-        "max_ms": 3.560717,
+        "median_ms": 2.876761,
+        "min_ms": 2.818765,
+        "max_ms": 3.041058,
         "runs": 7
       }
     },
     "first_100": {
       "files": 100,
       "serial_base": {
-        "median_ms": 7.461044,
-        "min_ms": 7.305761,
-        "max_ms": 7.759571,
+        "median_ms": 7.693389,
+        "min_ms": 7.547519,
+        "max_ms": 8.215183,
         "runs": 7
       },
       "c5_jobs1": {
-        "median_ms": 7.288312,
-        "min_ms": 7.051506,
-        "max_ms": 7.509703,
+        "median_ms": 7.975618,
+        "min_ms": 7.545348,
+        "max_ms": 18.062098,
         "runs": 7
       },
       "c5_jobs4": {
-        "median_ms": 3.976622,
-        "min_ms": 3.852164,
-        "max_ms": 4.303728,
+        "median_ms": 4.160844,
+        "min_ms": 3.986756,
+        "max_ms": 4.395524,
         "runs": 7
       },
       "c5_auto": {
-        "median_ms": 3.618387,
-        "min_ms": 3.474234,
-        "max_ms": 3.800511,
+        "median_ms": 4.543766,
+        "min_ms": 4.280982,
+        "max_ms": 4.595336,
         "runs": 7
       }
     },
     "first_200": {
       "files": 200,
       "serial_base": {
-        "median_ms": 26.684032,
-        "min_ms": 26.223369,
-        "max_ms": 29.23382,
+        "median_ms": 30.159032,
+        "min_ms": 27.969886,
+        "max_ms": 32.170152,
         "runs": 7
       },
       "c5_jobs1": {
-        "median_ms": 26.436733,
-        "min_ms": 25.850338,
-        "max_ms": 31.911272,
+        "median_ms": 30.288977,
+        "min_ms": 29.25003,
+        "max_ms": 34.131366,
         "runs": 7
       },
       "c5_jobs4": {
-        "median_ms": 12.476013,
-        "min_ms": 12.230453,
-        "max_ms": 13.667328,
+        "median_ms": 15.114184,
+        "min_ms": 13.836931,
+        "max_ms": 22.977749,
         "runs": 7
       },
       "c5_auto": {
-        "median_ms": 10.692986,
-        "min_ms": 10.040724,
-        "max_ms": 11.766283,
+        "median_ms": 14.19965,
+        "min_ms": 13.316285,
+        "max_ms": 14.929546,
         "runs": 7
       }
     },
     "first_400": {
       "files": 400,
       "serial_base": {
-        "median_ms": 162.084372,
-        "min_ms": 160.561907,
-        "max_ms": 163.70782,
+        "median_ms": 172.839223,
+        "min_ms": 165.730347,
+        "max_ms": 192.366816,
         "runs": 7
       },
       "c5_jobs1": {
-        "median_ms": 164.950008,
-        "min_ms": 163.049184,
-        "max_ms": 185.343536,
+        "median_ms": 171.8256,
+        "min_ms": 165.662446,
+        "max_ms": 183.367141,
         "runs": 7
       },
       "c5_jobs4": {
-        "median_ms": 53.866016,
-        "min_ms": 52.705499,
-        "max_ms": 65.758604,
+        "median_ms": 68.711295,
+        "min_ms": 66.650375,
+        "max_ms": 74.819325,
         "runs": 7
       },
       "c5_auto": {
-        "median_ms": 35.172726,
-        "min_ms": 34.640907,
-        "max_ms": 40.405595,
+        "median_ms": 64.519996,
+        "min_ms": 56.990956,
+        "max_ms": 78.734803,
         "runs": 7
       }
     },
     "heavy_diag_50": {
       "files": 50,
       "serial_base": {
-        "median_ms": 55.269645,
-        "min_ms": 54.555753,
-        "max_ms": 56.331795,
+        "median_ms": 62.087807,
+        "min_ms": 58.958395,
+        "max_ms": 69.689233,
         "runs": 7
       },
       "c5_jobs1": {
-        "median_ms": 55.703145,
-        "min_ms": 54.603587,
-        "max_ms": 58.015506,
+        "median_ms": 60.26111,
+        "min_ms": 57.359951,
+        "max_ms": 115.609134,
         "runs": 7
       },
       "c5_jobs4": {
-        "median_ms": 23.055661,
-        "min_ms": 22.609172,
-        "max_ms": 32.170992,
+        "median_ms": 24.888125,
+        "min_ms": 24.296282,
+        "max_ms": 28.737833,
         "runs": 7
       },
       "c5_auto": {
-        "median_ms": 20.322026,
-        "min_ms": 19.029742,
-        "max_ms": 26.891297,
+        "median_ms": 26.500343,
+        "min_ms": 25.464601,
+        "max_ms": 27.749971,
         "runs": 7
       }
     }
