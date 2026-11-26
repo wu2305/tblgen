@@ -4,7 +4,10 @@ use serde_json::{json, Value};
 use std::process::Command;
 use tblgen::check::check;
 use tblgen::decompile::decompile;
-use tblgen::gen::{generate, validate_spec};
+use tblgen::gen::{
+    generate, generate_with_diagnostics, generate_with_diagnostics_profile, validate_spec,
+    GeneratedCompileProfile,
+};
 use tblgen::model::*;
 use tblgen::schema::schema_document;
 
@@ -16,6 +19,72 @@ fn spec_errors(spec: &Value) -> Vec<Diag> {
 
 fn budget_spec() -> Value {
     serde_json::from_str(include_str!("../examples/budget.spec.json")).unwrap()
+}
+
+#[test]
+fn spec_entry_points_share_diagnostics() {
+    let mut generated = budget_spec();
+    generated["properties"].as_object_mut().unwrap().clear();
+    let cases: &[(&str, Value, &[&str])] = &[
+        ("non-object", json!([]), &["structure.spec"]),
+        ("missing format", json!({}), &["structure.format"]),
+        (
+            "wrong format with conflicting forms",
+            json!({"format": 2, "archive": null, "nodes": null}),
+            &["structure.format"],
+        ),
+        (
+            "wrong format with invalid archive",
+            json!({"format": "1", "archive": null}),
+            &["structure.format"],
+        ),
+        ("missing form", json!({"format": 1}), &["structure.form"]),
+        (
+            "conflicting forms",
+            json!({"format": 1, "nodes": [], "rawTable": null}),
+            &["structure.form"],
+        ),
+        (
+            "invalid archive",
+            json!({"format": 1, "archive": {"top": {"dataFlow": {}}, "flow": {}, "nodes": [
+                {"id": "same", "body": {}},
+                {"id": "same", "body": null}
+            ]}}),
+            &[
+                "structure.archive.node.id",
+                "structure.archive.node",
+                "structure.archive.collision",
+            ],
+        ),
+        (
+            "invalid rawTable",
+            json!({"format": 1, "extra": true, "rawTable": null}),
+            &["structure.rawTable.key", "structure.rawTable"],
+        ),
+        (
+            "archive",
+            json!({"format": 1, "archive": {"top": {}, "flow": {}, "nodes": []}}),
+            &[],
+        ),
+        ("rawTable", json!({"format": 1, "rawTable": {"a": 1}}), &[]),
+        ("generated", generated, &["warn.properties.runMode.unset"]),
+    ];
+
+    for (name, spec, expected_rules) in cases {
+        let (wire, diags) = generate_with_diagnostics(spec);
+        let (profiled_wire, profiled_diags, profile) = generate_with_diagnostics_profile(spec);
+        let diag_json = |diags: &[Diag]| diags.iter().map(Diag::to_json).collect::<Vec<_>>();
+        assert_eq!(rules(&diags), *expected_rules, "{name}");
+        assert_eq!(diag_json(&validate_spec(spec)), diag_json(&diags), "{name}");
+        assert_eq!(diag_json(&profiled_diags), diag_json(&diags), "{name}");
+        assert_eq!(profiled_wire, wire, "{name}");
+        assert_eq!(wire.is_some(), diags.iter().all(Diag::is_warning), "{name}");
+        if *name == "generated" {
+            assert_eq!(profile.nodes, spec["nodes"].as_array().unwrap().len());
+        } else {
+            assert_eq!(profile, GeneratedCompileProfile::default(), "{name}");
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
