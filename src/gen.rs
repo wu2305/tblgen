@@ -4390,6 +4390,14 @@ fn simulate_select(
         .map(Vec::as_slice)
         .unwrap_or(empty_steps);
     let mut step_hints: Vec<Option<Value>> = vec![None; steps.len()];
+    if steps.is_empty() {
+        // no evolution to prove: skip the name-list mirror entirely
+        return Ok(SimResult {
+            fields: work,
+            step_hints,
+            opaque_at: None,
+        });
+    }
     // names mirror `work` across the whole simulation: `evolve_names` and
     // `apply_step_mutation` apply the same name effects to the same step, so
     // one carried list replaces the previous per-step rebuild from `work`.
