@@ -1,0 +1,354 @@
+{
+  "task_id": "D1",
+  "pr": {
+    "url": "https://cnb.cool/wu2305/tblgen/-/pulls/13",
+    "number": 13,
+    "state": "open",
+    "base": "auto/g6-json-ownership-7f3a",
+    "head": "auto/d1-decompile-failure-62a1"
+  },
+  "commits": {
+    "base": "3dba14908ff1875912e7eeddacbe02aee4a5e616",
+    "candidate_perf_commit": "b266b2834b2237edf029f879faba314db3021838",
+    "candidate_branch": "auto/d1-decompile-failure-62a1",
+    "note": "PR head also includes a follow-up commit with benches report/evidence and tests/spec.rs regression tests; the measured perf change is candidate_perf_commit."
+  },
+  "baseline_input": {
+    "corpus": {
+      "source": "wu2305/succbi_project_container@xiaoshouyi-corpus:projects/xiaoshouyi",
+      "files": 828,
+      "tbl_files": 828,
+      "action_ts_files": 141,
+      "input_fingerprint": "fnv1a64:eac885b177de61b2"
+    },
+    "fixtures": {
+      "files": 10,
+      "input_fingerprint": "fnv1a64:512dfa706d62fa9a"
+    },
+    "synthetic": {
+      "files": 8,
+      "input_fingerprint": "fnv1a64:6c31680f3c31c327"
+    }
+  },
+  "unique_variable": "decompile rawNode fallback returns None when body contains top-level lastModifyTime",
+  "modification_scope": "perf: src/decompile.rs +7/-5; follow-up: tests/spec.rs +3 focused decompile regression tests and benches/d1-decompile-failure-{summary,raw-sample}.json + optimization-d1-decompile-failure.md evidence/report",
+  "baseline_outcomes": {
+    "corpus": {
+      "raw_table": 504,
+      "compare_mismatch": 278,
+      "generate_error": 46
+    },
+    "fixtures": {
+      "compare_mismatch": 4,
+      "generate_error": 4,
+      "typed": 2
+    },
+    "synthetic": {
+      "compare_mismatch": 1,
+      "generate_error": 1,
+      "malformed_dataflow": 2,
+      "raw_table": 1,
+      "try_none": 1,
+      "typed": 2
+    }
+  },
+  "candidate_outcomes": {
+    "corpus": {
+      "raw_table": 504,
+      "try_none": 320,
+      "generate_error": 4
+    },
+    "fixtures": {
+      "compare_mismatch": 2,
+      "generate_error": 4,
+      "try_none": 2,
+      "typed": 2
+    },
+    "synthetic": {
+      "compare_mismatch": 1,
+      "generate_error": 1,
+      "malformed_dataflow": 2,
+      "raw_table": 1,
+      "try_none": 1,
+      "typed": 2
+    }
+  },
+  "corpus_compare_mismatch_first_diff": {
+    "lastModifyTime": 274,
+    "dimensions": 4
+  },
+  "stage_sums": {
+    "baseline": {
+      "raw_table": {
+        "try_generated_ns": 0,
+        "generate_ns": 0,
+        "normalize_ns": 0,
+        "compare_ns": 0,
+        "archive_ns": 0,
+        "files": 504,
+        "wall_ns": 4544007
+      },
+      "compare_mismatch": {
+        "try_generated_ns": 59393968,
+        "generate_ns": 163605021,
+        "normalize_ns": 64847378,
+        "compare_ns": 92817,
+        "archive_ns": 235829797,
+        "files": 278,
+        "wall_ns": 606890273
+      },
+      "generate_error": {
+        "try_generated_ns": 7745174,
+        "generate_ns": 17085023,
+        "normalize_ns": 0,
+        "compare_ns": 0,
+        "archive_ns": 28608527,
+        "files": 46,
+        "wall_ns": 57663922
+      }
+    },
+    "candidate": {
+      "raw_table": {
+        "try_generated_ns": 0,
+        "generate_ns": 0,
+        "normalize_ns": 0,
+        "compare_ns": 0,
+        "archive_ns": 0,
+        "files": 504,
+        "wall_ns": 4446475
+      },
+      "try_none": {
+        "try_generated_ns": 2339239,
+        "generate_ns": 0,
+        "normalize_ns": 0,
+        "compare_ns": 0,
+        "archive_ns": 239076524,
+        "files": 320,
+        "wall_ns": 241848625
+      },
+      "generate_error": {
+        "try_generated_ns": 97872,
+        "generate_ns": 149580,
+        "normalize_ns": 0,
+        "compare_ns": 0,
+        "archive_ns": 116714,
+        "files": 4,
+        "wall_ns": 381407
+      }
+    }
+  },
+  "bench": {
+    "corpus": {
+      "files": 828,
+      "pairs": 5,
+      "cand_records": 4140,
+      "output_mismatches": 0,
+      "pair_totals": [
+        {
+          "pair": 1,
+          "base_ns": 687501870.0,
+          "cand_ns": 272196128.0,
+          "ratio": 0.3959205638233391
+        },
+        {
+          "pair": 2,
+          "base_ns": 688173699.0,
+          "cand_ns": 270222365.0,
+          "ratio": 0.39266592924528493
+        },
+        {
+          "pair": 3,
+          "base_ns": 699079582.0,
+          "cand_ns": 267636654.0,
+          "ratio": 0.3828414688272214
+        },
+        {
+          "pair": 4,
+          "base_ns": 681081930.0,
+          "cand_ns": 276843770.0,
+          "ratio": 0.40647645724501896
+        },
+        {
+          "pair": 5,
+          "base_ns": 694362667.0,
+          "cand_ns": 270173963.0,
+          "ratio": 0.3890963265166444
+        }
+      ],
+      "median_ratio": 0.39266592924528493,
+      "min_ratio": 0.3828414688272214,
+      "max_ratio": 0.40647645724501896,
+      "median_base_ns": 688173699.0,
+      "median_cand_ns": 270222365.0
+    },
+    "fixtures": {
+      "files": 10,
+      "pairs": 7,
+      "cand_records": 70,
+      "output_mismatches": 0,
+      "pair_totals": [
+        {
+          "pair": 1,
+          "base_ns": 5845262.0,
+          "cand_ns": 5895023.0,
+          "ratio": 1.00851304868798
+        },
+        {
+          "pair": 2,
+          "base_ns": 5864732.0,
+          "cand_ns": 5960028.5,
+          "ratio": 1.0162490800943675
+        },
+        {
+          "pair": 3,
+          "base_ns": 5824779.5,
+          "cand_ns": 5854308.0,
+          "ratio": 1.0050694622860832
+        },
+        {
+          "pair": 4,
+          "base_ns": 5854902.5,
+          "cand_ns": 5852317.0,
+          "ratio": 0.9995584042603612
+        },
+        {
+          "pair": 5,
+          "base_ns": 5895838.0,
+          "cand_ns": 5944181.0,
+          "ratio": 1.0081995129445551
+        },
+        {
+          "pair": 6,
+          "base_ns": 5856738.5,
+          "cand_ns": 5848582.0,
+          "ratio": 0.9986073306841342
+        },
+        {
+          "pair": 7,
+          "base_ns": 5811047.5,
+          "cand_ns": 5824418.0,
+          "ratio": 1.0023008760468746
+        }
+      ],
+      "median_ratio": 1.0050694622860832,
+      "min_ratio": 0.9986073306841342,
+      "max_ratio": 1.0162490800943675,
+      "median_base_ns": 5854902.5,
+      "median_cand_ns": 5854308.0
+    },
+    "synthetic": {
+      "files": 8,
+      "pairs": 7,
+      "cand_records": 56,
+      "output_mismatches": 0,
+      "pair_totals": [
+        {
+          "pair": 1,
+          "base_ns": 5190839.0,
+          "cand_ns": 5260692.5,
+          "ratio": 1.0134570731244024
+        },
+        {
+          "pair": 2,
+          "base_ns": 5282966.0,
+          "cand_ns": 5267157.0,
+          "ratio": 0.9970075521970044
+        },
+        {
+          "pair": 3,
+          "base_ns": 5171459.5,
+          "cand_ns": 5244402.0,
+          "ratio": 1.0141048189587485
+        },
+        {
+          "pair": 4,
+          "base_ns": 5168814.5,
+          "cand_ns": 5278989.0,
+          "ratio": 1.0213152358243849
+        },
+        {
+          "pair": 5,
+          "base_ns": 5171564.0,
+          "cand_ns": 5276289.0,
+          "ratio": 1.0202501602996694
+        },
+        {
+          "pair": 6,
+          "base_ns": 5159475.0,
+          "cand_ns": 5256725.0,
+          "ratio": 1.018848816982348
+        },
+        {
+          "pair": 7,
+          "base_ns": 5222920.5,
+          "cand_ns": 5285271.5,
+          "ratio": 1.0119379569342477
+        }
+      ],
+      "median_ratio": 1.0141048189587485,
+      "min_ratio": 0.9970075521970044,
+      "max_ratio": 1.0213152358243849,
+      "median_base_ns": 5171564.0,
+      "median_cand_ns": 5267157.0
+    }
+  },
+  "corpus_by_baseline_outcome": {
+    "raw_table": {
+      "base_ns": 3452217.0,
+      "cand_ns": 3449856.0,
+      "files": 504,
+      "ratio": 0.9993160916593598
+    },
+    "compare_mismatch": {
+      "base_ns": 621355544.0,
+      "cand_ns": 234619974.0,
+      "files": 278,
+      "ratio": 0.37759375653048005
+    },
+    "generate_error": {
+      "base_ns": 61408185.0,
+      "cand_ns": 30986446.0,
+      "files": 46,
+      "ratio": 0.5045979782662523
+    }
+  },
+  "rss_kb": {
+    "base_maxrss_kb": 37728,
+    "cand_maxrss_kb": 37596,
+    "bench": "corpus repeats=1 warmup=1",
+    "base_elapsed_s": 2.64,
+    "cand_elapsed_s": 1.41
+  },
+  "equivalence": {
+    "profile_output_fingerprint_mismatches": {
+      "corpus": 0,
+      "fixtures": 0,
+      "synthetic": 0
+    },
+    "bench_output_mismatches": {
+      "corpus": 0,
+      "fixtures": 0,
+      "synthetic": 0
+    },
+    "cli_final_clean_release": {
+      "files": 22,
+      "mismatches": 0,
+      "scope": "fixtures+synthetic+corpus sample across raw_table/compare_mismatch/generate_error"
+    },
+    "cli_prefinal_instrumented_same_logic": {
+      "files": 32,
+      "mismatches": 0
+    },
+    "tests": "cargo check --locked --benches: pass; cargo test --locked: 100 passed, 0 failed",
+    "regression_tests": "cargo check --locked --benches: pass; cargo test --locked: 103 passed, 0 failed (incl. 3 new decompile lastModifyTime/rawNode tests)",
+    "committed_evidence": "benches/d1-decompile-failure-summary.json and benches/d1-decompile-failure-raw-sample.json; full raw archive remains Devin session attachment d1-raw-results.tar.gz"
+  },
+  "known_blind_spots": [
+    "wall A/B on this VM release build; fixtures/synthetic are small and show noise-level ratios around 1.00-1.02",
+    "allocation not directly measured; RSS proxy on corpus bench repeats=1 warmup=1",
+    "4 remaining corpus generate_error and dimensions-mismatch compare_mismatch are not covered by this proof",
+    "not run under CNB CI"
+  ],
+  "decision": "retain; PR #13 open, not merged",
+  "next_step": "D2 normalize/compare/archive cost only if separately evidenced"
+}

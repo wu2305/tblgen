@@ -678,6 +678,95 @@ fn decompile_unsupported_node_falls_back_to_archive() {
     }
 }
 
+fn rawnode_modeltable_spec() -> Value {
+    json!({
+        "format": 1,
+        "properties": {"extractDataEnabled": false},
+        "nodes": [
+            {"key":"r","rawNode":{"type":"ModelTable","id":"r","alias":"r","moduleTablePath":"m.tbl"}},
+            {"key":"out","type":"Output","alias":"out","inputs":["r"],
+             "fields":[{"name":"A","dataType":"C","isDimension":true}]}
+        ]
+    })
+}
+
+#[test]
+fn decompile_typed_last_modify_time_still_generated() {
+    let spec = budget_spec();
+    let mut tbl = generate(&spec).unwrap();
+    tbl.pointer_mut("/dataFlow/nodes/src")
+        .unwrap()
+        .as_object_mut()
+        .unwrap()
+        .insert("lastModifyTime".into(), json!("2024-01-01T00:00:00Z"));
+    let back = decompile(&tbl).expect("decompile");
+    assert!(
+        back.get("nodes").is_some(),
+        "typed nodes must not be forced to archive by lastModifyTime: {}",
+        back
+    );
+    assert!(back.get("archive").is_none());
+    let wire2 = generate(&back).unwrap();
+    let mut expected = tbl.clone();
+    expected
+        .pointer_mut("/dataFlow/nodes/src")
+        .unwrap()
+        .as_object_mut()
+        .unwrap()
+        .remove("lastModifyTime");
+    assert_eq!(wire2, expected, "typed round-trip ignores normalized timestamp");
+}
+
+#[test]
+fn decompile_rawnode_without_last_modify_time_roundtrips_generated() {
+    let spec = rawnode_modeltable_spec();
+    let tbl = generate(&spec).unwrap();
+    let back = decompile(&tbl).expect("decompile");
+    assert!(
+        back.get("nodes").is_some(),
+        "rawNode without lastModifyTime may still use generated form: {}",
+        back
+    );
+    assert!(back.get("archive").is_none());
+    assert!(back["nodes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|n| n.get("rawNode").is_some()));
+    assert_eq!(generate(&back).unwrap(), tbl, "rawNode generated form round-trips");
+}
+
+#[test]
+fn decompile_rawnode_last_modify_time_archives_verbatim() {
+    let spec = rawnode_modeltable_spec();
+    let mut tbl = generate(&spec).unwrap();
+    tbl.pointer_mut("/dataFlow/nodes/r")
+        .unwrap()
+        .as_object_mut()
+        .unwrap()
+        .insert("lastModifyTime".into(), json!("2024-01-01T00:00:00Z"));
+    let back = decompile(&tbl).expect("decompile");
+    assert!(
+        back.get("archive").is_some(),
+        "rawNode carrying lastModifyTime cannot round-trip typed/generated: {}",
+        back
+    );
+    assert!(back.get("nodes").is_none());
+    let nodes = back.pointer("/archive/nodes").unwrap().as_array().unwrap();
+    let r = nodes.iter().find(|n| n["id"] == json!("r")).unwrap();
+    assert_eq!(r["body"]["type"], json!("ModelTable"));
+    assert_eq!(
+        r["body"]["lastModifyTime"],
+        json!("2024-01-01T00:00:00Z"),
+        "archive keeps raw node timestamps verbatim"
+    );
+    let wire = generate(&back).unwrap();
+    assert_eq!(
+        wire.pointer("/dataFlow/nodes/r/lastModifyTime").unwrap(),
+        &json!("2024-01-01T00:00:00Z")
+    );
+}
+
 #[test]
 fn archive_form_is_editable() {
     // build archive spec by hand, generate, verify structure
