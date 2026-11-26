@@ -419,8 +419,8 @@ fn select_explicit_fields_project_lineage() {
              "fields":[
                 {"name":"h","dataType":"C","isDimension":true,"desc":"declared",
                  "inputField":"bogus","inputNode":"bogus","originalNode":"bogus",
-                 "originalField":"bogus"},
-                {"name":"g","dataType":"N","isDimension":false,"desc":"second"},
+                 "originalField":"bogus","exp":"'stale'"},
+                {"name":"g","dataType":"N","isDimension":false,"desc":"second","aggType":"SUM"},
                 {"name":"f","dataType":"C","isDimension":true}
              ]},
             {"key":"out","type":"Output","alias":"out","inputs":["sel"]}
@@ -435,10 +435,9 @@ fn select_explicit_fields_project_lineage() {
     // AddField payload drives exp; declared lineage keys are overridden
     assert_eq!(fs[0]["exp"], json!("[f]"));
     assert_eq!(fs[0]["desc"], json!("declared"));
-    assert!(
-        fs[0].get("originalNode").is_none(),
-        "computed field has no origin"
-    );
+    for key in ["originalNode", "originalField", "inputNode", "inputField"] {
+        assert!(fs[0].get(key).is_none());
+    }
     // passthrough fields keep simulated lineage
     assert_eq!(fs[1]["inputField"], json!("g"));
     assert!(
@@ -448,6 +447,7 @@ fn select_explicit_fields_project_lineage() {
     assert_eq!(fs[1]["originalNode"], json!("src"));
     assert_eq!(fs[1]["originalField"], json!("g"));
     assert_eq!(fs[1]["desc"], json!("second"));
+    assert_eq!(fs[1]["aggType"], json!("SUM"));
     assert!(wire_errors(&tbl).is_empty(), "{:?}", wire_errors(&tbl));
 }
 
@@ -523,7 +523,8 @@ fn transform_is_derivable_and_rename_after_add_works() {
                        {"name":"d","dataType":"C","isDimension":true}]},
             {"key":"sel","type":"Select","alias":"sel","inputs":["src"],"steps":[
                 {"type":"AddField","addField":{"name":"t","dataType":"N",
-                   "isDimension":false,"exp":"[m] * 2"}},
+                   "isDimension":false,"exp":"[m] * 2","aggType":"SUM",
+                   "inputNode":"src","inputField":"m","originalNode":"src","originalField":"m"}},
                 {"type":"TransformToCalculatedField","fields":["m"],
                  "transformFieldInfo":{"exp":"[m] + 1","dataType":"N"}},
                 {"type":"Refactor","fields":["t"],"refactor":{"rename":"t2"}}
@@ -540,7 +541,16 @@ fn transform_is_derivable_and_rename_after_add_works() {
     assert_eq!(names, vec!["m", "d", "t2"]);
     let m = fs.iter().find(|f| f["name"] == "m").unwrap();
     assert_eq!(m["exp"], json!("[m] + 1"));
-    assert!(m.get("originalNode").is_none(), "computed -> no origin");
+    assert_eq!(m["inputField"], json!("m"));
+    for key in ["originalNode", "originalField", "inputNode"] {
+        assert!(m.get(key).is_none());
+    }
+    let added = fs.iter().find(|f| f["name"] == "t2").unwrap();
+    assert_eq!(added["exp"], json!("[m] * 2"));
+    assert_eq!(added["aggType"], json!("SUM"));
+    for key in ["originalNode", "originalField", "inputNode", "inputField"] {
+        assert!(added.get(key).is_none());
+    }
     assert!(wire_errors(&tbl).is_empty(), "{:?}", wire_errors(&tbl));
 }
 
@@ -571,12 +581,16 @@ fn union_spec(map: Value, fields: Value) -> Value {
 fn union_map_first_nonempty_input_wins() {
     // values[0] empty -> the map key is anchored on input b (index 1); the
     // emitted inputNode/inputField must be exactly that canonical pair.
-    let spec = union_spec(
+    let mut spec = union_spec(
         json!([{"values":["","Q1"],"visible":true},
                {"values":["","Q2"],"visible":true}]),
         json!([{"name":"X1","dataType":"C","isDimension":true,"inputField":"Q1","inputNode":"b"},
-               {"name":"X2","dataType":"N","isDimension":false,"inputField":"Q2","inputNode":"b"}]),
+               {"name":"X2","dataType":"N","isDimension":false,"inputField":"Q2","inputNode":"b",
+                "aggType":"MAX","desc":"declared","originalNode":"a","originalField":"P2"}]),
     );
+    spec["nodes"][1]["fields"][0]["aggType"] = json!("COUNT");
+    spec["nodes"][1]["fields"][1]["aggType"] = json!("SUM");
+    spec["nodes"][1]["fields"][1]["desc"] = json!("upstream");
     assert!(spec_errors(&spec).is_empty(), "{:?}", spec_errors(&spec));
     let tbl = generate(&spec).expect("generate");
     let f1 = field(&tbl, "u", "X1");
@@ -584,6 +598,12 @@ fn union_map_first_nonempty_input_wins() {
     assert_eq!(f1["inputField"], json!("Q1"));
     assert_eq!(f1["originalNode"], json!("b"));
     assert_eq!(f1["originalField"], json!("Q1"));
+    assert!(f1.get("aggType").is_none());
+    let f2 = field(&tbl, "u", "X2");
+    assert_eq!(f2["originalNode"], json!("b"));
+    assert_eq!(f2["originalField"], json!("Q2"));
+    assert_eq!(f2["aggType"], json!("MAX"));
+    assert_eq!(f2["desc"], json!("declared"));
     assert!(wire_errors(&tbl).is_empty(), "{:?}", wire_errors(&tbl));
 }
 
@@ -662,7 +682,10 @@ fn union_map_hidden_rows_and_legacy_no_map() {
     // checks apply.
     let mut legacy = union_spec(
         json!([]),
-        json!([{"name":"P1","dataType":"C","isDimension":true}]),
+        json!([{"name":"renamed","dataType":"C","isDimension":true,"inputField":"P1","inputNode":"b",
+                "originalNode":"b","originalField":"Q1","aggType":"COUNT"},
+               {"name":"C","dataType":"N","isDimension":false,"exp":"1+1","aggType":"SUM",
+                "inputNode":"a","inputField":"P1","originalNode":"a","originalField":"P1"}]),
     );
     legacy["nodes"][2]["config"]
         .as_object_mut()
@@ -674,7 +697,19 @@ fn union_map_hidden_rows_and_legacy_no_map() {
         spec_errors(&legacy)
     );
     let tbl = generate(&legacy).expect("generate");
-    assert_eq!(field(&tbl, "u", "P1")["inputField"], json!("P1"));
+    let f = field(&tbl, "u", "renamed");
+    assert_eq!(f["inputField"], json!("P1"));
+    assert_eq!(f["inputNode"], json!("a"));
+    assert_eq!(f["originalNode"], json!("a"));
+    assert_eq!(f["originalField"], json!("P1"));
+    assert_eq!(f["aggType"], json!("COUNT"));
+    let c = field(&tbl, "u", "C");
+    assert_eq!(c["inputField"], json!("P1"));
+    assert_eq!(c["exp"], json!("1+1"));
+    assert_eq!(c["aggType"], json!("SUM"));
+    for key in ["originalNode", "originalField", "inputNode"] {
+        assert!(c.get(key).is_none());
+    }
     assert!(wire_errors(&tbl).is_empty(), "{:?}", wire_errors(&tbl));
 }
 
@@ -1868,16 +1903,16 @@ fn union_hidden_field_needs_no_map_row() {
     let spec = union_spec(
         json!([{"values":["P1","Q1"],"visible":true}]),
         json!([{"name":"F1","dataType":"C","isDimension":true,"inputField":"P1"},
-               {"name":"H","dataType":"C","isDimension":true,"hidden":true}]),
+               {"name":"H","dataType":"C","isDimension":true,"hidden":true,
+                "inputNode":"a","inputField":"P2","originalNode":"a","originalField":"P2"}]),
     );
     assert!(spec_errors(&spec).is_empty(), "{:?}", spec_errors(&spec));
     let tbl = generate(&spec).expect("generate");
     let h = field(&tbl, "u", "H");
-    assert!(
-        h.get("originalNode").is_none() && h.get("inputField").is_none(),
-        "hidden field carries no proven lineage: {:?}",
-        h
-    );
+    assert_eq!(h["inputNode"], json!("a"));
+    assert_eq!(h["inputField"], json!("P2"));
+    assert!(h.get("originalNode").is_none());
+    assert!(h.get("originalField").is_none());
     assert!(wire_errors(&tbl).is_empty(), "{:?}", wire_errors(&tbl));
 }
 
@@ -1893,7 +1928,10 @@ fn escape_suffix_recovers_provable_step_metadata() {
             {"key":"src","type":"FileInput","alias":"src","config":{"fileName":"d.xlsx#S"},
              "fields":[{"name":"m","dataType":"N","isDimension":false}]},
             {"key":"sel","type":"Select","alias":"sel","inputs":["src"],
-             "fields":[{"name":"x","dataType":"N","isDimension":false}],
+             "fields":[{"name":"x","dataType":"N","isDimension":false,
+                        "inputNode":"src","inputField":"m","originalNode":"src","originalField":"m"},
+                       {"name":"m","dataType":"N","isDimension":false,
+                        "inputNode":"src","inputField":"m","originalNode":"src","originalField":"m"}],
              "steps":[
                 {"rawStep":{"type":"SplitField","fields":["m"]}},
                 {"type":"AddField","fields":["x"],
@@ -1912,7 +1950,14 @@ fn escape_suffix_recovers_provable_step_metadata() {
         json!("[m] * 2"),
         "latest transform wins over addField exp"
     );
-    assert!(x.get("originalNode").is_none());
+    let m = field(&tbl, "sel", "m");
+    assert_eq!(m["inputField"], json!("m"));
+    assert!(x.get("inputField").is_none());
+    for f in [x, m] {
+        for key in ["originalNode", "originalField", "inputNode"] {
+            assert!(f.get(key).is_none());
+        }
+    }
     // no rename hint is guessed through the opaque step
     let steps = node(&tbl, "sel")["steps"].as_array().unwrap();
     assert!(steps.iter().all(|s| s.get("originFieldInfo").is_none()));
