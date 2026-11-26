@@ -814,6 +814,8 @@ pub mod cite {
         "com.succez.bi/src/main/java/com/succez/dw/utils/impl/query/QueryImpl.java";
     pub const FILEINPUT_INFO: &str =
         "com.succez.bi/src/main/java/com/succez/dw/utils/impl/fileinput/FileInputInfoImpl.java";
+    pub const QUERY_HELPER: &str =
+        "com.succez.bi/src/main/java/com/succez/dw/services/impl/dataflow/helper/DwDataFlowQueryHelper.java";
     pub const DATAFLOW_CTX: &str =
         "com.succez.bi/src/main/java/com/succez/dw/services/impl/dataflow/DwDataFlowContext.java";
     pub const NODE_EXECUTOR: &str =

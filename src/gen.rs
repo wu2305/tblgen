@@ -1732,7 +1732,8 @@ fn validate_step_payload(obj: &Value, ty: &str, path: &str, diags: &mut Vec<Diag
 }
 
 /// Step prerequisites independent of node-level field derivation:
-/// Filter needs a non-empty fields operand (Java skips the step otherwise);
+/// every step but AddField needs a non-empty fields operand (Java applies a
+/// step once per operand, so an empty one silently skips it);
 /// AddField's `fields` must agree with `addField.name`; Refactor rename is a
 /// single string applied to exactly one selected field.
 fn validate_step_prereqs(obj: &Value, ty: &str, path: &str, diags: &mut Vec<Diag>) {
@@ -1745,16 +1746,17 @@ fn validate_step_prereqs(obj: &Value, ty: &str, path: &str, diags: &mut Vec<Diag
                 .collect()
         })
         .unwrap_or_default();
+    if ty != "AddField" && fields.is_empty() {
+        diags.push(Diag::spec(
+            format!("{}/fields", path),
+            "field.required",
+            format!(
+                "{} step requires a non-empty fields operand (Java skips the step otherwise)",
+                ty
+            ),
+        ));
+    }
     match ty {
-        "Filter" => {
-            if fields.is_empty() {
-                diags.push(Diag::spec(
-                    format!("{}/fields", path),
-                    "field.required",
-                    "Filter step requires a non-empty fields operand (Java skips the step otherwise)",
-                ));
-            }
-        }
         "AddField" => {
             // fields is the platform's own operand selection: omitted is
             // synthesized as [addField.name] at emission; an explicit

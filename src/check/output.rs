@@ -39,6 +39,29 @@ fn partition_names<'a>(v: &'a Value, out: &mut Vec<&'a str>) {
     }
 }
 
+/// Collect every upper-cased `dbfield` inside a top-level partition array,
+/// with the same flattening as [`partition_names`].
+fn partition_dbfields(v: &Value, out: &mut HashSet<String>) {
+    match v {
+        Value::Array(arr) => {
+            for item in arr {
+                partition_dbfields(item, out);
+            }
+        }
+        Value::Object(o) => {
+            if let Some(n) = o.get("dbfield").and_then(Value::as_str) {
+                out.insert(n.to_uppercase());
+            }
+            for k in PARTITION_CONTAINERS {
+                if let Some(child) = o.get(k) {
+                    partition_dbfields(child, out);
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
 /// True when the object looks like a leaf field rather than a pure folder:
 /// it carries a name plus at least one field-attribute key.
 fn looks_like_field(o: &serde_json::Map<String, Value>) -> bool {
@@ -79,8 +102,10 @@ impl PartitionNames<'_> {
 /// The default Output node's live field names must appear in the matching
 /// top-level partition (isDimension -> dimensions, else measures). The
 /// platform overrides node fields with the top-level lists, so extra top
-/// fields and an absent/empty node copy are fine — only names the Output
-/// declares but the partition drops are errors.
+/// fields and an absent/empty node copy are fine. A name the top level
+/// drops entirely is an error (the model loses that column); a stale copy —
+/// the name sits in the other partition, or the node names the field by a
+/// top-level `dbfield` — only warns, since the loader never reads it.
 pub(super) fn check_output_partition(
     diags: &mut Vec<Diag>,
     tbl: &Value,
@@ -106,6 +131,8 @@ pub(super) fn check_output_partition(
     }
     let mut dim_names = PartitionNames::default();
     let mut meas_names = PartitionNames::default();
+    // built only when a name misses both partitions' names
+    let mut dbfields: Option<HashSet<String>> = None;
     if let Some(d) = tbl.get("dimensions") {
         partition_names(d, &mut dim_names.names);
     }
@@ -123,12 +150,38 @@ pub(super) fn check_output_partition(
             continue;
         };
         let is_dim = f.get("isDimension").and_then(Value::as_bool) == Some(true);
-        let top = if is_dim {
-            &mut dim_names
+        let (top, other) = if is_dim {
+            (&mut dim_names, &mut meas_names)
         } else {
-            &mut meas_names
+            (&mut meas_names, &mut dim_names)
         };
-        if !top.contains(nm) {
+        if top.contains(nm) {
+            continue;
+        }
+        let stale = other.contains(nm)
+            || dbfields
+                .get_or_insert_with(|| {
+                    let mut set = HashSet::new();
+                    for k in ["dimensions", "measures"] {
+                        if let Some(v) = tbl.get(k) {
+                            partition_dbfields(v, &mut set);
+                        }
+                    }
+                    set
+                })
+                .contains(&nm.to_uppercase());
+        if stale {
+            diags.push(warn(
+                format!("/dataFlow/nodes/default/fields/{}/name", i),
+                "flow.output.partition",
+                &src(cite::LOADER, "1256", "DwTableLoader#loadDataFlow"),
+                format!(
+                    "default Output field {:?} ({}) is a stale copy of a top-level field in another role or under its dbfield; the loader replaces Output fields with the top-level lists",
+                    nm,
+                    if is_dim { "dimension" } else { "measure" },
+                ),
+            ));
+        } else {
             diags.push(err(
                 format!("/dataFlow/nodes/default/fields/{}/name", i),
                 "flow.output.partition",
@@ -219,15 +272,27 @@ mod tests {
         ]}});
         let mut ds = Vec::new();
         check_output_partition(&mut ds, &tbl, nodes.as_object().unwrap());
-        assert!(ds.iter().all(|d| d.rule == "flow.output.partition"));
-        let paths: Vec<_> = ds.iter().map(|d| d.path.as_str()).collect();
+        let found: Vec<_> = ds.iter().map(|d| (d.path.as_str(), d.rule.as_str())).collect();
         assert_eq!(
-            paths,
+            found,
             [
-                "/dataFlow/nodes/default/fields/6/name",
-                "/dataFlow/nodes/default/fields/7/name",
-                "/dataFlow/nodes/default/fields/9/name"
+                // AMT sits in measures: a stale role copy, not a lost column
+                ("/dataFlow/nodes/default/fields/6/name", "warn.flow.output.partition"),
+                ("/dataFlow/nodes/default/fields/7/name", "flow.output.partition"),
+                ("/dataFlow/nodes/default/fields/9/name", "flow.output.partition")
             ]
         );
+    }
+
+    #[test]
+    fn dbfield_named_copy_warns_and_dropped_name_errors() {
+        let tbl = json!({"dimensions":[{"name":"销售单位","dbfield":"XSDW"}]});
+        let nodes = json!({"default":{"type":"Output","fields":[
+            {"name":"XSDW","isDimension":true}, {"name":"GONE","isDimension":true}
+        ]}});
+        let mut ds = Vec::new();
+        check_output_partition(&mut ds, &tbl, nodes.as_object().unwrap());
+        let rules: Vec<_> = ds.iter().map(|d| d.rule.as_str()).collect();
+        assert_eq!(rules, ["warn.flow.output.partition", "flow.output.partition"]);
     }
 }

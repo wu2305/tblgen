@@ -612,13 +612,15 @@ fn wire_step_name_collisions_are_errors() {
     );
     assert!(wire_errors(&w).iter().any(|d| d.rule == "field.duplicate"));
 
-    // AddField duplicating an existing name collides
+    // AddField naming an existing field: Java skips the step (no throw),
+    // so the wire check only warns
     let w2 = select_wire(
         json!([{"type":"AddField","fields":["n"],
                 "addField":{"name":"id","dataType":"C","isDimension":true,"exp":"'x'"}}]),
         f.clone(),
     );
-    assert!(wire_errors(&w2).iter().any(|d| d.rule == "field.duplicate"));
+    assert!(wire_errors(&w2).is_empty(), "{:?}", wire_errors(&w2));
+    assert!(check(&w2).iter().any(|d| d.rule == "warn.field.duplicate"));
 
     // case-only self rename stays legal
     let w3 = select_wire(
@@ -685,14 +687,16 @@ fn wire_top_partition_must_match_default_output() {
     );
     assert!(wire_errors(&ok).is_empty(), "{:?}", wire_errors(&ok));
 
-    // swapped roles -> error
+    // swapped roles -> stale Output copy: warning (the loader replaces
+    // Output fields with the top-level lists)
     let bad = mk(
         json!([{"name":"AMT","dataType":"N","isDimension":false}]),
         json!([{"name":"ID","dataType":"C","isDimension":true}]),
     );
-    assert!(wire_errors(&bad)
+    assert!(wire_errors(&bad).is_empty(), "{:?}", wire_errors(&bad));
+    assert!(check(&bad)
         .iter()
-        .any(|d| d.rule == "flow.output.partition"));
+        .any(|d| d.rule == "warn.flow.output.partition"));
 
     // both empty while the Output carries fields -> error
     let missing = mk(json!([]), json!([]));
@@ -1706,4 +1710,30 @@ fn raw_pred_without_fields_explicit_shape() {
     let tbl2 = generate(&spec2).expect("generate");
     assert_eq!(field(&tbl2, "sel", "x")["exp"], json!("1+1"));
     assert!(wire_errors(&tbl2).is_empty(), "{:?}", wire_errors(&tbl2));
+}
+
+#[test]
+fn original_node_may_name_any_node_and_empty_operands_skip_steps() {
+    // the platform writes originalNode as the node a field was born in —
+    // here a Select's AddField — so only an unknown alias warns
+    let fields = json!([{"name":"ID","dataType":"C","isDimension":true}]);
+    let mut w = select_wire(json!([]), fields.clone());
+    w["dataFlow"]["nodes"]["sel"]["fields"][0]["originalNode"] = json!("sel");
+    assert!(!rules(&check(&w)).contains(&"warn.field.originalNode".to_string()));
+    w["dataFlow"]["nodes"]["sel"]["fields"][0]["originalNode"] = json!("ghost");
+    assert!(rules(&check(&w)).contains(&"warn.field.originalNode".to_string()));
+
+    // a per-field step without operands is skipped by Java: gen rejects it,
+    // check warns
+    let w = select_wire(json!([{"type":"ToUppercase","fields":[]}]), fields);
+    assert!(rules(&check(&w)).contains(&"warn.step.fields.empty".to_string()));
+    let spec = json!({"format":1,"version":"4.19.0","properties":{"extractDataEnabled":false},
+        "nodes":[
+            {"key":"src","type":"FileInput","alias":"src","config":{"fileName":"d.xlsx#S"},
+             "fields":[{"name":"ID","dataType":"C","isDimension":true}]},
+            {"key":"sel","type":"Select","alias":"sel","inputs":["src"],
+             "steps":[{"type":"ExcludeEmpty"}]},
+            {"key":"out","type":"Output","alias":"out","inputs":["sel"]}
+        ]});
+    assert!(rules(&spec_errors(&spec)).contains(&"field.required".to_string()));
 }

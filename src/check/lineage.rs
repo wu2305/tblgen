@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use serde_json::Value;
 
 use super::{err, src, warn};
-use crate::model::{cite, field_eq, is_source, ptr_escape, Diag};
+use crate::model::{cite, field_eq, ptr_escape, Diag};
 
 /// Field lineage: a field's `inputField` must name a field of the node it
 /// reads from — resolved ONLY through this node's direct `inputNodes`
@@ -38,17 +38,10 @@ pub(super) fn check_lineage(diags: &mut Vec<Diag>, nodes: &serde_json::Map<Strin
             .map(str::to_string)
             .unwrap_or_else(|| k.to_string())
     };
-    // aliases (effective names) of root source nodes for originalNode
-    let source_names: HashSet<String> = nodes
-        .iter()
-        .filter(|(_, n)| {
-            n.get("type")
-                .and_then(Value::as_str)
-                .map(is_source)
-                .unwrap_or(false)
-        })
-        .map(|(k, _)| name_of(k).to_uppercase())
-        .collect();
+    // effective names of every node: the platform writes originalNode as
+    // the node a field was born in (a Select's AddField included) and
+    // DwTableLoader resolves it against all node aliases
+    let node_names: HashSet<String> = nodes.keys().map(|k| name_of(k).to_uppercase()).collect();
     let names_of = |n: &Value| -> HashSet<String> {
         n.get("fields")
             .and_then(Value::as_array)
@@ -73,13 +66,13 @@ pub(super) fn check_lineage(diags: &mut Vec<Diag>, nodes: &serde_json::Map<Strin
             .flatten()
             .enumerate()
         {
-            // originalNode: every kind, warning only — must be a root source
+            // originalNode: every kind, warning only — must name a node
             if let Some(on) = f
                 .get("originalNode")
                 .and_then(Value::as_str)
                 .filter(|s| !s.is_empty())
             {
-                if !source_names.contains(&on.to_uppercase()) {
+                if !node_names.contains(&on.to_uppercase()) {
                     diags.push(warn(
                         format!(
                             "/dataFlow/nodes/{}/fields/{}/originalNode",
@@ -87,12 +80,8 @@ pub(super) fn check_lineage(diags: &mut Vec<Diag>, nodes: &serde_json::Map<Strin
                             i
                         ),
                         "field.originalNode",
-                        &src(
-                            cite::DATAFLOW_CTX,
-                            "207",
-                            "DwDataFlowContext#initNodeFields",
-                        ),
-                        format!("originalNode {:?} is not a root source node alias", on),
+                        &src(cite::LOADER, "535", "DwTableLoader#refactorExtractProperties"),
+                        format!("originalNode {:?} does not name any node alias", on),
                     ));
                 }
             }

@@ -1523,6 +1523,18 @@ fn check_select_steps(
                         "AddField step requires a non-empty fields operand",
                     ));
                 }
+            } else if step_obj
+                .get("fields")
+                .and_then(Value::as_array)
+                .map_or(true, |a| a.is_empty())
+            {
+                // every other step runs once per operand: none = a no-op
+                diags.push(warn(
+                    format!("{}/fields", spath),
+                    "step.fields.empty",
+                    &src(cite::SELECT_NODE, "150", "DwDataFlowNodeContributor_select#doCompileQuery"),
+                    format!("{} step has no fields operand; the platform skips it", ty),
+                ));
             }
             // closed payload member keys (warn — wire may carry loader-tolerated extras)
             if let Some(pname) = step_payload_name(ty) {
@@ -1778,6 +1790,21 @@ fn check_select_steps(
                 Ok(false) => {
                     current = None;
                     removed.clear();
+                }
+                Err("addField/name") => {
+                    // Java's addField skips a name already in the query, so
+                    // the step is a no-op and the earlier field survives —
+                    // names are unchanged, exactly as evolve_names left them
+                    diags.push(warn(
+                        format!("{}/addField/name", spath),
+                        "field.duplicate",
+                        &src(
+                            cite::QUERY_HELPER,
+                            "234",
+                            "DwDataFlowQueryHelper#addField",
+                        ),
+                        "step AddField names an existing field; the platform skips it and keeps the existing field",
+                    ));
                 }
                 Err(tag) => {
                     diags.push(err(
