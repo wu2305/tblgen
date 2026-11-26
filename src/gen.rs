@@ -2313,21 +2313,13 @@ fn validate_graph_semantics(spec: &Value, descs: &[NodeDesc], diags: &mut Vec<Di
             );
         }
         if ty == "Select" {
-            check_select_step_fields(
+            check_select_names(
                 d,
                 descs,
                 &key_to_idx_s,
                 &mut name_memo,
                 &mut name_visiting,
                 &param_names_s,
-                diags,
-            );
-            check_select_explicit_vs_derived(
-                d,
-                descs,
-                &key_to_idx_s,
-                &mut name_memo,
-                &mut name_visiting,
                 diags,
             );
         }
@@ -2538,8 +2530,14 @@ fn resolve_field_names_inner(
     }
 }
 
-/// Per-step operated-field existence for Select nodes (names provable only).
-fn check_select_step_fields(
+/// Combined Select name checks, evolved ONCE per node: the per-step
+/// operated-field existence and expression-reference checks plus the
+/// explicit-`fields`-vs-derived multiset comparison all read the same
+/// predecessor name list walked through the typed steps. Previously two
+/// separate passes re-evolved identical name lists; the merged pass keeps
+/// diagnostic order (step diagnostics in step order, then at most one
+/// `field.mismatch`) and every early-exit condition of both checks.
+fn check_select_names(
     d: &NodeDesc,
     descs: &[NodeDesc],
     key_to_idx: &HashMap<String, usize>,
@@ -2552,161 +2550,152 @@ fn check_select_step_fields(
     let Some(pred_key) = d.inputs.first() else {
         return;
     };
+    let explicit = sn.get("fields").and_then(Value::as_array);
+    let steps = sn.get("steps").and_then(Value::as_array);
+    // A leading rawStep stops step checking immediately and makes the name
+    // derivation unprovable, so neither check can emit a diagnostic.
+    if steps
+        .and_then(|arr| arr.first())
+        .map(|s| s.get("rawStep").is_some())
+        .unwrap_or(false)
+    {
+        return;
+    }
+    let has_checkable_steps = steps.map(|arr| !arr.is_empty()).unwrap_or(false);
+    // No explicit projection and no steps to check: nothing to validate.
+    // (Resolving predecessor names is a pure memo side effect with no
+    // diagnostic effect, so it is skipped here.)
+    if explicit.is_none() && !has_checkable_steps {
+        return;
+    }
     let Some(mut current) = resolve_field_names(descs, key_to_idx, pred_key, memo, visiting) else {
         return; // cannot prove the input field set
     };
-    let Some(steps) = sn.get("steps").and_then(Value::as_array) else {
-        return;
-    };
-    for (si, st) in steps.iter().enumerate() {
-        if st.get("rawStep").is_some() {
-            break; // tracking lost
-        }
-        let ty = st.get("type").and_then(Value::as_str).unwrap_or("");
-        // Java checkStep exempts Text2Id only when it carries srcField
-        let operated = matches!(
-            ty,
-            "RemoveField"
-                | "SplitField"
-                | "Refactor"
-                | "SubString"
-                | "Replace"
-                | "ToUppercase"
-                | "ToLowercase"
-                | "ToNumber"
-                | "ToDate"
-                | "ToSynonym"
-                | "Trim"
-                | "DeleteNumbers"
-                | "DeleteLetters"
-                | "DeleteSpechars"
-                | "DeletePunctuations"
-                | "ExcludeEmpty"
-                | "ExtractNumber"
-                | "TransformToCalculatedField"
-                | "Distinct"
-                | "GroupNumber"
-                | "ReGroup"
-        ) || (ty == "Text2Id"
-            && st
-                .pointer("/text2id/srcField")
-                .and_then(Value::as_str)
-                .map(|x| x.is_empty())
-                .unwrap_or(true));
-        if operated {
-            if let Some(fl) = st.get("fields").and_then(Value::as_array) {
-                for (fi, fv) in fl.iter().enumerate() {
-                    if let Some(name) = fv.as_str() {
-                        if ty != "RemoveField" && !current.iter().any(|c| field_eq(c, name)) {
-                            diags.push(Diag::spec(
-                                format!("/nodes/{}/steps/{}/fields/{}", d.idx, si, fi),
-                                "err.dataflow.stepField.notfound",
-                                format!("step {} references unknown field {:?}", ty, name),
-                            ));
+    // names evolve first: collision detection + authoritative name set
+    let mut derivable = true;
+    if let Some(steps) = steps {
+        for (si, st) in steps.iter().enumerate() {
+            if st.get("rawStep").is_some() {
+                derivable = false;
+                break; // tracking lost
+            }
+            let ty = st.get("type").and_then(Value::as_str).unwrap_or("");
+            // Java checkStep exempts Text2Id only when it carries srcField
+            let operated = matches!(
+                ty,
+                "RemoveField"
+                    | "SplitField"
+                    | "Refactor"
+                    | "SubString"
+                    | "Replace"
+                    | "ToUppercase"
+                    | "ToLowercase"
+                    | "ToNumber"
+                    | "ToDate"
+                    | "ToSynonym"
+                    | "Trim"
+                    | "DeleteNumbers"
+                    | "DeleteLetters"
+                    | "DeleteSpechars"
+                    | "DeletePunctuations"
+                    | "ExcludeEmpty"
+                    | "ExtractNumber"
+                    | "TransformToCalculatedField"
+                    | "Distinct"
+                    | "GroupNumber"
+                    | "ReGroup"
+            ) || (ty == "Text2Id"
+                && st
+                    .pointer("/text2id/srcField")
+                    .and_then(Value::as_str)
+                    .map(|x| x.is_empty())
+                    .unwrap_or(true));
+            if operated {
+                if let Some(fl) = st.get("fields").and_then(Value::as_array) {
+                    for (fi, fv) in fl.iter().enumerate() {
+                        if let Some(name) = fv.as_str() {
+                            if ty != "RemoveField" && !current.iter().any(|c| field_eq(c, name)) {
+                                diags.push(Diag::spec(
+                                    format!("/nodes/{}/steps/{}/fields/{}", d.idx, si, fi),
+                                    "err.dataflow.stepField.notfound",
+                                    format!("step {} references unknown field {:?}", ty, name),
+                                ));
+                            }
                         }
                     }
                 }
             }
-        }
-        // conservative expression check: bracket refs in filter/addField.exp/
-        // transformFieldInfo.exp must resolve to a current field or a
-        // declared parameter (unqualified, case-insensitive). Qualified refs
-        // and unparseable grammar are skipped — never guessed.
-        for (ekey, epath) in [
-            ("filter", "filter"),
-            ("addField", "addField/exp"),
-            ("transformFieldInfo", "transformFieldInfo/exp"),
-        ] {
-            let exp = if ekey == "filter" {
-                st.get("filter").and_then(Value::as_str)
-            } else {
-                st.pointer(&format!("/{}/exp", ekey))
-                    .and_then(Value::as_str)
-            };
-            let Some(exp) = exp else { continue };
-            for (name, qualified) in exp_bracket_refs(exp) {
-                if qualified || name.is_empty() {
-                    continue;
-                }
-                let upper = name.to_uppercase();
-                let known =
-                    current.iter().any(|c| field_eq(c, &name)) || param_names.contains(&upper);
-                if !known {
-                    diags.push(Diag::spec(
-                        format!("/nodes/{}/steps/{}/{}", d.idx, si, epath),
-                        "err.exp.ref.notfound",
-                        format!(
-                            "expression references unknown field/parameter {:?} (unqualified refs resolve against current fields + parameters)",
-                            name
-                        ),
-                    ));
-                }
-            }
-        }
-        match evolve_names(&mut current, st) {
-            Ok(true) => {}
-            Ok(false) => break, // tracking lost
-            Err(tag) => {
-                // step-time name collision (AddField/Refactor rename): the
-                // platform would produce two fields with the same name
-                diags.push(Diag::spec(
-                    format!("/nodes/{}/steps/{}/{}", d.idx, si, tag),
-                    "field.duplicate",
-                    format!("step {} creates a duplicate field name", ty),
-                ));
-                break;
-            }
-        }
-    }
-}
-
-/// Compare a Select's explicit `fields` against the provable derivation:
-/// name sequence (case-insensitive) per position. Display/other attributes
-/// are never required to match.
-fn check_select_explicit_vs_derived(
-    d: &NodeDesc,
-    descs: &[NodeDesc],
-    key_to_idx: &HashMap<String, usize>,
-    memo: &mut HashMap<String, Option<Vec<String>>>,
-    visiting: &mut HashSet<String>,
-    diags: &mut Vec<Diag>,
-) {
-    let Some(sn) = d.spec else { return };
-    let Some(explicit) = sn.get("fields").and_then(Value::as_array) else {
-        return;
-    };
-    let Some(pred_key) = d.inputs.first() else {
-        return;
-    };
-    let Some(mut names) = resolve_field_names(descs, key_to_idx, pred_key, memo, visiting) else {
-        return;
-    };
-    let derivable = match sn.get("steps").and_then(Value::as_array) {
-        Some(steps) => {
-            let mut ok = true;
-            for st in steps {
-                match evolve_names(&mut names, st) {
-                    Ok(true) => {}
-                    _ => {
-                        ok = false;
-                        break;
+            // conservative expression check: bracket refs in
+            // filter/addField.exp/transformFieldInfo.exp must resolve to a
+            // current field or a declared parameter (unqualified,
+            // case-insensitive). Qualified refs and unparseable grammar are
+            // skipped — never guessed.
+            for (exp, epath) in [
+                (st.get("filter").and_then(Value::as_str), "filter"),
+                (
+                    st.pointer("/addField/exp").and_then(Value::as_str),
+                    "addField/exp",
+                ),
+                (
+                    st.pointer("/transformFieldInfo/exp")
+                        .and_then(Value::as_str),
+                    "transformFieldInfo/exp",
+                ),
+            ] {
+                let Some(exp) = exp else { continue };
+                for (name, qualified) in exp_bracket_refs(exp) {
+                    if qualified || name.is_empty() {
+                        continue;
+                    }
+                    let upper = name.to_uppercase();
+                    let known = current.iter().any(|c| field_eq(c, &name))
+                        || param_names.contains(&upper);
+                    if !known {
+                        diags.push(Diag::spec(
+                            format!("/nodes/{}/steps/{}/{}", d.idx, si, epath),
+                            "err.exp.ref.notfound",
+                            format!(
+                                "expression references unknown field/parameter {:?} (unqualified refs resolve against current fields + parameters)",
+                                name
+                            ),
+                        ));
                     }
                 }
             }
-            ok
+            match evolve_names(&mut current, st) {
+                Ok(true) => {}
+                Ok(false) => {
+                    derivable = false;
+                    break; // tracking lost
+                }
+                Err(tag) => {
+                    // step-time name collision (AddField/Refactor rename):
+                    // the platform would produce two fields with the same
+                    // name
+                    diags.push(Diag::spec(
+                        format!("/nodes/{}/steps/{}/{}", d.idx, si, tag),
+                        "field.duplicate",
+                        format!("step {} creates a duplicate field name", ty),
+                    ));
+                    derivable = false;
+                    break;
+                }
+            }
         }
-        None => true,
-    };
+    }
+    // Compare a Select's explicit `fields` against the provable derivation:
+    // name multiset (order-insensitive, Unicode-aware field_eq) — mirrors
+    // QueryImpl name semantics (toUpperCase). Display/other attributes are
+    // never required to match.
+    let Some(explicit) = explicit else { return };
     if !derivable {
         return;
     }
-    // multiset comparison, order-insensitive, Unicode-aware field_eq —
-    // mirrors QueryImpl name semantics (toUpperCase)
     let exp_names: Vec<String> = explicit
         .iter()
         .filter_map(|f| f.get("name").and_then(Value::as_str).map(str::to_string))
         .collect();
-    let mut remaining = names.clone();
+    let mut remaining = current.clone();
     let mut matched = true;
     'outer: for en in &exp_names {
         for (i, dn) in remaining.iter().enumerate() {
@@ -2724,7 +2713,7 @@ fn check_select_explicit_vs_derived(
             "field.mismatch",
             format!(
                 "explicit fields {:?} do not match derivable output {:?}",
-                exp_names, names
+                exp_names, current
             ),
         ));
     }
@@ -4394,20 +4383,24 @@ fn simulate_select(
         .iter()
         .map(|f| clone_passthrough(f, pred))
         .collect();
-    let steps = sn
+    let empty_steps: &[Value] = &[];
+    let steps: &[Value] = sn
         .get("steps")
         .and_then(Value::as_array)
-        .cloned()
-        .unwrap_or_default();
+        .map(Vec::as_slice)
+        .unwrap_or(empty_steps);
     let mut step_hints: Vec<Option<Value>> = vec![None; steps.len()];
+    // names mirror `work` across the whole simulation: `evolve_names` and
+    // `apply_step_mutation` apply the same name effects to the same step, so
+    // one carried list replaces the previous per-step rebuild from `work`.
+    let mut names: Vec<String> = work
+        .iter()
+        .enumerate()
+        .map(|(i, f)| field_name(f, i))
+        .collect();
     let mut opaque_at = None;
     for (si, s) in steps.iter().enumerate() {
         // names evolve first: collision detection + authoritative name set
-        let mut names: Vec<String> = work
-            .iter()
-            .enumerate()
-            .map(|(i, f)| field_name(f, i))
-            .collect();
         match evolve_names(&mut names, s) {
             Ok(true) => {}
             Ok(false) => {
@@ -4655,11 +4648,11 @@ fn compute_select_fields(
                 )),
             );
         };
-        let steps = sn
+        let steps: &[Value] = sn
             .get("steps")
             .and_then(Value::as_array)
-            .cloned()
-            .unwrap_or_default();
+            .map(Vec::as_slice)
+            .unwrap_or(&[]);
         let mut fields: Vec<Value> = decl
             .iter()
             .map(|df| {
@@ -4670,7 +4663,7 @@ fn compute_select_fields(
                 }
             })
             .collect();
-        if let Err(e) = apply_escape_steps(d, &steps, &mut fields, 0) {
+        if let Err(e) = apply_escape_steps(d, steps, &mut fields, 0) {
             return (None, Some(e));
         }
         return (
@@ -4704,12 +4697,12 @@ fn compute_select_fields(
                     })
                     .collect();
                 let hints = res.step_hints;
-                let steps = sn
+                let steps: &[Value] = sn
                     .get("steps")
                     .and_then(Value::as_array)
-                    .cloned()
-                    .unwrap_or_default();
-                if let Err(e) = apply_escape_steps(d, &steps, &mut fields, oi + 1) {
+                    .map(Vec::as_slice)
+                    .unwrap_or(&[]);
+                if let Err(e) = apply_escape_steps(d, steps, &mut fields, oi + 1) {
                     return (None, Some(e));
                 }
                 return (
@@ -4782,11 +4775,11 @@ fn compute_select_fields(
         }
         None => {
             if let Some(si) = res.opaque_at {
-                let steps = sn
+                let steps: &[Value] = sn
                     .get("steps")
                     .and_then(Value::as_array)
-                    .cloned()
-                    .unwrap_or_default();
+                    .map(Vec::as_slice)
+                    .unwrap_or(&[]);
                 let ty = steps
                     .get(si)
                     .and_then(|s| s.get("type"))
