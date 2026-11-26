@@ -96,6 +96,12 @@ fn default_cases() -> Vec<Case> {
             repeats: 60,
             warmup: 3,
         },
+        Case {
+            name: "select-rawstep",
+            path: fixture("select-rawstep"),
+            repeats: 300,
+            warmup: 5,
+        },
     ]
 }
 

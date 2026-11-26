@@ -417,6 +417,87 @@ def select_heavy(chain: int = 16, width: int = 64) -> dict:
     return base(nodes)
 
 
+def select_rawstep() -> dict:
+    """Minimal typed-spec rawStep coverage for the gen A/B.
+
+    Two chained Selects exercise every rawStep branch on both validate and
+    field_compute: typed prefix + mid rawStep + typed suffix with explicit
+    fields (merged name check stops at rawStep; simulation stops with
+    opaque_at; escape suffix recovery runs on borrowed steps), and a leading
+    rawStep (validate early-return; escape walks the whole suffix). Shapes
+    mirror the escape-path regressions in tests/dataflow.rs.
+    """
+    src_fields = [
+        field("dim_0", "C", True),
+        field("meas_0", "N", False),
+        field("meas_1", "N", False),
+        field("note", "C", True),
+    ]
+    s_mid = {
+        "key": "s_raw_mid",
+        "type": "Select",
+        "inputs": ["src"],
+        "fields": [
+            {"name": "dim_0", "dataType": "C", "isDimension": True},
+            {"name": "amount_0", "dataType": "N", "isDimension": False},
+            {"name": "meas_1", "dataType": "N", "isDimension": False},
+            {"name": "calc_y", "dataType": "N", "isDimension": False},
+        ],
+        "steps": [
+            {"type": "Filter", "fields": ["dim_0"], "filter": "[dim_0] != NULL"},
+            {"type": "Refactor", "fields": ["meas_0"], "refactor": {"rename": "amount_0"}},
+            {"rawStep": {"type": "SplitField", "fields": ["note"]}},
+            {
+                "type": "AddField",
+                "fields": ["calc_y"],
+                "addField": {
+                    "name": "calc_y",
+                    "dataType": "N",
+                    "isDimension": False,
+                    "exp": "[amount_0]",
+                },
+            },
+            {
+                "type": "TransformToCalculatedField",
+                "fields": ["calc_y"],
+                "transformFieldInfo": {"exp": "[amount_0] * 2", "dataType": "N"},
+            },
+        ],
+    }
+    s_first = {
+        "key": "s_raw_first",
+        "type": "Select",
+        "inputs": ["s_raw_mid"],
+        "fields": [
+            {"name": "dim_0", "dataType": "C", "isDimension": True},
+            {"name": "amount_0", "dataType": "N", "isDimension": False},
+            {"name": "measure_1", "dataType": "N", "isDimension": False},
+            {"name": "calc_y", "dataType": "N", "isDimension": False},
+            {"name": "total_x", "dataType": "N", "isDimension": False},
+        ],
+        "steps": [
+            {"rawStep": {"type": "SplitField", "fields": ["meas_1"]}},
+            {
+                "type": "AddField",
+                "fields": ["total_x"],
+                "addField": {
+                    "name": "total_x",
+                    "dataType": "N",
+                    "isDimension": False,
+                    "exp": "[amount_0]",
+                },
+            },
+            {"type": "Refactor", "fields": ["meas_1"], "refactor": {"rename": "measure_1"}},
+        ],
+    }
+    return base([
+        file_input("src", src_fields, file_name="rawstep.xlsx#S"),
+        s_mid,
+        s_first,
+        output("s_raw_first"),
+    ])
+
+
 CASES = {
     "small": small,
     "wide": wide,
@@ -426,6 +507,7 @@ CASES = {
     "union-map": union_map,
     "error-dense": error_dense,
     "select-heavy": select_heavy,
+    "select-rawstep": select_rawstep,
 }
 
 
