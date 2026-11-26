@@ -188,6 +188,55 @@ def fan_out(branches: int = 8, width: int = 32) -> dict:
     return base(nodes)
 
 
+def union_map(inputs: int = 6, fields_per_input: int = 16) -> dict:
+    """Union with a full alias.field map grid: one visible row per input field.
+
+    Amplifies the per-declared-field map-row scan: with `inputs *
+    fields_per_input` rows and the same number of declared fields, the old
+    resolver rescans the row list for every output column.
+    """
+    nodes = []
+    input_keys = []
+    for i in range(inputs):
+        key = f"u{i}"
+        input_keys.append(key)
+        fields = [field("k", "C", True, dbfield=f"K{i}")]
+        for j in range(fields_per_input):
+            fields.append(field(f"f{j:02d}", "N", False))
+        nodes.append(file_input(key, fields, alias=f"in{i}", file_name=f"um{i}.xlsx#S"))
+
+    rows = []
+    union_fields = []
+    for r in range(inputs * fields_per_input):
+        pos = r % inputs
+        fi = r // inputs
+        name = f"f{fi:02d}"
+        values = [""] * inputs
+        values[pos] = name
+        rows.append({"values": values, "visible": True})
+        union_fields.append(
+            {
+                "name": f"out_{pos:02d}_{fi:02d}",
+                "dataType": "N",
+                "isDimension": False,
+                "inputField": name,
+                "inputNode": f"in{pos}",
+            }
+        )
+
+    nodes.append(
+        {
+            "key": "u",
+            "type": "Union",
+            "inputs": input_keys,
+            "config": {"unionType": "UnionAll", "unionMapArray": rows},
+            "fields": union_fields,
+        }
+    )
+    nodes.append(output("u"))
+    return base(nodes)
+
+
 def error_dense(raw_nodes: int = 24, steps_per_node: int = 8, fields: int = 8) -> dict:
     src_fields = [field(f"f{i}", "C", i % 2 == 0) for i in range(fields)]
     nodes = [file_input("src", src_fields, file_name="errors.xlsx#S")]
@@ -374,6 +423,7 @@ CASES = {
     "deep": deep,
     "fan-in": fan_in,
     "fan-out": fan_out,
+    "union-map": union_map,
     "error-dense": error_dense,
     "select-heavy": select_heavy,
 }

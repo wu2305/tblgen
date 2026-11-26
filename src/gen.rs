@@ -3414,7 +3414,7 @@ fn node_is_source(d: &NodeDesc) -> bool {
 /// pivot-born/unmatched columns carry NO origin — never fabricated. A
 /// source's own fields root at the source itself, so stale explicit
 /// `original*` on them is rewritten rather than trusted.
-fn field_origin(f: &Value, pred: &NodeDesc) -> Option<(String, String)> {
+fn field_origin(f: &Value, pred: &NodeDesc, alias: Option<&str>) -> Option<(String, String)> {
     let nonblank = |k: &str| {
         f.get(k)
             .and_then(Value::as_str)
@@ -3427,7 +3427,10 @@ fn field_origin(f: &Value, pred: &NodeDesc) -> Option<(String, String)> {
     if node_is_source(pred) {
         let name = f.get("name").and_then(Value::as_str).unwrap_or("");
         if !name.is_empty() {
-            return Some((node_alias(pred), name.to_string()));
+            let alias = alias
+                .map(str::to_string)
+                .unwrap_or_else(|| node_alias(pred));
+            return Some((alias, name.to_string()));
         }
         return None;
     }
@@ -3536,14 +3539,54 @@ fn field_match_name(f: &Value) -> &str {
         .unwrap_or("")
 }
 
-/// Find a predecessor field by name (Unicode-aware).
-fn find_pred_field<'a>(fields: &'a [Value], want: &str) -> Option<&'a Value> {
-    fields.iter().find(|pf| {
-        pf.get("name")
-            .and_then(Value::as_str)
-            .map(|n| field_eq(n, want))
-            .unwrap_or(false)
-    })
+/// Per-projection lookup tables for explicit field resolution. Keys are the
+/// same Unicode `to_uppercase()` form `field_eq` compares; the first field
+/// with a folded name wins, exactly like the previous linear scan.
+struct ProjectionLookup {
+    aliases: Vec<String>,
+    alias_keys: Vec<String>,
+    by_alias: HashMap<String, Vec<usize>>,
+    all: Vec<usize>,
+    field_maps: Vec<HashMap<String, usize>>,
+}
+
+impl ProjectionLookup {
+    fn new(preds: &[&NodeDesc], fields_of: &[&Vec<Value>]) -> Self {
+        let mut aliases = Vec::with_capacity(preds.len());
+        let mut alias_keys = Vec::with_capacity(preds.len());
+        let mut by_alias: HashMap<String, Vec<usize>> = HashMap::new();
+        let mut field_maps = Vec::with_capacity(preds.len());
+        for (pi, pred) in preds.iter().enumerate() {
+            let alias = node_alias(pred);
+            let alias_key = alias.to_uppercase();
+            by_alias.entry(alias_key.clone()).or_default().push(pi);
+            aliases.push(alias);
+            alias_keys.push(alias_key);
+
+            let mut by_name: HashMap<String, usize> = HashMap::new();
+            for (fi, pf) in fields_of[pi].iter().enumerate() {
+                if let Some(name) = pf.get("name").and_then(Value::as_str) {
+                    by_name.entry(name.to_uppercase()).or_insert(fi);
+                }
+            }
+            field_maps.push(by_name);
+        }
+        let all = (0..preds.len()).collect();
+        Self {
+            aliases,
+            alias_keys,
+            by_alias,
+            all,
+            field_maps,
+        }
+    }
+
+    fn candidates(&self, want_node_key: Option<&str>) -> &[usize] {
+        match want_node_key {
+            Some(key) => self.by_alias.get(key).map(Vec::as_slice).unwrap_or(&[]),
+            None => &self.all,
+        }
+    }
 }
 
 fn compute_node_fields(
@@ -3723,7 +3766,7 @@ fn clone_passthrough(f: &Value, pred: &NodeDesc) -> Value {
     let name = field_name(f, 0);
     m.insert("name".into(), Value::String(name.clone()));
     m.insert("inputField".into(), Value::String(name));
-    if let Some((on, of)) = field_origin(f, pred) {
+    if let Some((on, of)) = field_origin(f, pred, None) {
         m.insert("originalNode".into(), Value::String(on));
         m.insert("originalField".into(), Value::String(of));
     }
@@ -3747,6 +3790,7 @@ fn resolve_declared_fields(
         .and_then(Value::as_array)
         .cloned()
         .unwrap_or_default();
+    let lookup = ProjectionLookup::new(preds, fields_of);
     let mut out = Vec::with_capacity(declared.len());
     for (fi, df) in declared.iter().enumerate() {
         if has_exp(df) {
@@ -3755,15 +3799,12 @@ fn resolve_declared_fields(
         }
         let want = field_match_name(df);
         let want_node = field_str(df, "inputNode");
-        let mut matches: Vec<(&NodeDesc, &Value)> = Vec::new();
-        for (pi, pred) in preds.iter().enumerate() {
-            if let Some(wn) = want_node {
-                if !field_eq(wn, &node_alias(pred)) {
-                    continue;
-                }
-            }
-            if let Some(pf) = find_pred_field(fields_of[pi], want) {
-                matches.push((pred, pf));
+        let want_key = want.to_uppercase();
+        let want_node_key = want_node.map(|s| s.to_uppercase());
+        let mut matches: Vec<(usize, &NodeDesc, &Value)> = Vec::new();
+        for &pi in lookup.candidates(want_node_key.as_deref()) {
+            if let Some(&fi) = lookup.field_maps[pi].get(&want_key) {
+                matches.push((pi, preds[pi], &fields_of[pi][fi]));
             }
         }
         match matches.len() {
@@ -3778,23 +3819,20 @@ fn resolve_declared_fields(
                 out.push(emit_unresolved(df));
             }
             1 => {
-                let (pred, pf) = matches[0];
+                let (pi, pred, pf) = matches[0];
                 let pname = pf
                     .get("name")
                     .and_then(Value::as_str)
                     .unwrap_or(want)
                     .to_string();
-                let in_node = if emit_input_node {
-                    Some(node_alias(pred))
-                } else {
-                    None
-                };
+                let alias = lookup.aliases[pi].as_str();
+                let in_node = if emit_input_node { Some(alias) } else { None };
                 out.push(merge_declared(
                     df,
                     pf,
                     &pname,
-                    in_node.as_deref(),
-                    field_origin(pf, pred),
+                    in_node,
+                    field_origin(pf, pred, Some(alias)),
                 ));
             }
             _ => {
@@ -3940,6 +3978,7 @@ fn compute_union_fields(
             )),
         );
     }
+    let lookup = ProjectionLookup::new(&preds, &fields_of);
     let sn = d.spec.unwrap();
     let map = sn
         .get("config")
@@ -3950,8 +3989,9 @@ fn compute_union_fields(
     // field name) per visible row; duplicate keys are an error
     struct URow {
         key_pos: usize,
-        key_alias: String,
+        key_alias_key: String,
         key_field: String,
+        key_field_key: String,
         values: Vec<Option<String>>,
     }
     let mut rows: Vec<URow> = Vec::new();
@@ -3982,8 +4022,9 @@ fn compute_union_fields(
             if kpos >= preds.len() {
                 continue; // width mismatch already diagnosed
             }
-            let kalias = node_alias(preds[kpos]);
-            if !key_seen.insert((kalias.to_uppercase(), kfield.to_uppercase())) {
+            let key_alias_key = lookup.aliases[kpos].to_uppercase();
+            let key_field_key = kfield.to_uppercase();
+            if !key_seen.insert((key_alias_key.clone(), key_field_key.clone())) {
                 return (
                     None,
                     Some(Diag::spec(
@@ -3995,12 +4036,27 @@ fn compute_union_fields(
             }
             rows.push(URow {
                 key_pos: kpos,
-                key_alias: kalias,
+                key_alias_key,
                 key_field: kfield,
+                key_field_key,
                 values,
             });
         }
     }
+
+    let mut primary_by_field: HashMap<&str, Vec<usize>> = HashMap::new();
+    for (ri, r) in rows.iter().enumerate() {
+        primary_by_field
+            .entry(r.key_field_key.as_str())
+            .or_default()
+            .push(ri);
+    }
+    // Secondary (renamed-value) indexes are built lazily on the first declared
+    // field whose canonical key misses: most map rows resolve primarily.
+    let mut secondary_index: Option<(
+        HashMap<String, Vec<usize>>,
+        HashMap<String, HashMap<String, Vec<usize>>>,
+    )> = None;
 
     let declared = sn
         .get("fields")
@@ -4028,15 +4084,17 @@ fn compute_union_fields(
             // legacy no-map resolution: inputField = declared name, origin
             // looked up in the first input
             let want = field_match_name(df);
-            let origin = find_pred_field(fields_of[0], want)
-                .map(|pf| field_origin(pf, preds[0]))
-                .flatten();
+            let want_key = want.to_uppercase();
+            let origin = lookup.field_maps[0]
+                .get(&want_key)
+                .and_then(|&fi| fields_of[0].get(fi))
+                .and_then(|pf| field_origin(pf, preds[0], Some(lookup.aliases[0].as_str())));
             let mut m = df.as_object().cloned().unwrap_or_default();
             m.remove("originalNode");
             m.remove("originalField");
             m.remove("inputNode");
             m.insert("inputField".into(), Value::String(want.to_string()));
-            m.insert("inputNode".into(), Value::String(node_alias(preds[0])));
+            m.insert("inputNode".into(), Value::String(lookup.aliases[0].clone()));
             if let Some((on, of)) = origin {
                 m.insert("originalNode".into(), Value::String(on));
                 m.insert("originalField".into(), Value::String(of));
@@ -4058,34 +4116,73 @@ fn compute_union_fields(
         }
         let want_field = field_match_name(df);
         let want_node = field_str(df, "inputNode");
+        let want_field_key = want_field.to_uppercase();
+        let want_node_key = want_node.map(|s| s.to_uppercase());
         // primary: match the canonical key (field + optional alias)
-        let mut primary: Vec<&URow> = rows
-            .iter()
-            .filter(|r| {
-                field_eq(&r.key_field, want_field)
-                    && want_node
-                        .map(|wn| field_eq(wn, &r.key_alias))
-                        .unwrap_or(true)
-            })
-            .collect();
+        let mut primary: Vec<&URow> = Vec::new();
+        if let Some(indices) = primary_by_field.get(want_field_key.as_str()) {
+            for &ri in indices {
+                let r = &rows[ri];
+                if want_node_key
+                    .as_ref()
+                    .map(|wn| wn == r.key_alias_key.as_str())
+                    .unwrap_or(true)
+                {
+                    primary.push(r);
+                }
+            }
+        }
         // secondary: the field may be renamed — match any other populated
         // values[j] together with that input's alias
         if primary.is_empty() {
+            if secondary_index.is_none() {
+                let mut any: HashMap<String, Vec<usize>> = HashMap::new();
+                let mut by_alias: HashMap<String, HashMap<String, Vec<usize>>> = HashMap::new();
+                for (ri, r) in rows.iter().enumerate() {
+                    for (j, v) in r.values.iter().enumerate() {
+                        if j == r.key_pos || j >= lookup.alias_keys.len() {
+                            continue;
+                        }
+                        let Some(sv) = v.as_ref().filter(|s| !s.is_empty()) else {
+                            continue;
+                        };
+                        let value_key = sv.to_uppercase();
+                        let alias_key = lookup.alias_keys[j].clone();
+                        let any_vec = any.entry(value_key.clone()).or_default();
+                        if any_vec.last().copied() != Some(ri) {
+                            any_vec.push(ri);
+                        }
+                        let alias_vec = by_alias
+                            .entry(value_key)
+                            .or_default()
+                            .entry(alias_key)
+                            .or_default();
+                        if alias_vec.last().copied() != Some(ri) {
+                            alias_vec.push(ri);
+                        }
+                    }
+                }
+                secondary_index = Some((any, by_alias));
+            }
+            let (any, by_alias) = secondary_index.as_ref().unwrap();
             let mut secondary: Vec<&URow> = Vec::new();
-            for r in &rows {
-                for (j, v) in r.values.iter().enumerate() {
-                    let Some(sv) = v.as_ref().filter(|s| !s.is_empty()) else {
-                        continue;
-                    };
-                    if j == r.key_pos || !field_eq(sv, want_field) {
-                        continue;
+            match want_node_key.as_deref() {
+                Some(wn) => {
+                    if let Some(indices) = by_alias
+                        .get(want_field_key.as_str())
+                        .and_then(|m| m.get(wn))
+                    {
+                        for &ri in indices {
+                            secondary.push(&rows[ri]);
+                        }
                     }
-                    let alias_j = node_alias(preds[j]);
-                    if want_node.map(|wn| !field_eq(wn, &alias_j)).unwrap_or(false) {
-                        continue;
+                }
+                None => {
+                    if let Some(indices) = any.get(want_field_key.as_str()) {
+                        for &ri in indices {
+                            secondary.push(&rows[ri]);
+                        }
                     }
-                    secondary.push(r);
-                    break;
                 }
             }
             primary = secondary;
@@ -4093,7 +4190,10 @@ fn compute_union_fields(
         match primary.len() {
             1 => {
                 let r = primary[0];
-                let Some(pf) = find_pred_field(fields_of[r.key_pos], &r.key_field) else {
+                let Some(pf) = lookup.field_maps[r.key_pos]
+                    .get(&r.key_field_key)
+                    .and_then(|&fi| fields_of[r.key_pos].get(fi))
+                else {
                     return (
                         None,
                         Some(Diag::spec(
@@ -4108,7 +4208,7 @@ fn compute_union_fields(
                 };
                 // two visible noncomputed fields resolving to the same
                 // canonical map key would read the same runtime column
-                if !used_keys.insert((r.key_alias.to_uppercase(), r.key_field.to_uppercase())) {
+                if !used_keys.insert((r.key_alias_key.clone(), r.key_field_key.clone())) {
                     return (
                         None,
                         Some(Diag::spec(
@@ -4121,10 +4221,18 @@ fn compute_union_fields(
                         )),
                     );
                 }
-                let origin = field_origin(pf, preds[r.key_pos]);
-                let pname = r.key_field.clone();
-                let kalias = r.key_alias.clone();
-                out.push(merge_declared(df, pf, &pname, Some(&kalias), origin));
+                let origin = field_origin(
+                    pf,
+                    preds[r.key_pos],
+                    Some(lookup.aliases[r.key_pos].as_str()),
+                );
+                out.push(merge_declared(
+                    df,
+                    pf,
+                    r.key_field.as_str(),
+                    Some(lookup.aliases[r.key_pos].as_str()),
+                    origin,
+                ));
             }
             0 => {
                 return (

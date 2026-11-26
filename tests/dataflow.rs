@@ -537,6 +537,72 @@ fn union_map_errors_on_unmatched_and_duplicate_keys() {
 }
 
 #[test]
+fn union_map_lookup_aliases_and_secondary_values() {
+    // Node keys (x/y) differ from aliases (Alpha/Beta); the second row has an
+    // empty first value so its canonical key is anchored on Beta; the third
+    // row exercises renamed-value (secondary) resolution back to Alpha.A2.
+    let spec = json!({
+        "format": 1,
+        "properties": {"extractDataEnabled": false},
+        "nodes": [
+            {"key":"x","type":"FileInput","alias":"Alpha","config":{"fileName":"x.xlsx#S"},
+             "fields":[{"name":"A1","dataType":"C","isDimension":true},
+                       {"name":"A2","dataType":"C","isDimension":true}]},
+            {"key":"y","type":"FileInput","alias":"Beta","config":{"fileName":"y.xlsx#S"},
+             "fields":[{"name":"B1","dataType":"C","isDimension":true},
+                       {"name":"B2","dataType":"C","isDimension":true}]},
+            {"key":"u","type":"Union","alias":"u","inputs":["x","y"],
+             "config":{"unionType":"UnionAll","unionMapArray":[
+                 {"values":["A1",""],"visible":true},
+                 {"values":["","B1"],"visible":true},
+                 {"values":["A2","B2"],"visible":true}
+             ]},
+             "fields":[
+                 {"name":"OUT_A","dataType":"C","isDimension":true,"inputField":"A1","inputNode":"Alpha"},
+                 {"name":"OUT_B","dataType":"C","isDimension":true,"inputField":"B1","inputNode":"Beta"},
+                 {"name":"OUT_SECONDARY","dataType":"C","isDimension":true,"inputField":"B2","inputNode":"Beta"}
+             ]},
+            {"key":"out","type":"Output","alias":"out","inputs":["u"]}
+        ]
+    });
+    assert!(spec_errors(&spec).is_empty(), "{:?}", spec_errors(&spec));
+    let tbl = generate(&spec).expect("generate");
+    assert_eq!(field(&tbl, "u", "OUT_A")["inputNode"], json!("Alpha"));
+    assert_eq!(field(&tbl, "u", "OUT_A")["inputField"], json!("A1"));
+    assert_eq!(field(&tbl, "u", "OUT_B")["inputNode"], json!("Beta"));
+    assert_eq!(field(&tbl, "u", "OUT_B")["inputField"], json!("B1"));
+    assert_eq!(
+        field(&tbl, "u", "OUT_SECONDARY")["inputNode"],
+        json!("Alpha")
+    );
+    assert_eq!(field(&tbl, "u", "OUT_SECONDARY")["inputField"], json!("A2"));
+    assert_eq!(
+        field(&tbl, "u", "OUT_SECONDARY")["originalNode"],
+        json!("Alpha")
+    );
+    assert_eq!(
+        field(&tbl, "u", "OUT_SECONDARY")["originalField"],
+        json!("A2")
+    );
+    assert!(wire_errors(&tbl).is_empty(), "{:?}", wire_errors(&tbl));
+
+    // A visible passthrough field that no canonical or secondary value can
+    // produce is still union.mapkey, in declared order.
+    let mut bad = spec.clone();
+    bad["nodes"][2]["fields"] = json!([
+        {"name":"OK","dataType":"C","isDimension":true,"inputField":"A1","inputNode":"Alpha"},
+        {"name":"MISSING","dataType":"C","isDimension":true,"inputField":"NOPE","inputNode":"Beta"}
+    ]);
+    let ds = spec_errors(&bad);
+    assert!(
+        ds.iter()
+            .any(|d| d.rule == "union.mapkey" && d.path.ends_with("/fields/1")),
+        "{:?}",
+        rules(&ds)
+    );
+}
+
+#[test]
 fn union_wire_requires_map_key_for_linked_fields() {
     // hand-built wire: mutate the generated union so a field's
     // inputFieldExp misses every map key -> hard error (Java NPEs on
@@ -929,6 +995,61 @@ fn join_fields_resolve_with_optional_inputnode() {
     assert!(spec_errors(&miss)
         .iter()
         .any(|d| d.rule == "field.notfound"));
+}
+
+#[test]
+fn join_projection_lookup_multi_input_aliases() {
+    // Three inputs whose aliases differ from their keys; duplicate `id`/`shared`
+    // columns require inputNode, while a unique column resolves across inputs.
+    let spec = json!({
+        "format": 1,
+        "properties": {"extractDataEnabled": false},
+        "nodes": [
+            {"key":"n1","type":"FileInput","alias":"Alpha","config":{"fileName":"n1.xlsx#S"},
+             "fields":[{"name":"id","dataType":"C","isDimension":true},
+                       {"name":"shared","dataType":"C","isDimension":true},
+                       {"name":"a_only","dataType":"N","isDimension":false}]},
+            {"key":"n2","type":"FileInput","alias":"Beta","config":{"fileName":"n2.xlsx#S"},
+             "fields":[{"name":"id","dataType":"C","isDimension":true},
+                       {"name":"shared","dataType":"C","isDimension":true},
+                       {"name":"b_only","dataType":"N","isDimension":false}]},
+            {"key":"n3","type":"FileInput","alias":"Gamma","config":{"fileName":"n3.xlsx#S"},
+             "fields":[{"name":"id","dataType":"C","isDimension":true},
+                       {"name":"shared","dataType":"C","isDimension":true},
+                       {"name":"c_only","dataType":"N","isDimension":false}]},
+            {"key":"j","type":"Join","alias":"j","inputs":["n1","n2","n3"],
+             "config":{"joinConditions":[
+                 {"leftTable":"Alpha","rightTable":"Beta","joinType":"InnerJoin",
+                  "clauses":[{"leftExp":"[Alpha].[id]","operator":"=","rightExp":"[Beta].[id]"}]},
+                 {"leftTable":"Beta","rightTable":"Gamma","joinType":"InnerJoin",
+                  "clauses":[{"leftExp":"[Beta].[id]","operator":"=","rightExp":"[Gamma].[id]"}]}
+             ]},
+             "fields":[
+                 {"name":"id","inputNode":"Beta"},
+                 {"name":"a_renamed","inputField":"a_only","inputNode":"Alpha"},
+                 {"name":"c_only"}
+             ]},
+            {"key":"out","type":"Output","alias":"out","inputs":["j"]}
+        ]
+    });
+    assert!(spec_errors(&spec).is_empty(), "{:?}", spec_errors(&spec));
+    let tbl = generate(&spec).expect("generate");
+    let id = field(&tbl, "j", "id");
+    assert_eq!(id["inputNode"], json!("Beta"));
+    assert_eq!(id["inputField"], json!("id"));
+    assert_eq!(id["originalNode"], json!("Beta"));
+    let renamed = field(&tbl, "j", "a_renamed");
+    assert_eq!(renamed["inputNode"], json!("Alpha"));
+    assert_eq!(renamed["inputField"], json!("a_only"));
+    let c = field(&tbl, "j", "c_only");
+    assert_eq!(c["inputNode"], json!("Gamma"));
+    assert!(wire_errors(&tbl).is_empty(), "{:?}", wire_errors(&tbl));
+
+    // The same shared column without inputNode stays ambiguous in declared order.
+    let mut amb = spec.clone();
+    amb["nodes"][3]["fields"] = json!([{"name":"shared"}]);
+    let ds = spec_errors(&amb);
+    assert!(ds.iter().any(|d| d.rule == "field.ambiguous" && d.path.ends_with("/fields/0")), "{:?}", rules(&ds));
 }
 
 // ---------------------------------------------------------------------------

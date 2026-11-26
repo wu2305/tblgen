@@ -79,6 +79,12 @@ fn default_cases() -> Vec<Case> {
             warmup: 3,
         },
         Case {
+            name: "union-map",
+            path: fixture("union-map"),
+            repeats: 30,
+            warmup: 3,
+        },
+        Case {
             name: "error-dense",
             path: fixture("error-dense"),
             repeats: 80,
