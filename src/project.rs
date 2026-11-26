@@ -29,6 +29,10 @@ pub fn locate_new(file: &Path) -> Option<Located> {
     locate_abs(abs.clone()).or_else(|| prospective_locate(&abs))
 }
 
+fn is_app_dir(name: &str) -> bool {
+    name.ends_with(".app")
+}
+
 /// Locate a project for a path whose directories do not exist yet: the
 /// nearest lexical ancestor literally named `data` with a non-`.app`
 /// parent is treated as the prospective `<project>/data` root, matching
@@ -40,7 +44,7 @@ fn prospective_locate(abs: &Path) -> Option<Located> {
         }
         let root = anc.parent()?;
         let name = root.file_name()?.to_string_lossy();
-        if name.ends_with(".app") || name.is_empty() {
+        if is_app_dir(&name) || name.is_empty() {
             continue;
         }
         let rel = abs.strip_prefix(root).ok()?;
@@ -119,7 +123,7 @@ fn locate_abs(abs: PathBuf) -> Option<Located> {
     let mut dir = abs.parent();
     while let Some(d) = dir {
         let name = d.file_name()?.to_string_lossy();
-        if !name.ends_with(".app") && d.join("data").is_dir() {
+        if !is_app_dir(&name) && d.join("data").is_dir() {
             let rel = abs.strip_prefix(d).ok()?;
             let rel: Vec<String> = rel.iter().map(|s| s.to_string_lossy().into_owned()).collect();
             return Some(Located {
@@ -162,8 +166,14 @@ fn resolve_path(base: &str, rel: &str) -> String {
 }
 
 /// `MetaUtils#getParentAppPath`: the enclosing `<name>.app` path, if any.
-fn parent_app_path(p: &str) -> Option<&str> {
-    p.rfind(".app").map(|i| &p[..i + 4])
+fn parent_app_path(mut path: &str) -> Option<&str> {
+    while let Some((parent, name)) = path.rsplit_once('/') {
+        if is_app_dir(name) {
+            return Some(path);
+        }
+        path = parent;
+    }
+    is_app_dir(path).then_some(path)
 }
 
 /// Resolve `reference` as written in the model at `from_file`
@@ -227,6 +237,38 @@ mod tests {
         assert_eq!(resolve_reference(from, "/Q/data/tables/y.tbl").unwrap(), "/Q/data/tables/y.tbl");
         let in_app = "/P/app/s.app/data/x.tbl";
         assert_eq!(resolve_reference(in_app, "$TAPP:/data/y.tbl").unwrap(), "/P/app/s.app/data/y.tbl");
+    }
+
+    #[test]
+    fn resolves_tapp_to_nearest_app_directory() {
+        let from = "/P/app/outer.app/data/内层.app/data/x.tbl";
+        assert_eq!(
+            resolve_reference(from, "$tapp:/data/y.tbl").as_deref(),
+            Some("/P/app/outer.app/data/内层.app/data/y.tbl")
+        );
+
+        let from = "/P/app/outer.app/data/x.app.bak/foo.apple//x.tbl";
+        assert_eq!(
+            resolve_reference(from, "$TAPP:/data/y.tbl").as_deref(),
+            Some("/P/app/outer.app/data/y.tbl")
+        );
+        assert_eq!(
+            resolve_reference(from, "$tapp:tail").as_deref(),
+            Some("/P/app/outer.apptail")
+        );
+    }
+
+    #[test]
+    fn tapp_requires_an_app_directory() {
+        for from in [
+            "/P/data/foo.apple/x.tbl",
+            "/P/data/x.app.bak/x.tbl",
+            "/P/data/outer.APP/x.tbl",
+            r"/P/data/outer.app\ordinary/x.tbl",
+            "/P/data/x.app",
+        ] {
+            assert_eq!(resolve_reference(from, "$tapp:/data/y.tbl"), None, "{from}");
+        }
     }
 
     #[test]
