@@ -632,6 +632,54 @@ fn wire_step_name_collisions_are_errors() {
 }
 
 #[test]
+fn wire_select_duplicate_names_keep_multiset_membership() {
+    let field = |name: &str| json!({"name":name,"dataType":"C","isDimension":true});
+    let source = json!([field("ID"), field("SKU"), field("sku")]);
+    let output = json!([field("ID"), field("ABC"), field("sku")]);
+    let mk = |steps: Value, fields: Value| {
+        json!({"dataFlow":{"nodes":{
+            "src":{"id":"src","type":"FileInput","alias":"src","fileName":"x.xlsx#S",
+                   "fields":source},
+            "sel":{"id":"sel","type":"Select","alias":"sel","inputNodes":["src"],
+                   "fields":fields,"steps":steps},
+            "default":{"id":"default","type":"Output","alias":"out","inputNodes":["sel"],
+                       "fields":[]}
+        }}})
+    };
+
+    // Refactor renames only the first matching occurrence: the duplicate SKU
+    // remains available to later steps.
+    let renamed = mk(
+        json!([
+            {"type":"Refactor","fields":["SKU"],"refactor":{"rename":"ABC"}},
+            {"type":"ToUppercase","fields":["sku"]}
+        ]),
+        output,
+    );
+    let ds = wire_errors(&renamed);
+    assert!(
+        !ds.iter().any(|d| d.rule == "err.dataflow.stepField.notfound"),
+        "{:?}",
+        rules(&ds)
+    );
+
+    // RemoveField still removes every occurrence of the folded name.
+    let removed = mk(
+        json!([
+            {"type":"RemoveField","fields":["SKU"]},
+            {"type":"ToUppercase","fields":["sku"]}
+        ]),
+        json!([field("ID")]),
+    );
+    let ds = wire_errors(&removed);
+    assert!(
+        ds.iter().any(|d| d.rule == "err.dataflow.stepField.notfound"),
+        "{:?}",
+        rules(&ds)
+    );
+}
+
+#[test]
 fn wire_select_final_set_must_match_steps() {
     // provable steps: RemoveField sku -> the declared output must be [ID];
     // a stale declaration keeping SKU is a mismatch.

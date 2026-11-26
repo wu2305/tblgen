@@ -55,4 +55,5 @@ tblgen check projects/P
 
 - **DataFlow 修复与回归**：typed `gen` 在返回前校验生成的 wire；原实验中的 8 个 AddField 操作数错误和 10 个 Union 映射错误均已有回归覆盖。参见 [测试样本来源](tests/fixtures/PROVENANCE.md)。
 - **性能与校验覆盖**：[基准记录](benches/README.md)与[功能消融](benches/check-ablation.md)区分了算法提速和跳过检查的代价，附原始配对计时和复跑方法。
-- **后续工作**：[优化交接清单](benches/optimization-handoff.md)列出 28 项候选。建议优先测 Select 步骤推演、CLI 各阶段和 typed 生成基线，并单独核查血缘警告的有效性；这些是待验证方向，不是已交付功能。
+- **Select 步骤索引**：[S1 spike](benches/select-step-spike.md)保留有序投影语义，用多重集索引加速字段存在性查询；实验 wire 纯检查配对中位数下降 25.5%，附小输入代价和等价证据。
+- **后续工作**：[优化交接清单](benches/optimization-handoff.md)列出 28 项候选。建议优先测 CLI 各阶段和 typed 生成基线，并单独核查血缘警告的有效性；这些是待验证方向，不是已交付功能。
