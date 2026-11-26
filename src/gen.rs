@@ -248,9 +248,9 @@ fn compile_generated(
 }
 
 /// Translate a wire `.tbl` diagnostic path into the spec path that produced
-/// it. Node bodies map by wire map key; generated keys keep their tail,
-/// config keys route under `/config`, everything else under `/raw` (or
-/// `/rawNode` for rawNode entries whose body is verbatim).
+/// it. Node bodies map by wire map key; inputNodes maps to inputs, other
+/// generated keys keep their tail, and payload keys route under `/config`
+/// or `/raw` (`/rawNode` for verbatim node bodies).
 fn map_wire_diag(wd: Diag, descs: &[NodeDesc]) -> Diag {
     let p = wd.path;
     let remap = |path: String| Diag {
@@ -277,7 +277,9 @@ fn map_wire_diag(wd: Diag, descs: &[NodeDesc]) -> Diag {
                     None => base,
                     Some(t) => {
                         let seg = t.split('/').next().unwrap_or("");
-                        if GENERATED_NODE_KEYS.contains(&seg) {
+                        if seg == "inputNodes" {
+                            format!("{}/inputs{}", base, &t[seg.len()..])
+                        } else if GENERATED_NODE_KEYS.contains(&seg) {
                             // a wire step that decompiles to rawStep lives
                             // under steps/N/rawStep in the spec
                             if let Some((n, rest)) =
@@ -300,8 +302,6 @@ fn map_wire_diag(wd: Diag, descs: &[NodeDesc]) -> Diag {
                                 }
                             }
                             format!("{}/{}", base, t)
-                        } else if seg == "inputNodes" {
-                            format!("{}/inputs/{}", base, &t["inputNodes/".len()..])
                         } else {
                             // route by where the spec actually put the key:
                             // config first, then raw, then the type whitelist
@@ -978,21 +978,10 @@ fn validate_config(v: &Value, ty: &str, path: &str, diags: &mut Vec<Diag>) {
             };
             if !ok {
                 diags.push(Diag::spec(
-                    kpath.clone(),
+                    kpath,
                     "structure.config.type",
                     format!("config.{} must be a {:?} scalar", k, kind),
                 ));
-            }
-            if k == "unionType" {
-                if let Some(su) = kv.as_str() {
-                    if !UNION_TYPES.contains(&su) {
-                        diags.push(Diag::spec(
-                            kpath.clone(),
-                            "enum.unionType",
-                            format!("unknown unionType {:?}", su),
-                        ));
-                    }
-                }
             }
             continue;
         }
@@ -1439,19 +1428,34 @@ fn validate_closed_config(v: &Value, kind: ClosedKind, path: &str, diags: &mut V
                                     ));
                                 }
                             }
-                            for k in ["name", "dataType"] {
-                                if co
-                                    .get(k)
-                                    .and_then(Value::as_str)
-                                    .map(|s| s.is_empty())
-                                    .unwrap_or(true)
-                                {
-                                    diags.push(Diag::spec(
-                                        format!("{}/{}", cp, k),
-                                        "field.required",
-                                        format!("field reference requires non-empty {}", k),
-                                    ));
+                            // The typed cell has an explicit field reference
+                            // shape, including metadata the wire loader can omit.
+                            match co.get("name").and_then(Value::as_str) {
+                                Some(name) => {
+                                    if let Some((rule, message)) = col_to_row_empty_name(name) {
+                                        diags.push(Diag::spec(
+                                            format!("{}/name", cp),
+                                            rule,
+                                            message,
+                                        ));
+                                    }
                                 }
+                                None => diags.push(Diag::spec(
+                                    format!("{}/name", cp),
+                                    "field.required",
+                                    "field reference requires a string name",
+                                )),
+                            }
+                            if !co
+                                .get("dataType")
+                                .and_then(Value::as_str)
+                                .is_some_and(|s| !s.is_empty())
+                            {
+                                diags.push(Diag::spec(
+                                    format!("{}/dataType", cp),
+                                    "field.required",
+                                    "field reference requires non-empty dataType",
+                                ));
                             }
                         }
                     }
@@ -2139,11 +2143,6 @@ fn validate_subprocesses(spec: &Value, diags: &mut Vec<Diag>) {
 // ---------------------------------------------------------------------------
 
 fn validate_graph_semantics(spec: &Value, descs: &[NodeDesc], diags: &mut Vec<Diag>) {
-    let key_to_idx: HashMap<&str, usize> = descs
-        .iter()
-        .enumerate()
-        .map(|(i, d)| (d.key.as_str(), i))
-        .collect();
     // name-resolution memo shared across per-node checks
     let key_to_idx_s: HashMap<String, usize> = descs
         .iter()
@@ -2167,94 +2166,14 @@ fn validate_graph_semantics(spec: &Value, descs: &[NodeDesc], diags: &mut Vec<Di
         let Some(sn) = d.spec else { continue }; // rawNode: no typed semantics
         let ty = d.ty.as_deref().unwrap_or("");
         let n = d.inputs.len();
-        // arity (mirrors check rules; spec paths)
-        let arity_path = format!("/nodes/{}/inputs", d.idx);
-        match ty {
-            "Select" | "Output" | "DbOutput" => {
-                if n != 1 {
-                    diags.push(Diag::spec(
-                        arity_path,
-                        "err.dataflow.node.input",
-                        format!("{} requires exactly 1 input, found {}", ty, n),
-                    ));
-                }
-            }
-            "Join" => {
-                if n < 2 {
-                    diags.push(Diag::spec(
-                        arity_path,
-                        "err.dataflow.node.input",
-                        format!("Join requires at least 2 inputs, found {}", n),
-                    ));
-                }
-            }
-            "Union" => {
-                if n == 0 {
-                    diags.push(Diag::spec(
-                        arity_path,
-                        "err.dataflow.node.input",
-                        "Union requires at least 1 input",
-                    ));
-                }
-            }
-            "Agg" | "Distinct" => {
-                // the contributors read the FIRST input only — extra inputs
-                // would be silently ignored
-                if n != 1 {
-                    diags.push(Diag::spec(
-                        arity_path,
-                        "err.dataflow.node.input",
-                        format!("{} requires exactly 1 input, found {}", ty, n),
-                    ));
-                }
-            }
-            "RowToCol" | "ColToRow" | "Snapshot" | "Update" => {
-                if n == 0 {
-                    diags.push(Diag::spec(
-                        arity_path,
-                        "err.dataflow.node.input",
-                        format!("{} requires at least 1 input", ty),
-                    ));
-                }
-            }
-            "FileInput" | "ModelTable" => {
-                if n > 0 {
-                    diags.push(Diag::spec(
-                        arity_path,
-                        "err.dataflow.node.input",
-                        format!("{} takes no graph inputs", ty),
-                    ));
-                }
-            }
-            "DbTable" => {
-                for inp in &d.inputs {
-                    if let Some(&j) = key_to_idx.get(inp.as_str()) {
-                        let it = descs[j].ty.as_deref().unwrap_or("");
-                        if it != "Sql" && it != "Script" {
-                            diags.push(Diag::spec(
-                                arity_path.clone(),
-                                "graph.dbtable.predecessor",
-                                format!("DbTable predecessor must be Sql or Script, found {}", it),
-                            ));
-                        }
-                    }
-                }
-            }
-            "Sql" => {
-                for inp in &d.inputs {
-                    if let Some(&j) = key_to_idx.get(inp.as_str()) {
-                        let it = descs[j].ty.as_deref().unwrap_or("");
-                        if it != "Sql" && it != "DbOutput" {
-                            diags.push(Diag::spec(
-                                arity_path.clone(),
-                                "graph.sql.predecessor",
-                                format!("Sql predecessor must be Sql or DbOutput, found {}", it),
-                            ));
-                        }
-                    }
-                }
-            }
-            _ => {}
+        // Hard input counts protect projection. Advisory topology diagnostics
+        // come from the emitted wire, including for rawNode bodies.
+        if let Some(message) = node_input_arity_error(ty, n) {
+            diags.push(Diag::spec(
+                format!("/nodes/{}/inputs", d.idx),
+                NODE_INPUT_ARITY_RULE,
+                message,
+            ));
         }
 
         // fields requirement / derivability
@@ -2295,22 +2214,11 @@ fn validate_graph_semantics(spec: &Value, descs: &[NodeDesc], diags: &mut Vec<Di
                 ));
             }
         }
-        if ty == "Join" && n >= 2 {
-            check_spec_join_conditions(sn, d, descs, &key_to_idx, diags);
-        }
         if ty == "Union" {
-            check_spec_union(sn, d, diags);
+            check_union_projection_widths(sn, d, diags);
         }
         if ty == "ColToRow" {
-            check_spec_col_to_row(sn, d.idx, diags);
-            check_col_to_row_refs(
-                d,
-                descs,
-                &key_to_idx_s,
-                &mut name_memo,
-                &mut name_visiting,
-                diags,
-            );
+            check_spec_col_to_row_headers(sn, d.idx, diags);
         }
         if ty == "Select" {
             check_select_names(
@@ -2323,24 +2231,7 @@ fn validate_graph_semantics(spec: &Value, descs: &[NodeDesc], diags: &mut Vec<Di
                 diags,
             );
         }
-        if ty == "Update" && n > 1 {
-            // updateConditions is not a closed typed config — it may arrive
-            // via node `raw` (explicit escape) or `config` (rejected earlier,
-            // tolerated here for the semantic check).
-            let ok = cfg
-                .and_then(|c| c.get("updateConditions"))
-                .or_else(|| sn.get("raw").and_then(|r| r.get("updateConditions")))
-                .and_then(Value::as_array)
-                .map(|a| !a.is_empty())
-                .unwrap_or(false);
-            if !ok {
-                diags.push(Diag::spec(
-                    format!("/nodes/{}/config/updateConditions", d.idx),
-                    "err.dataflow.update.conditions",
-                    "Update with >1 input requires updateConditions",
-                ));
-            }
-        }
+
         // raw collision with generated keys AND config keys: both are
         // emitted onto the same wire object, so an overlap would silently
         // overwrite regardless of whether the values agree.
@@ -2580,44 +2471,14 @@ fn check_select_names(
                 break; // tracking lost
             }
             let ty = st.get("type").and_then(Value::as_str).unwrap_or("");
-            // Java checkStep exempts Text2Id only when it carries srcField
-            let operated = matches!(
-                ty,
-                "RemoveField"
-                    | "SplitField"
-                    | "Refactor"
-                    | "SubString"
-                    | "Replace"
-                    | "ToUppercase"
-                    | "ToLowercase"
-                    | "ToNumber"
-                    | "ToDate"
-                    | "ToSynonym"
-                    | "Trim"
-                    | "DeleteNumbers"
-                    | "DeleteLetters"
-                    | "DeleteSpechars"
-                    | "DeletePunctuations"
-                    | "ExcludeEmpty"
-                    | "ExtractNumber"
-                    | "TransformToCalculatedField"
-                    | "Distinct"
-                    | "GroupNumber"
-                    | "ReGroup"
-            ) || (ty == "Text2Id"
-                && st
-                    .pointer("/text2id/srcField")
-                    .and_then(Value::as_str)
-                    .map(|x| x.is_empty())
-                    .unwrap_or(true));
-            if operated {
+            if step_requires_existing_fields(ty, st) {
                 if let Some(fl) = st.get("fields").and_then(Value::as_array) {
                     for (fi, fv) in fl.iter().enumerate() {
                         if let Some(name) = fv.as_str() {
-                            if ty != "RemoveField" && !current.iter().any(|c| field_eq(c, name)) {
+                            if !current.iter().any(|c| field_eq(c, name)) {
                                 diags.push(Diag::spec(
                                     format!("/nodes/{}/steps/{}/fields/{}", d.idx, si, fi),
-                                    "err.dataflow.stepField.notfound",
+                                    STEP_FIELD_NOT_FOUND,
                                     format!("step {} references unknown field {:?}", ty, name),
                                 ));
                             }
@@ -2707,203 +2568,35 @@ fn check_select_names(
     }
 }
 
-/// ColToRow valuesArray {name,dataType} references must exist in the
-/// predecessor's provable field set.
-fn check_col_to_row_refs(
-    d: &NodeDesc,
-    descs: &[NodeDesc],
-    key_to_idx: &HashMap<String, usize>,
-    memo: &mut HashMap<String, Option<Vec<String>>>,
-    visiting: &mut HashSet<String>,
-    diags: &mut Vec<Diag>,
-) {
-    let Some(sn) = d.spec else { return };
-    let Some(pred_key) = d.inputs.first() else {
-        return;
-    };
-    let Some(pred_names) = resolve_field_names(descs, key_to_idx, pred_key, memo, visiting) else {
-        return;
-    };
-    let Some(info) = sn
-        .get("config")
-        .and_then(|c| c.get("colToRowInfo"))
-        .and_then(Value::as_object)
-    else {
-        return;
-    };
-    let Some(rows) = info.get("valuesArray").and_then(Value::as_array) else {
-        return;
-    };
-    for (ri, row) in rows.iter().enumerate() {
-        let Some(rarr) = row.as_array() else {
-            continue;
-        };
-        for (ci, cell) in rarr.iter().enumerate() {
-            if let Some(co) = cell.as_object() {
-                if let Some(nm) = co.get("name").and_then(Value::as_str) {
-                    if !pred_names.iter().any(|p| field_eq(p, nm)) {
-                        diags.push(Diag::spec(
-                            format!(
-                                "/nodes/{}/config/colToRowInfo/valuesArray/{}/{}",
-                                d.idx, ri, ci
-                            ),
-                            "field.notfound",
-                            format!(
-                                "ColToRow field reference {:?} not found in predecessor fields {:?}",
-                                nm, pred_names
-                            ),
-                        ));
-                    }
-                }
-            }
-        }
-    }
-}
-
-fn spec_node_alias<'a>(descs: &'a [NodeDesc], key: &str) -> Option<&'a str> {
-    descs
-        .iter()
-        .find(|d| d.key == key)
-        .map(|d| d.alias.as_deref().unwrap_or(d.key.as_str()))
-}
-
-fn check_spec_join_conditions(
-    sn: &Value,
-    d: &NodeDesc,
-    descs: &[NodeDesc],
-    _key_to_idx: &HashMap<&str, usize>,
-    diags: &mut Vec<Diag>,
-) {
-    let cfg = sn.get("config").and_then(Value::as_object);
-    let Some(conds) = cfg
-        .and_then(|c| c.get("joinConditions"))
+/// Projection indexes input aliases by the positions in each effective row.
+fn check_union_projection_widths(sn: &Value, d: &NodeDesc, diags: &mut Vec<Diag>) {
+    let Some(rows) = sn
+        .pointer("/config/unionMapArray")
         .and_then(Value::as_array)
     else {
         return;
     };
-    let n = d.inputs.len();
-    if conds.len() != n - 1 {
-        diags.push(Diag::spec(
-            format!("/nodes/{}/config/joinConditions", d.idx),
-            "join.conditions.count",
-            format!(
-                "joinConditions count {} != inputs-1 ({})",
-                conds.len(),
-                n - 1
-            ),
-        ));
-    }
-    // Java resolves leftTable/rightTable against node ALIASES only — the
-    // spec key is not an alias unless it was declared as one.
-    let mut aliases: HashSet<String> = HashSet::new();
-    for inp in &d.inputs {
-        if let Some(a) = spec_node_alias(descs, inp) {
-            aliases.insert(a.to_string());
+    for (i, row) in rows.iter().enumerate() {
+        if !union_row_is_visible(row) {
+            continue;
         }
-    }
-    for (i, c) in conds.iter().enumerate() {
-        for side in ["leftTable", "rightTable"] {
-            if let Some(t) = c.get(side).and_then(Value::as_str) {
-                if !t.is_empty() && !aliases.iter().any(|a| field_eq(a, t)) {
-                    diags.push(Diag::spec(
-                        format!("/nodes/{}/config/joinConditions/{}/{}", d.idx, i, side),
-                        "join.condition.alias",
-                        format!("{} {:?} does not match any input node alias", side, t),
-                    ));
-                }
-            }
-        }
-        // clause AND condition-level expressions qualify fields as
-        // [alias].[field]; a qualifier that is an input's spec KEY (but not
-        // its alias) resolves to nothing at runtime — reject it. Quoted
-        // literals are skipped by the shared scanner.
-        let mut scan = |e: &str, epath: String| {
-            for q in exp_table_qualifiers(e) {
-                let is_key = d.inputs.iter().any(|k| field_eq(k, &q));
-                let is_alias = d
-                    .inputs
-                    .iter()
-                    .filter_map(|k| spec_node_alias(descs, k))
-                    .any(|a| field_eq(a, &q));
-                if is_key && !is_alias {
-                    diags.push(Diag::spec(
-                        epath.clone(),
-                        "join.condition.qualifier",
-                        format!("expression qualifier {:?} is a node key, not an alias", q),
-                    ));
-                }
-            }
+        // The closed spec shape checks that values exists and is an array.
+        let Some(values) = row.get("values").and_then(Value::as_array) else {
+            continue;
         };
-        if let Some(e) = c.get("exp").and_then(Value::as_str) {
-            scan(
-                e,
-                format!("/nodes/{}/config/joinConditions/{}/exp", d.idx, i),
-            );
-        }
-        for (ci, cl) in c
-            .get("clauses")
-            .and_then(Value::as_array)
-            .map(|a| a.iter().enumerate().collect::<Vec<_>>())
-            .unwrap_or_default()
-        {
-            for ek in ["leftExp", "rightExp", "exp"] {
-                if let Some(e) = cl.get(ek).and_then(Value::as_str) {
-                    scan(
-                        e,
-                        format!(
-                            "/nodes/{}/config/joinConditions/{}/clauses/{}/{}",
-                            d.idx, i, ci, ek
-                        ),
-                    );
-                }
-            }
-        }
-    }
-}
-
-fn check_spec_union(sn: &Value, d: &NodeDesc, diags: &mut Vec<Diag>) {
-    let cfg = sn.get("config").and_then(Value::as_object);
-    if let Some(ut) = cfg.and_then(|c| c.get("unionType")) {
-        if let Some(s) = ut.as_str() {
-            if !["UnionAll", "Union", "Minus", "Intersect"].contains(&s) {
-                diags.push(Diag::spec(
-                    format!("/nodes/{}/config/unionType", d.idx),
-                    "enum.unionType",
-                    format!("unknown unionType {:?}", s),
-                ));
-            }
-        } else {
+        if let Some(message) = union_row_width_error(i, values.len(), d.inputs.len()) {
             diags.push(Diag::spec(
-                format!("/nodes/{}/config/unionType", d.idx),
-                "structure.unionType",
-                "unionType must be a string",
+                format!("/nodes/{}/config/unionMapArray/{}/values", d.idx, i),
+                UNION_MAP_KEY_RULE,
+                message,
             ));
         }
     }
-    if let Some(map) = cfg
-        .and_then(|c| c.get("unionMapArray"))
-        .and_then(Value::as_array)
-    {
-        for (i, item) in map.iter().enumerate() {
-            if let Some(vals) = item.get("values").and_then(Value::as_array) {
-                if vals.len() != d.inputs.len() {
-                    diags.push(Diag::spec(
-                        format!("/nodes/{}/config/unionMapArray/{}/values", d.idx, i),
-                        "structure.unionMap",
-                        format!(
-                            "unionMapArray[{}].values length {} != input count {}",
-                            i,
-                            vals.len(),
-                            d.inputs.len()
-                        ),
-                    ));
-                }
-            }
-        }
-    }
 }
 
-fn check_spec_col_to_row(sn: &Value, idx: usize, diags: &mut Vec<Diag>) {
+/// The typed spec requires pivot headers to be declared as output fields.
+/// Row widths and source references are checked on the emitted wire.
+fn check_spec_col_to_row_headers(sn: &Value, idx: usize, diags: &mut Vec<Diag>) {
     let Some(info) = sn
         .get("config")
         .and_then(|c| c.get("colToRowInfo"))
@@ -2940,44 +2633,6 @@ fn check_spec_col_to_row(sn: &Value, idx: usize, diags: &mut Vec<Diag>) {
                         i, name
                     ),
                 ));
-            }
-        }
-    }
-    for (r, row) in v.iter().enumerate() {
-        if let Some(rarr) = row.as_array() {
-            if rarr.len() != h.len() {
-                diags.push(Diag::spec(
-                    format!("/nodes/{}/config/colToRowInfo/valuesArray/{}", idx, r),
-                    "err.dataflow.colToRow.config",
-                    format!(
-                        "valuesArray[{}] width {} != headers width {}",
-                        r,
-                        rarr.len(),
-                        h.len()
-                    ),
-                ));
-            }
-            for (c, cell) in rarr.iter().enumerate() {
-                if let Some(co) = cell.as_object() {
-                    // {name,dataType} field reference: both required non-empty
-                    for k in ["name", "dataType"] {
-                        if co
-                            .get(k)
-                            .and_then(Value::as_str)
-                            .map(|s| s.is_empty())
-                            .unwrap_or(true)
-                        {
-                            diags.push(Diag::spec(
-                                format!(
-                                    "/nodes/{}/config/colToRowInfo/valuesArray/{}/{}",
-                                    idx, r, c
-                                ),
-                                "field.required",
-                                format!("valuesArray field reference requires non-empty {}", k),
-                            ));
-                        }
-                    }
-                }
             }
         }
     }
@@ -3969,8 +3624,7 @@ fn compute_union_fields(
     let mut key_seen: HashSet<(String, String)> = HashSet::new();
     if let Some(arr) = map {
         for (ri, item) in arr.iter().enumerate() {
-            let visible = item.get("visible").and_then(Value::as_bool).unwrap_or(true);
-            if !visible {
+            if !union_row_is_visible(item) {
                 continue;
             }
             let Some(vals) = item.get("values").and_then(Value::as_array) else {
@@ -3991,7 +3645,7 @@ fn compute_union_fields(
                 continue; // all empty: Java produces no map key
             };
             if kpos >= preds.len() {
-                continue; // width mismatch already diagnosed
+                continue; // projection widths are checked before field computation
             }
             let key_alias_key = lookup.aliases[kpos].to_uppercase();
             let key_field_key = kfield.to_uppercase();

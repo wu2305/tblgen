@@ -8,7 +8,7 @@
 use serde_json::{json, Value};
 use tblgen::check::check;
 use tblgen::decompile::decompile;
-use tblgen::gen::{generate, validate_spec};
+use tblgen::gen::{generate, generate_with_diagnostics, validate_spec};
 use tblgen::model::Diag;
 
 fn fixture(rel: &str) -> Value {
@@ -34,6 +34,16 @@ fn rules(diags: &[Diag]) -> Vec<String> {
 
 fn wire_errors(tbl: &Value) -> Vec<Diag> {
     check(tbl).into_iter().filter(|d| !d.is_warning()).collect()
+}
+
+fn assert_single_diag<'a>(diags: &'a [Diag], rule: &str, path: &str, warning: bool) -> &'a Diag {
+    let matches: Vec<_> = diags
+        .iter()
+        .filter(|d| d.rule == rule && d.path == path)
+        .collect();
+    assert_eq!(matches.len(), 1, "{rule} @ {path}: {diags:?}");
+    assert_eq!(matches[0].is_warning(), warning);
+    matches[0]
 }
 
 fn node<'a>(tbl: &'a Value, key: &str) -> &'a Value {
@@ -274,6 +284,52 @@ fn join_clause_qualifier_must_be_an_alias() {
         assert!(wire_errors(&tbl)
             .iter()
             .any(|d| d.rule == "join.condition.qualifier"));
+    }
+}
+
+#[test]
+fn join_condition_diagnostics_follow_the_emitted_aliases_and_map_back_to_config() {
+    let mut valid = join_alias_spec("LEFT", "right", "[left].[ID]", "[RIGHT].[ID]");
+    valid["nodes"][2]["id"] = json!("j/~wire");
+    valid["nodes"][2]["config"]["joinConditions"][0]["exp"] = json!("[LEFT].[ID] = [RIGHT].[ID]");
+    let valid_wire = generate(&valid).unwrap();
+    for (tail, value, rule) in [
+        ("/0/leftTable", json!("l"), "join.condition.alias"),
+        (
+            "/0/clauses/0/leftExp",
+            json!("[unknown].[ID]"),
+            "join.condition.qualifier",
+        ),
+        (
+            "/0/exp",
+            json!("[l].[ID] = [right].[ID]"),
+            "join.condition.qualifier",
+        ),
+        (
+            "/0/exp",
+            json!("[unknown].[ID] = [right].[ID]"),
+            "join.condition.qualifier",
+        ),
+        ("", json!([]), "join.conditions.count"),
+    ] {
+        let spec_path = format!("/nodes/2/config/joinConditions{tail}");
+        let wire_path = format!("/dataFlow/nodes/j~1~0wire/joinConditions{tail}");
+        let (mut spec, mut wire) = (valid.clone(), valid_wire.clone());
+        *spec.pointer_mut(&spec_path).unwrap() = value.clone();
+        *wire.pointer_mut(&wire_path).unwrap() = value;
+        let (generated, diags) = generate_with_diagnostics(&spec);
+        assert!(generated.is_none());
+        assert_eq!(
+            diags.iter().filter(|d| d.rule == rule).count(),
+            1,
+            "{diags:?}"
+        );
+        let spec_diag = assert_single_diag(&diags, rule, &spec_path, false);
+        let wire_diags = check(&wire);
+        let wire_diag = assert_single_diag(&wire_diags, rule, &wire_path, false);
+        assert_eq!(spec_diag.message, wire_diag.message);
+        assert_eq!(spec_diag.source, wire_diag.source);
+        assert!(!spec_diag.source.is_empty());
     }
 }
 
@@ -555,7 +611,7 @@ fn union_map_renamed_output_via_inputfield() {
 fn union_map_hidden_rows_and_legacy_no_map() {
     // visible:false rows produce no map key; fields never reference them.
     let spec = union_spec(
-        json!([{"values":["P1","Q1"],"visible":false},
+        json!([{"values":["P1"],"visible":false},
                {"values":["P2","Q2"],"visible":true}]),
         json!([{"name":"F2","dataType":"N","isDimension":false,"inputField":"P2"}]),
     );
@@ -563,6 +619,44 @@ fn union_map_hidden_rows_and_legacy_no_map() {
     let tbl = generate(&spec).expect("generate");
     assert_eq!(field(&tbl, "u", "F2")["inputField"], json!("P2"));
     assert!(wire_errors(&tbl).is_empty(), "{:?}", wire_errors(&tbl));
+    assert_eq!(node(&tbl, "u")["unionMapArray"][0]["values"], json!(["P1"]));
+    let round_trip = decompile(&tbl).unwrap();
+    assert!(round_trip.get("nodes").is_some(), "{round_trip:?}");
+    assert_eq!(generate(&round_trip).unwrap(), tbl);
+
+    // Hiding a row does not exempt it from the typed spec's JSON shape.
+    let mut missing_values = spec.clone();
+    missing_values["nodes"][2]["config"]["unionMapArray"][0] = json!({"visible":false});
+    assert_single_diag(
+        &spec_errors(&missing_values),
+        "field.required",
+        "/nodes/2/config/unionMapArray/0/values",
+        false,
+    );
+
+    // The same short row is an error once visible. Width is diagnosed
+    // before Union projection can emit a misleading field lookup error.
+    let (mut visible_spec, mut visible_wire) = (spec, tbl);
+    visible_spec["nodes"][2]["config"]["unionMapArray"][0]["visible"] = json!(true);
+    visible_wire["dataFlow"]["nodes"]["u"]["unionMapArray"][0]["visible"] = json!(true);
+    let errors = spec_errors(&visible_spec);
+    assert_eq!(errors.len(), 1, "{errors:?}");
+    let spec_diag = assert_single_diag(
+        &errors,
+        "union.mapkey",
+        "/nodes/2/config/unionMapArray/0/values",
+        false,
+    );
+    let wire_diags = wire_errors(&visible_wire);
+    let wire_diag = assert_single_diag(
+        &wire_diags,
+        "union.mapkey",
+        "/dataFlow/nodes/u/unionMapArray/0/values",
+        false,
+    );
+    assert_eq!(spec_diag.message, wire_diag.message);
+    assert!(spec_diag.source.is_empty());
+    assert!(!wire_diag.source.is_empty());
 
     // no unionMapArray at all -> legacy per-input name resolution; no key
     // checks apply.
@@ -1973,4 +2067,225 @@ fn original_node_may_name_any_node_and_empty_operands_skip_steps() {
             {"key":"out","type":"Output","alias":"out","inputs":["sel"]}
         ]});
     assert!(rules(&spec_errors(&spec)).contains(&"field.required".to_string()));
+}
+
+#[test]
+fn col_to_row_uses_platform_reference_rules_and_keeps_typed_metadata() {
+    let fields = json!([{"name":"header","dataType":"C","isDimension":true}]);
+    let valid = json!({
+        "format":1, "properties":{"extractDataEnabled":false},
+        "nodes":[
+            {"key":"src","type":"FileInput","config":{"fileName":"d.xlsx#S"},
+             "fields":[{"name":"input","dataType":"C","isDimension":true}]},
+            {"key":"pivot","type":"ColToRow","inputs":["src"],"fields":fields,
+             "config":{"colToRowInfo":{"headers":["header"],
+                                      "valuesArray":[[{"name":"INPUT","dataType":"C"}]]}}},
+            {"key":"out","type":"Output","inputs":["pivot"]}
+        ]
+    });
+    let valid_wire = generate(&valid).unwrap();
+    for (row, tail, rule, has_platform_source) in [
+        (json!([[]]), "/0", "err.dataflow.colToRow.config", true),
+        (
+            json!([[{"name":"","dataType":"C"}]]),
+            "/0/0/name",
+            "field.name",
+            false,
+        ),
+        (
+            json!([[{"name":"missing","dataType":"C"}]]),
+            "/0/0/name",
+            "field.notfound",
+            true,
+        ),
+    ] {
+        let (mut spec, mut wire) = (valid.clone(), valid_wire.clone());
+        let spec_base = "/nodes/1/config/colToRowInfo/valuesArray";
+        let wire_base = "/dataFlow/nodes/pivot/colToRowInfo/valuesArray";
+        *spec.pointer_mut(spec_base).unwrap() = row.clone();
+        *wire.pointer_mut(wire_base).unwrap() = row;
+        let errors = spec_errors(&spec);
+        assert_eq!(errors.len(), 1, "{errors:?}");
+        let spec_diag = assert_single_diag(&errors, rule, &format!("{spec_base}{tail}"), false);
+        let wire_diags = wire_errors(&wire);
+        let wire_diag = assert_single_diag(&wire_diags, rule, &format!("{wire_base}{tail}"), false);
+        assert_eq!(spec_diag.message, wire_diag.message);
+        assert!(!wire_diag.source.is_empty());
+        assert_eq!(!spec_diag.source.is_empty(), has_platform_source);
+        if has_platform_source {
+            assert_eq!(spec_diag.source, wire_diag.source);
+        }
+    }
+    for cell in [
+        json!({"name":"input"}),
+        json!({"name":"input","dataType":""}),
+    ] {
+        let (mut spec, mut wire) = (valid.clone(), valid_wire.clone());
+        spec["nodes"][1]["config"]["colToRowInfo"]["valuesArray"][0][0] = cell.clone();
+        wire["dataFlow"]["nodes"]["pivot"]["colToRowInfo"]["valuesArray"][0][0] = cell;
+        let errors = spec_errors(&spec);
+        assert_eq!(errors.len(), 1, "{errors:?}");
+        assert_single_diag(
+            &errors,
+            "field.required",
+            "/nodes/1/config/colToRowInfo/valuesArray/0/0/dataType",
+            false,
+        );
+        assert!(wire_errors(&wire).is_empty());
+    }
+    let mut wrong_header = valid;
+    wrong_header["nodes"][1]["config"]["colToRowInfo"]["headers"] = json!(["undeclared"]);
+    assert_single_diag(
+        &spec_errors(&wrong_header),
+        "field.name",
+        "/nodes/1/config/colToRowInfo/headers/0",
+        false,
+    );
+}
+
+#[test]
+fn topology_keeps_hard_errors_and_remaps_platform_warnings_once() {
+    let fields = json!([{"name":"ID","dataType":"C","isDimension":true}]);
+    let spec = json!({
+        "format":1, "properties":{"extractDataEnabled":false},
+        "nodes":[
+            {"key":"src","id":"source/~wire","type":"FileInput","fields":fields,
+             "config":{"fileName":"d.xlsx#S"}},
+            {"key":"row","type":"RowToCol","fields":fields},
+            {"key":"col","type":"ColToRow","fields":fields},
+            {"key":"snap","type":"Snapshot","fields":fields},
+            {"key":"upd","type":"Update","fields":fields},
+            {"key":"db","type":"DbTable","inputs":["src"],"fields":fields},
+            {"key":"sql","type":"Sql","inputs":["src"],"fields":fields},
+            {"key":"sel","type":"Select","inputs":["src"]},
+            {"key":"out","type":"Output","inputs":["sel"]}
+        ]
+    });
+    let (wire, diags) = generate_with_diagnostics(&spec);
+    let wire = wire.unwrap_or_else(|| panic!("{diags:?}"));
+    let wire_diags = check(&wire);
+    for (index, id, rule) in [
+        (1, "row", "warn.warn.node.noInput"),
+        (2, "col", "warn.warn.node.noInput"),
+        (3, "snap", "warn.warn.node.noInput"),
+        (4, "upd", "warn.warn.node.noInput"),
+        (5, "db", "warn.editor.dbtable.predecessor"),
+        (6, "sql", "warn.editor.sql.predecessor"),
+    ] {
+        let spec_path = format!("/nodes/{index}/inputs");
+        let wire_path = format!("/dataFlow/nodes/{id}/inputNodes");
+        let spec_diag = assert_single_diag(&diags, rule, &spec_path, true);
+        let wire_diag = assert_single_diag(&wire_diags, rule, &wire_path, true);
+        assert_eq!(spec_diag.message, wire_diag.message);
+        assert_eq!(spec_diag.source, wire_diag.source);
+        assert!(!spec_diag.source.is_empty());
+    }
+    assert_eq!(
+        diags
+            .iter()
+            .filter(|d| d.rule == "warn.warn.node.noInput")
+            .count(),
+        4
+    );
+    assert_eq!(
+        diags
+            .iter()
+            .filter(|d| d.rule.starts_with("warn.editor."))
+            .count(),
+        2
+    );
+
+    let (mut update_spec, mut update_wire) = (spec.clone(), wire.clone());
+    update_spec["nodes"][4]["inputs"] = json!(["src", "db"]);
+    update_spec["nodes"][4]["raw"] = json!({"updateConditions":[]});
+    update_wire["dataFlow"]["nodes"]["upd"]["inputNodes"] = json!(["source/~wire", "db"]);
+    update_wire["dataFlow"]["nodes"]["upd"]["updateConditions"] = json!([]);
+    let rule = "err.dataflow.update.conditions";
+    let update_spec_diags = spec_errors(&update_spec);
+    let update_wire_diags = wire_errors(&update_wire);
+    let spec_diag = assert_single_diag(
+        &update_spec_diags,
+        rule,
+        "/nodes/4/raw/updateConditions",
+        false,
+    );
+    let wire_diag = assert_single_diag(
+        &update_wire_diags,
+        rule,
+        "/dataFlow/nodes/upd/updateConditions",
+        false,
+    );
+    assert_eq!(spec_diag.source, wire_diag.source);
+
+    let (mut bad_spec, mut bad_wire) = (spec, wire);
+    bad_spec["nodes"][7]["inputs"] = json!([]);
+    bad_wire["dataFlow"]["nodes"]["sel"]["inputNodes"] = json!([]);
+    let bad_spec_diags = spec_errors(&bad_spec);
+    let bad_wire_diags = wire_errors(&bad_wire);
+    let rule = "err.dataflow.node.input";
+    let spec_diag = assert_single_diag(&bad_spec_diags, rule, "/nodes/7/inputs", false);
+    let wire_diag = assert_single_diag(
+        &bad_wire_diags,
+        rule,
+        "/dataFlow/nodes/sel/inputNodes",
+        false,
+    );
+    assert_eq!(spec_diag.message, wire_diag.message);
+    assert!(spec_diag.source.is_empty());
+    assert!(!wire_diag.source.is_empty());
+}
+
+#[test]
+fn select_operand_checks_share_the_text2id_source_exception() {
+    let fields = json!([{"name":"ID","dataType":"C","isDimension":true}]);
+    let valid = json!({
+        "format":1, "properties":{"extractDataEnabled":false},
+        "nodes":[
+            {"key":"src","type":"FileInput","config":{"fileName":"d.xlsx#S"},"fields":fields},
+            {"key":"sel","type":"Select","inputs":["src"],"fields":fields,
+             "steps":[{"type":"ToUppercase","fields":["id"]}]},
+            {"key":"out","type":"Output","inputs":["sel"]}
+        ]
+    });
+    let valid_wire = generate(&valid).unwrap();
+    for (step, rejects) in [
+        (json!({"type":"ToUppercase","fields":["ghost"]}), true),
+        (json!({"type":"RemoveField","fields":["ghost"]}), false),
+        (
+            json!({"type":"Text2Id","fields":["ghost"],"text2id":{}}),
+            true,
+        ),
+        (
+            json!({"type":"Text2Id","fields":["ghost"],"text2id":{"srcField":""}}),
+            true,
+        ),
+        (
+            json!({"type":"Text2Id","fields":["ghost"],"text2id":{"srcField":"ID"}}),
+            false,
+        ),
+    ] {
+        let (mut spec, mut wire) = (valid.clone(), valid_wire.clone());
+        spec["nodes"][1]["steps"][0] = step.clone();
+        wire["dataFlow"]["nodes"]["sel"]["steps"][0] = step;
+        let (generated, spec_diags) = generate_with_diagnostics(&spec);
+        let wire_diags = check(&wire);
+        let rule = "err.dataflow.stepField.notfound";
+        if rejects {
+            assert!(generated.is_none());
+            let spec_diag =
+                assert_single_diag(&spec_diags, rule, "/nodes/1/steps/0/fields/0", false);
+            let wire_diag = assert_single_diag(
+                &wire_diags,
+                rule,
+                "/dataFlow/nodes/sel/steps/0/fields/0",
+                false,
+            );
+            assert_eq!(spec_diag.message, wire_diag.message);
+            assert!(spec_diag.source.is_empty());
+            assert!(!wire_diag.source.is_empty());
+        } else {
+            assert!(generated.is_some(), "{spec_diags:?}");
+            assert!(wire_diags.iter().all(Diag::is_warning), "{wire_diags:?}");
+        }
+    }
 }

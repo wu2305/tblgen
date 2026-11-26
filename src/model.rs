@@ -12,7 +12,7 @@ use serde_json::Value;
 /// A single diagnostic. `path` is an RFC 6901 JSON pointer into the document
 /// being validated (spec path for `gen`, wire `.tbl` path for `check`).
 /// `source` carries the product evidence citation (`file:line symbol`) for
-/// check rules; it is empty for generator diagnostics.
+/// wire diagnostics, including those mapped back into spec paths.
 #[derive(Debug, Clone)]
 pub struct Diag {
     pub path: String,
@@ -99,6 +99,49 @@ pub const SAVE_VERSION: &str = "4.19.0";
 /// (`ß` folds to `SS`), not ASCII-only case folding.
 pub(crate) fn field_eq(a: &str, b: &str) -> bool {
     a.to_uppercase() == b.to_uppercase()
+}
+
+pub(crate) const NODE_INPUT_ARITY_RULE: &str = "err.dataflow.node.input";
+
+/// Hard arity constraints also protect field computation, which can index the
+/// first input or project fields across several branches. Advisory checks
+/// (including contributors that return a null query) run on the emitted wire.
+pub(crate) fn node_input_arity_error(ty: &str, count: usize) -> Option<String> {
+    match ty {
+        "Select" | "Output" | "DbOutput" | "Agg" | "Distinct" if count != 1 => {
+            Some(format!("{ty} requires exactly 1 input, found {count}"))
+        }
+        "Join" if count < 2 => Some(format!(
+            "Join requires at least 2 inputs (MustMore), found {count}"
+        )),
+        "Union" if count == 0 => Some("Union requires at least 1 input branch".into()),
+        "FileInput" | "ModelTable" if count > 0 => {
+            Some(format!("{ty} takes no graph inputs, found {count}"))
+        }
+        _ => None,
+    }
+}
+
+/// Hidden Union rows are ignored by the loader, even if their width no
+/// longer matches the number of inputs.
+pub(crate) fn union_row_is_visible(row: &Value) -> bool {
+    row.get("visible").and_then(Value::as_bool) != Some(false)
+}
+
+pub(crate) const UNION_MAP_KEY_RULE: &str = "union.mapkey";
+
+pub(crate) fn union_row_width_error(row: usize, width: usize, inputs: usize) -> Option<String> {
+    (width != inputs)
+        .then(|| format!("unionMapArray[{row}].values width {width} != input count {inputs}"))
+}
+
+/// The wire loader tolerates missing metadata. A name, when supplied as a
+/// string, must be non-empty in an active ColToRow mapping.
+pub(crate) fn col_to_row_empty_name(name: &str) -> Option<(&'static str, &'static str)> {
+    name.is_empty().then_some((
+        "field.name",
+        "valuesArray field objects require a non-empty name",
+    ))
 }
 
 /// Node types whose fields are self-declared roots of lineage: they have no
@@ -328,6 +371,42 @@ pub const UNSUPPORTED_STEP_TYPES: [&str; 6] = [
 
 pub fn step_supported(ty: &str) -> bool {
     SUPPORTED_STEP_TYPES.contains(&ty)
+}
+
+pub(crate) const STEP_FIELD_NOT_FOUND: &str = "err.dataflow.stepField.notfound";
+
+/// Steps whose `fields` operand must resolve under Java `checkStep`.
+/// RemoveField tolerates missing operands. Text2Id uses its own source
+/// field when the payload carries a non-empty `srcField`.
+pub(crate) fn step_requires_existing_fields(ty: &str, step: &Value) -> bool {
+    match ty {
+        "SplitField"
+        | "Refactor"
+        | "SubString"
+        | "Replace"
+        | "ToUppercase"
+        | "ToLowercase"
+        | "ToNumber"
+        | "ToDate"
+        | "ToSynonym"
+        | "Trim"
+        | "DeleteNumbers"
+        | "DeleteLetters"
+        | "DeleteSpechars"
+        | "DeletePunctuations"
+        | "ExcludeEmpty"
+        | "ExtractNumber"
+        | "TransformToCalculatedField"
+        | "Distinct"
+        | "GroupNumber"
+        | "ReGroup" => true,
+        "Text2Id" => !step
+            .get("text2id")
+            .and_then(|payload| payload.get("srcField"))
+            .and_then(Value::as_str)
+            .is_some_and(|src| !src.is_empty()),
+        _ => false,
+    }
 }
 
 // ---------------------------------------------------------------------------
