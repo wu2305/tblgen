@@ -89,17 +89,28 @@ pub fn check_script(path: &str, src: &str) -> Vec<Diag> {
 /// `{ name: "会员号", dbfield: "VIPCODE", ... }`. Fields built at run time
 /// are not visible here.
 pub fn declared_fields(src: &str) -> std::collections::HashMap<String, String> {
-    let code = strip_comments(src);
     let mut out = std::collections::HashMap::new();
-    let mut start = None;
-    for (i, c) in code.char_indices() {
-        match c {
-            '{' => start = Some(i),
-            '}' => {
-                if let Some(s) = start.take() {
-                    let obj = &code[s..i];
-                    if let (Some(n), Some(d)) = (string_prop(obj, "name"), string_prop(obj, "dbfield")) {
-                        out.insert(d.to_uppercase(), n);
+    let mut objects: Vec<(Option<String>, Option<String>)> = Vec::new();
+    let mut tokens = source_tokens(src)
+        .filter(|token| !matches!(token, Token::Comment(_) | Token::Whitespace(_)))
+        .peekable();
+    while let Some(token) = tokens.next() {
+        match token {
+            Token::Code("{") => objects.push((None, None)),
+            Token::Code("}") => {
+                if let Some((Some(name), Some(dbfield))) = objects.pop() {
+                    out.insert(dbfield.to_uppercase(), name);
+                }
+            }
+            Token::Code(key @ ("name" | "dbfield")) => {
+                if let Some((name, dbfield)) = objects.last_mut() {
+                    let value = if key == "name" { name } else { dbfield };
+                    if value.is_none() && matches!(tokens.peek(), Some(Token::Code(":"))) {
+                        tokens.next();
+                        if let Some(Token::Quoted(literal)) = tokens.peek() {
+                            *value = string_value(literal);
+                            tokens.next();
+                        }
                     }
                 }
             }
@@ -109,57 +120,101 @@ pub fn declared_fields(src: &str) -> std::collections::HashMap<String, String> {
     out
 }
 
-/// Value of `key: "..."` / `key: '...'` in an object literal body.
-fn string_prop(obj: &str, key: &str) -> Option<String> {
-    let mut from = 0;
-    while let Some(off) = obj[from..].find(key) {
-        let at = from + off;
-        from = at + key.len();
-        if obj[..at].chars().next_back().is_some_and(is_word) {
-            continue;
+/// Generated literals use JSON escapes. Normalize quoting and raw control
+/// characters from hand-written scripts before using the same decoder.
+fn string_value(literal: &str) -> Option<String> {
+    let quote = match literal.chars().next()? {
+        quote @ ('"' | '\'') => quote,
+        _ => return None,
+    };
+    if quote == '"' {
+        if let Ok(decoded) = serde_json::from_str(literal) {
+            return Some(decoded);
         }
-        let rest = obj[at + key.len()..].trim_start();
-        let Some(rest) = rest.strip_prefix(':') else { continue };
-        let rest = rest.trim_start();
-        let q = rest.chars().next()?;
-        if q != '"' && q != '\'' {
-            continue;
-        }
-        let end = rest[1..].find(q)?;
-        return Some(rest[1..1 + end].to_string());
     }
-    None
+    let body = literal.strip_prefix(quote)?.strip_suffix(quote)?;
+    let mut json = String::with_capacity(literal.len());
+    json.push('"');
+    let mut chars = body.chars();
+    while let Some(c) = chars.next() {
+        match c {
+            '"' => json.push_str(r#"\""#),
+            '\\' => {
+                let escaped = chars.next()?;
+                if escaped != '\'' {
+                    json.push('\\');
+                }
+                json.push(escaped);
+            }
+            c if c < '\u{20}' => json.push_str(&format!(r"\u{:04x}", c as u32)),
+            _ => json.push(c),
+        }
+    }
+    json.push('"');
+    serde_json::from_str(&json).ok()
 }
 
-/// Remove `/* */` and `//` comments (same as the original lint: string
-/// contents are not special-cased).
-pub fn strip_comments(src: &str) -> String {
-    let b = src.as_bytes();
-    let mut out = Vec::with_capacity(b.len());
-    let mut i = 0;
-    while i < b.len() {
-        if b[i] == b'/' && b.get(i + 1) == Some(&b'*') {
-            match src[i + 2..].find("*/") {
-                Some(j) => {
-                    // keep newlines so line numbers stay correct
-                    out.extend(src[i..i + 2 + j + 2].bytes().filter(|c| *c == b'\n'));
-                    i += 2 + j + 2;
-                }
-                None => {
-                    out.extend_from_slice(&b[i..]);
-                    break;
+enum Token<'a> {
+    Code(&'a str),
+    Whitespace(&'a str),
+    Quoted(&'a str),
+    Comment(&'a str),
+}
+
+// Keep quotes and comments together so braces and property names inside
+// them are opaque to the field scanner.
+fn source_tokens<'a>(mut src: &'a str) -> impl Iterator<Item = Token<'a>> {
+    std::iter::from_fn(move || {
+        let first = src.chars().next()?;
+        let (len, kind): (usize, fn(&'a str) -> Token<'a>) = match first {
+            '"' | '\'' | '`' => (quoted_len(src, first), Token::Quoted),
+            '/' if src.starts_with("/*") => {
+                (src[2..].find("*/").map_or(src.len(), |i| i + 4), Token::Comment)
+            }
+            '/' if src.starts_with("//") => {
+                (src.find(['\r', '\n', '\u{2028}', '\u{2029}']).unwrap_or(src.len()), Token::Comment)
+            }
+            c if c.is_whitespace() => {
+                (src.find(|c: char| !c.is_whitespace()).unwrap_or(src.len()), Token::Whitespace)
+            }
+            c if is_word(c) || c == '$' => {
+                (src.find(|c| !is_word(c) && c != '$').unwrap_or(src.len()), Token::Code)
+            }
+            c => (c.len_utf8(), Token::Code),
+        };
+        let (token, rest) = src.split_at(len);
+        src = rest;
+        Some(kind(token))
+    })
+}
+
+fn quoted_len(src: &str, quote: char) -> usize {
+    let mut chars = src[1..].char_indices().peekable();
+    while let Some((i, c)) = chars.next() {
+        match c {
+            c if c == quote => return i + 2,
+            '\r' | '\n' if quote != '`' => return i + 1,
+            '\\' => {
+                if matches!(chars.next(), Some((_, '\r'))) && matches!(chars.peek(), Some((_, '\n'))) {
+                    chars.next();
                 }
             }
-        } else if b[i] == b'/' && b.get(i + 1) == Some(&b'/') {
-            while i < b.len() && b[i] != b'\n' {
-                i += 1;
-            }
-        } else {
-            out.push(b[i]);
-            i += 1;
+            _ => {}
         }
     }
-    String::from_utf8(out).unwrap_or_default()
+    src.len()
+}
+
+/// Remove comments while preserving quoted text and line numbers.
+pub fn strip_comments(src: &str) -> String {
+    let mut out = String::with_capacity(src.len());
+    for token in source_tokens(src) {
+        match token {
+            Token::Code(text) | Token::Whitespace(text) | Token::Quoted(text) => out.push_str(text),
+            Token::Comment(text) => out.extend(text.chars().filter(|c| *c == '\n')),
+        }
+    }
+    out
 }
 
 /// `function <name>` declared in the code (word-bounded name).
@@ -293,6 +348,25 @@ mod tests {
         assert_eq!(d.get("VIPCODE").map(String::as_str), Some("会员号"));
         assert_eq!(d.get("SHOP").map(String::as_str), Some("门店"));
         assert!(!d.contains_key("GONE") && !d.contains_key("NONAME"));
+    }
+
+    #[test]
+    fn field_scanner_distinguishes_literals_from_syntax() {
+        let src = r#"let fieldsInfo = [
+  { hint: "{ name: '错误', dbfield: 'FAKE' }", name: '门\'店 "A" \\ //', dbfield: 'shop' },
+  /* { name: "注释", dbfield: "GONE" } */
+  { name: "会员\n号\u2028 // /* */ {fields} \"A\"", dbfield: "\u0056ip" },
+];"#;
+        let fields = declared_fields(src);
+        assert_eq!(fields.len(), 2);
+        assert_eq!(fields["SHOP"], "门'店 \"A\" \\ //");
+        assert_eq!(fields["VIP"], "会员\n号\u{2028} // /* */ {fields} \"A\"");
+        assert_eq!(string_value("\"A\tB\"").as_deref(), Some("A\tB"));
+        let code = strip_comments(src);
+        assert!(!code.contains("GONE"));
+        assert!(code.contains(r#"门\'店 "A" \\ //"#));
+        assert!(code.contains("// /* */ {fields}"));
+        assert_eq!(code.lines().count(), src.lines().count());
     }
 
     #[test]

@@ -463,6 +463,18 @@ pub fn dsl_spec(
     Ok(wrap(c, nodes))
 }
 
+fn ts_string(value: &str) -> String {
+    serde_json::to_string(value)
+        .expect("serializing a string cannot fail")
+        // Keep the literal valid for TypeScript's older JavaScript targets too.
+        .replace('\u{2028}', r"\u2028")
+        .replace('\u{2029}', r"\u2029")
+}
+
+fn ts_block_comment(value: &str) -> String {
+    value.replace("*/", "* /")
+}
+
 /// Field list as TypeScript `DbFieldInfo` literals for script skeletons.
 pub fn fields_ts(fields: &[FieldReq]) -> String {
     fields
@@ -474,12 +486,12 @@ pub fn fields_ts(fields: &[FieldReq]) -> String {
         .map(|f| {
             let dec = f.get("decimal").map(|d| format!(", decimal: {}", d)).unwrap_or_default();
             format!(
-                "  {{ name: \"{}\", dataType: FieldDataType.{}, length: {}{}, dbfield: \"{}\", isDimension: {} }},",
-                f["name"].as_str().unwrap_or(""),
+                "  {{ name: {}, dataType: FieldDataType.{}, length: {}{}, dbfield: {}, isDimension: {} }},",
+                ts_string(f["name"].as_str().unwrap_or("")),
                 f["dataType"].as_str().unwrap_or(""),
                 f["length"],
                 dec,
-                f["dbfield"].as_str().unwrap_or(""),
+                ts_string(f["dbfield"].as_str().unwrap_or("")),
                 f["isDimension"]
             )
         })
@@ -488,16 +500,16 @@ pub fn fields_ts(fields: &[FieldReq]) -> String {
 }
 
 const PLACEHOLDER_TMPL: &str = r#"/**
- * {cn}（占位）
+ * {{title_comment}}（占位）
  *
- * 物理表：{physical}
- * 状态：{note}
+ * 物理表：{{table_comment}}
+ * 状态：{{note_comment}}
  * 约定：数据源确认后按既有脚本规范补齐抽取（配置写顶部常量、不读 context.params、
  *       设计器预览按 context.isPreview 截断）；正式运行在未接入状态下显式报错。
  */
 
 let fieldsInfo: DbFieldInfo[] = [
-{fields}
+{{fields}}
 ];
 
 /**
@@ -514,20 +526,20 @@ function onProcessData(context: IDataFlowScriptNodeContext): DbTableInfo | any[]
   if (context.isPreview) {
     return null;
   }
-  throw new Error("占位模型未接入：{physical} 数据来源确认后补齐加工");
+  throw new Error({{error_string}});
 }
 "#;
 
 const TRANSFORM_TMPL: &str = r#"/**
- * {cn}
+ * {{title_comment}}
  *
- * 物理表：{physical}
+ * 物理表：{{table_comment}}
  * 输入：上游模型连到本脚本节点后流式读取；未连线时预览返回字段结构、正式运行显式报错。
  * 约定：配置写顶部常量、不读 context.params、设计器预览按 PREVIEW_MAX_ROWS 截断写出。
  */
 
 let fieldsInfo: DbFieldInfo[] = [
-{fields}
+{{fields}}
 ];
 
 // 设计器预览时最多写出的行数，正式运行不截断
@@ -564,7 +576,7 @@ function onProcessData(context: IDataFlowScriptNodeContext): DbTableInfo | any[]
     if (context.isPreview) {
       return null;
     }
-    throw new Error("{physical} 未连线：请将上游模型连到本脚本节点");
+    throw new Error({{error_string}});
   }
   let input = context.getInput(0);
   let idx = fieldIndex(input);
@@ -580,7 +592,7 @@ function onProcessData(context: IDataFlowScriptNodeContext): DbTableInfo | any[]
       break;
     }
   }
-  console.info("{physical} 写出 " + written + " 行");
+  console.info({{written_prefix_string}} + written + " 行");
   return null;
 }
 "#;
@@ -588,11 +600,27 @@ function onProcessData(context: IDataFlowScriptNodeContext): DbTableInfo | any[]
 /// Script skeleton. `transform` reads one upstream input; otherwise a
 /// placeholder that previews the field structure and fails at run time.
 pub fn script_source(transform: bool, cn: &str, physical: &str, note: &str, fields: &[FieldReq]) -> String {
-    let t = if transform { TRANSFORM_TMPL } else { PLACEHOLDER_TMPL };
-    t.replace("{cn}", cn)
-        .replace("{physical}", physical)
-        .replace("{note}", note)
-        .replace("{fields}", &fields_ts(fields))
+    let mut template = if transform { TRANSFORM_TMPL } else { PLACEHOLDER_TMPL };
+    let mut source = String::with_capacity(template.len());
+    // Consume only the template. Encoded values can themselves contain placeholder text.
+    while let Some((prefix, marker)) = template.split_once("{{") {
+        let (slot, rest) = marker.split_once("}}").expect("unclosed script template slot");
+        let value = match slot {
+            "title_comment" => ts_block_comment(cn),
+            "table_comment" => ts_block_comment(physical),
+            "note_comment" => ts_block_comment(note),
+            "fields" => fields_ts(fields),
+            "error_string" if transform => ts_string(&format!("{physical} 未连线：请将上游模型连到本脚本节点")),
+            "error_string" => ts_string(&format!("占位模型未接入：{physical} 数据来源确认后补齐加工")),
+            "written_prefix_string" => ts_string(&format!("{physical} 写出 ")),
+            _ => unreachable!("unknown script template slot: {slot}"),
+        };
+        source.push_str(prefix);
+        source.push_str(&value);
+        template = rest;
+    }
+    source.push_str(template);
+    source
 }
 
 /// Lowercase hex MD5 (RFC 1321), used for deterministic 32-hex script names.
@@ -638,6 +666,40 @@ pub fn md5_hex(input: &[u8]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn script_templates_encode_each_context_once() {
+        let title = "标题 */\n{physical} {{table_comment}}";
+        let physical = "表\"\\\n🙂 */ {note} {{fields}}\u{2028}\u{2029}";
+        let note = "说明 */\n{fields} {{error_string}}";
+        let name = "显示\"\\\n中文🙂 // /* */ {fields} {{fields}}\u{2028}\u{2029}末";
+        let fields = parse_fields(&format!("{name}=demo:C"), false).unwrap();
+
+        for transform in [false, true] {
+            let source = script_source(transform, title, physical, note, &fields);
+            let (header, body) = source.split_once("*/").unwrap();
+            assert!(header.contains("标题 * /\n{physical} {{table_comment}}"));
+            assert!(header.contains("表\"\\\n🙂 * / {note} {{fields}}"));
+            assert_eq!(header.contains("说明 * /\n{fields} {{error_string}}"), !transform);
+            assert!(body.starts_with("\n\nlet fieldsInfo"));
+
+            let (_, error) = body.split_once("throw new Error(").unwrap();
+            let (error, _) = error.split_once(");\n").unwrap();
+            let expected = if transform {
+                format!("{physical} 未连线：请将上游模型连到本脚本节点")
+            } else {
+                format!("占位模型未接入：{physical} 数据来源确认后补齐加工")
+            };
+            assert!(!error.contains(['\u{2028}', '\u{2029}']));
+            assert_eq!(serde_json::from_str::<String>(error).unwrap(), expected);
+            if transform {
+                let (_, log) = body.rsplit_once("console.info(").unwrap();
+                let (prefix, _) = log.split_once(" + written").unwrap();
+                assert_eq!(serde_json::from_str::<String>(prefix).unwrap(), format!("{physical} 写出 "));
+            }
+            assert_eq!(crate::script::declared_fields(&source)["DEMO"], name);
+        }
+    }
 
     #[test]
     fn md5_matches_reference() {
