@@ -201,6 +201,30 @@ fn raw_default_output_partitions_top_level() {
     assert!(tbl.get("measures").is_none());
 }
 
+#[test]
+fn mixed_topology_routes_inputs_through_wire_keys() {
+    let spec = json!({
+        "format": 1,
+        "properties": {"extractDataEnabled": false},
+        "nodes": [
+            {"key":"out","type":"Output","inputs":["sel"]},
+            {"key":"sel","id":"select-wire","type":"Select","inputs":["raw/source"]},
+            {"key":"raw/source","rawNode":{"type":"ModelTable","id":"verbatim-id","alias":"src",
+                "moduleTablePath":"m.tbl","fields":[{"name":"ID","dataType":"C","isDimension":true}]}}
+        ]
+    });
+    let tbl = generate(&spec).expect("generate");
+    assert_eq!(node(&tbl, "raw/source"), &spec["nodes"][2]["rawNode"]);
+    assert_eq!(
+        node(&tbl, "select-wire")["inputNodes"],
+        json!(["raw/source"])
+    );
+    assert_eq!(node(&tbl, "default")["inputNodes"], json!(["select-wire"]));
+    assert_eq!(field(&tbl, "default", "ID")["originalNode"], json!("src"));
+    let decompiled = decompile(&tbl).expect("decompile");
+    assert_eq!(generate(&decompiled).expect("regenerate"), tbl);
+}
+
 // ---------------------------------------------------------------------------
 // join conditions: aliases, not keys; clause qualifiers
 // ---------------------------------------------------------------------------
@@ -1269,7 +1293,8 @@ fn validate_spec_covers_wire_only_errors() {
     });
     let ds = validate_spec(&spec);
     assert!(
-        ds.iter().any(|d| d.rule == "graph.danglingInput"),
+        ds.iter()
+            .any(|d| d.rule == "graph.danglingInput" && d.path == "/nodes/1/rawNode/inputNodes"),
         "validate_spec must include wire-check errors: {:?}",
         rules(&ds)
     );
@@ -1290,11 +1315,19 @@ fn validate_spec_covers_wire_only_errors() {
     });
     let ds2 = validate_spec(&spec2);
     assert!(
-        ds2.iter().any(|d| d.rule == "enum.stepType"),
+        ds2.iter()
+            .any(|d| d.rule == "enum.stepType" && d.path == "/nodes/1/steps/0/rawStep/type"),
         "validate_spec must include wire step enum errors: {:?}",
         rules(&ds2)
     );
     assert!(generate(&spec2).is_err());
+
+    let mut invalid_raw_node = spec;
+    invalid_raw_node["nodes"][1]["rawNode"] = Value::Null;
+    assert!(spec_errors(&invalid_raw_node)
+        .iter()
+        .any(|d| d.rule == "structure.node.rawNode" && d.path == "/nodes/1/rawNode"));
+    assert!(generate(&invalid_raw_node).is_err());
 }
 
 // ---------------------------------------------------------------------------
@@ -2057,6 +2090,12 @@ fn raw_pred_without_fields_explicit_shape() {
     let tbl = generate(&spec).expect("generate");
     assert_eq!(field(&tbl, "default", "A")["name"], json!("A"));
     assert!(wire_errors(&tbl).is_empty(), "{:?}", wire_errors(&tbl));
+
+    let mut known_empty = spec.clone();
+    known_empty["nodes"][0]["rawNode"]["fields"] = json!([]);
+    assert!(spec_errors(&known_empty)
+        .iter()
+        .any(|d| d.rule == "field.notfound" && d.path == "/nodes/1/fields/0"));
 
     // absent declarations remain an error
     let mut bad = spec.clone();

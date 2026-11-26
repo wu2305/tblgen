@@ -208,64 +208,54 @@ fn map_wire_diag(wd: Diag, descs: &[NodeDesc]) -> Diag {
         // wk is the escaped path segment from the wire pointer
         if let Some(d) = descs.iter().find(|d| ptr_escape(&d.wire_key) == wk) {
             let base = format!("/nodes/{}", d.idx);
-            let spec_path = if d.raw_body.is_some() {
-                match tail {
-                    None => base,
-                    Some(t) => format!("{}/rawNode/{}", base, t),
-                }
-            } else {
-                match tail {
-                    None => base,
-                    Some(t) => {
-                        let seg = t.split('/').next().unwrap_or("");
-                        if seg == "inputNodes" {
-                            format!("{}/inputs{}", base, &t[seg.len()..])
-                        } else if GENERATED_NODE_KEYS.contains(&seg) {
-                            // a wire step that decompiles to rawStep lives
-                            // under steps/N/rawStep in the spec
-                            if let Some((n, rest)) =
-                                t.strip_prefix("steps/").and_then(|r| r.split_once('/'))
-                            {
-                                if let Ok(si) = n.parse::<usize>() {
-                                    let is_raw = d
-                                        .spec
-                                        .and_then(|s| s.get("steps"))
-                                        .and_then(Value::as_array)
-                                        .and_then(|a| a.get(si))
-                                        .map(|s| s.get("rawStep").is_some())
-                                        .unwrap_or(false);
-                                    if is_raw {
-                                        return remap(format!(
-                                            "{}/steps/{}/rawStep/{}",
-                                            base, si, rest
-                                        ));
-                                    }
+            let spec_path = match (d.body, tail) {
+                (_, None) => base,
+                (NodeBody::Raw(_), Some(t)) => format!("{}/rawNode/{}", base, t),
+                (NodeBody::Typed(sn), Some(t)) => {
+                    let seg = t.split('/').next().unwrap_or("");
+                    if seg == "inputNodes" {
+                        format!("{}/inputs{}", base, &t[seg.len()..])
+                    } else if GENERATED_NODE_KEYS.contains(&seg) {
+                        // a wire step that decompiles to rawStep lives
+                        // under steps/N/rawStep in the spec
+                        if let Some((n, rest)) =
+                            t.strip_prefix("steps/").and_then(|r| r.split_once('/'))
+                        {
+                            if let Ok(si) = n.parse::<usize>() {
+                                let is_raw = sn
+                                    .get("steps")
+                                    .and_then(Value::as_array)
+                                    .and_then(|a| a.get(si))
+                                    .map(|s| s.get("rawStep").is_some())
+                                    .unwrap_or(false);
+                                if is_raw {
+                                    return remap(format!(
+                                        "{}/steps/{}/rawStep/{}",
+                                        base, si, rest
+                                    ));
                                 }
                             }
-                            format!("{}/{}", base, t)
+                        }
+                        format!("{}/{}", base, t)
+                    } else {
+                        // route by where the spec actually put the key:
+                        // config first, then raw, then the type whitelist
+                        let in_cfg = sn
+                            .get("config")
+                            .and_then(Value::as_object)
+                            .map(|c| c.contains_key(seg))
+                            .unwrap_or(false);
+                        let in_raw = sn
+                            .get("raw")
+                            .and_then(Value::as_object)
+                            .map(|r| r.contains_key(seg))
+                            .unwrap_or(false);
+                        if in_cfg
+                            || (!in_raw && config_key_allowed(d.ty.as_deref().unwrap_or(""), seg))
+                        {
+                            format!("{}/config/{}", base, t)
                         } else {
-                            // route by where the spec actually put the key:
-                            // config first, then raw, then the type whitelist
-                            let in_cfg = d
-                                .spec
-                                .and_then(|s| s.get("config"))
-                                .and_then(Value::as_object)
-                                .map(|c| c.contains_key(seg))
-                                .unwrap_or(false);
-                            let in_raw = d
-                                .spec
-                                .and_then(|s| s.get("raw"))
-                                .and_then(Value::as_object)
-                                .map(|r| r.contains_key(seg))
-                                .unwrap_or(false);
-                            if in_cfg
-                                || (!in_raw
-                                    && config_key_allowed(d.ty.as_deref().unwrap_or(""), seg))
-                            {
-                                format!("{}/config/{}", base, t)
-                            } else {
-                                format!("{}/raw/{}", base, t)
-                            }
+                            format!("{}/raw/{}", base, t)
                         }
                     }
                 }
@@ -292,6 +282,12 @@ fn map_wire_diag(wd: Diag, descs: &[NodeDesc]) -> Diag {
 // Node preparation: keys, ids, topo
 // ---------------------------------------------------------------------------
 
+#[derive(Clone, Copy)]
+enum NodeBody<'a> {
+    Typed(&'a Value),
+    Raw(&'a Value),
+}
+
 struct NodeDesc<'a> {
     idx: usize,
     key: String,
@@ -300,10 +296,7 @@ struct NodeDesc<'a> {
     /// is the only identifier consumers may reference — a rawNode body's own
     /// `id` is verbatim payload reserved for duplicate detection only.
     wire_key: String,
-    /// spec node object (typed) — None for rawNode entries
-    spec: Option<&'a Value>,
-    /// rawNode body for raw entries
-    raw_body: Option<&'a Value>,
+    body: NodeBody<'a>,
     ty: Option<String>,
     inputs: Vec<String>,
     /// resolved wire node ids for `inputs`, filled post-resolution
@@ -368,29 +361,20 @@ fn prepare_nodes_inner<'a>(
                 format!("duplicate node key {:?}", key),
             ));
         }
+        let raw_body = n.get("rawNode");
         descs.push(NodeDesc {
             idx: i,
             key: key.clone(),
             wire_key: String::new(),
-            spec: if n.get("rawNode").is_some() {
-                None
-            } else {
-                Some(n)
-            },
-            raw_body: n.get("rawNode"),
-            ty: node_ty(n).or_else(|| {
-                n.get("rawNode")
-                    .and_then(|b| b.get("type"))
-                    .and_then(Value::as_str)
-                    .map(str::to_string)
-            }),
+            body: raw_body.map_or(NodeBody::Typed(n), NodeBody::Raw),
+            ty: node_ty(n).or_else(|| raw_body.and_then(node_ty)),
             inputs: Vec::new(),
             inputs_wire: Vec::new(),
             alias: n
                 .get("alias")
                 .and_then(Value::as_str)
                 .or_else(|| {
-                    n.get("rawNode")
+                    raw_body
                         .and_then(|b| b.get("alias"))
                         .and_then(Value::as_str)
                 })
@@ -405,7 +389,7 @@ fn prepare_nodes_inner<'a>(
     // first declared Output index (typed only)
     let first_output_idx = descs
         .iter()
-        .position(|d| d.spec.is_some() && d.ty.as_deref() == Some("Output"));
+        .position(|d| matches!(d.body, NodeBody::Typed(_)) && d.ty.as_deref() == Some("Output"));
     // single owner map over every wire-visible identifier: typed resolved
     // ids, rawNode spec keys (nodes map keys) and rawNode body ids. The same
     // owner may claim the same identifier twice (e.g. key == body.id).
@@ -425,54 +409,56 @@ fn prepare_nodes_inner<'a>(
     };
 
     for d in descs.iter_mut() {
-        if let Some(sn) = d.spec {
-            // inputs
-            if let Some(arr) = sn.get("inputs").and_then(Value::as_array) {
-                for (ii, v) in arr.iter().enumerate() {
-                    match v.as_str() {
-                        Some(s) => {
-                            d.inputs.push(s.to_string());
-                            if !key_set.contains(s) {
-                                diags.push(Diag::spec(
-                                    format!("/nodes/{}/inputs/{}", d.idx, ii),
-                                    "graph.danglingInput",
-                                    format!("inputs references unknown key {:?}", s),
-                                ));
+        match d.body {
+            NodeBody::Typed(sn) => {
+                // inputs
+                if let Some(arr) = sn.get("inputs").and_then(Value::as_array) {
+                    for (ii, v) in arr.iter().enumerate() {
+                        match v.as_str() {
+                            Some(s) => {
+                                d.inputs.push(s.to_string());
+                                if !key_set.contains(s) {
+                                    diags.push(Diag::spec(
+                                        format!("/nodes/{}/inputs/{}", d.idx, ii),
+                                        "graph.danglingInput",
+                                        format!("inputs references unknown key {:?}", s),
+                                    ));
+                                }
                             }
+                            None => diags.push(Diag::spec(
+                                format!("/nodes/{}/inputs/{}", d.idx, ii),
+                                "structure.inputs",
+                                "inputs entries must be strings (node keys)",
+                            )),
                         }
-                        None => diags.push(Diag::spec(
-                            format!("/nodes/{}/inputs/{}", d.idx, ii),
-                            "structure.inputs",
-                            "inputs entries must be strings (node keys)",
-                        )),
                     }
                 }
+                // resolved id
+                let explicit_id = sn.get("id").and_then(Value::as_str).map(str::to_string);
+                let resolved =
+                    if d.idx == first_output_idx.unwrap_or(usize::MAX) && explicit_id.is_none() {
+                        "default".to_string()
+                    } else {
+                        explicit_id.unwrap_or_else(|| d.key.clone())
+                    };
+                d.wire_key = resolved.clone();
+                claim(&resolved, d.idx, format!("/nodes/{}/id", d.idx), diags);
             }
-            // resolved id
-            let explicit_id = sn.get("id").and_then(Value::as_str).map(str::to_string);
-            let resolved =
-                if d.idx == first_output_idx.unwrap_or(usize::MAX) && explicit_id.is_none() {
-                    "default".to_string()
-                } else {
-                    explicit_id.unwrap_or_else(|| d.key.clone())
-                };
-            d.wire_key = resolved.clone();
-            claim(&resolved, d.idx, format!("/nodes/{}/id", d.idx), diags);
-        } else {
-            // rawNode: wire map key = spec key, body untouched. The body's
-            // own `id` is reserved for the duplicate-owners check only —
-            // consumers route through the map key, never through body.id.
-            d.wire_key = d.key.clone();
-            let body_id = d
-                .raw_body
-                .and_then(|b| b.get("id"))
-                .and_then(Value::as_str)
-                .filter(|s| !s.is_empty())
-                .map(str::to_string);
-            claim(&d.key, d.idx, format!("/nodes/{}/key", d.idx), diags);
-            if let Some(bid) = body_id {
-                if bid != d.key {
-                    claim(&bid, d.idx, format!("/nodes/{}/rawNode/id", d.idx), diags);
+            NodeBody::Raw(raw) => {
+                // rawNode: wire map key = spec key, body untouched. The body's
+                // own `id` is reserved for the duplicate-owners check only —
+                // consumers route through the map key, never through body.id.
+                d.wire_key = d.key.clone();
+                let body_id = raw
+                    .get("id")
+                    .and_then(Value::as_str)
+                    .filter(|s| !s.is_empty())
+                    .map(str::to_string);
+                claim(&d.key, d.idx, format!("/nodes/{}/key", d.idx), diags);
+                if let Some(bid) = body_id {
+                    if bid != d.key {
+                        claim(&bid, d.idx, format!("/nodes/{}/rawNode/id", d.idx), diags);
+                    }
                 }
             }
         }
@@ -564,8 +550,7 @@ impl<'a> NodeDesc<'a> {
             idx: self.idx,
             key: self.key.clone(),
             wire_key: self.wire_key.clone(),
-            spec: self.spec,
-            raw_body: self.raw_body,
+            body: self.body,
             ty: self.ty.clone(),
             inputs: self.inputs.clone(),
             inputs_wire: self.inputs_wire.clone(),
@@ -2104,7 +2089,9 @@ fn validate_graph_semantics(spec: &Value, descs: &[NodeDesc], diags: &mut Vec<Di
         .unwrap_or_default();
 
     for d in descs {
-        let Some(sn) = d.spec else { continue }; // rawNode: no typed semantics
+        let NodeBody::Typed(sn) = d.body else {
+            continue;
+        };
         let ty = d.ty.as_deref().unwrap_or("");
         let n = d.inputs.len();
         // Hard input counts protect projection. Advisory topology diagnostics
@@ -2333,9 +2320,10 @@ fn resolve_field_names_inner(
 ) -> Option<Vec<String>> {
     let &i = key_to_idx.get(key)?;
     let d = &descs[i];
-    let Some(sn) = d.spec else {
-        // rawNode: the verbatim body's fields are the only provable names
-        return d.raw_body.and_then(|b| b.get("fields")).map(field_names_of);
+    let sn = match d.body {
+        NodeBody::Typed(sn) => sn,
+        // The verbatim body's fields are the only provable names.
+        NodeBody::Raw(raw) => return raw.get("fields").map(field_names_of),
     };
     if let Some(f) = sn.get("fields") {
         return Some(field_names_of(f));
@@ -2378,7 +2366,7 @@ fn check_select_names(
     param_names: &HashSet<String>,
     diags: &mut Vec<Diag>,
 ) {
-    let Some(sn) = d.spec else { return };
+    let NodeBody::Typed(sn) = d.body else { return };
     let Some(pred_key) = d.inputs.first() else {
         return;
     };
@@ -2810,16 +2798,15 @@ fn emit_generated_wire<'a>(
     // emit nodes
     let mut nodes_map = Map::new();
     for d in &mut descs {
-        let body = if let Some(rn) = d.raw_body {
-            rn.clone() // verbatim, never mutated
-        } else {
-            match emit_typed_node(d) {
+        let body = match d.body {
+            NodeBody::Raw(raw) => raw.clone(), // verbatim, never mutated
+            NodeBody::Typed(sn) => match emit_typed_node(sn, d) {
                 Ok(b) => b,
                 Err(e) => {
                     diags.push(e);
                     continue;
                 }
-            }
+            },
         };
         nodes_map.insert(d.wire_key.clone(), body);
     }
@@ -2902,8 +2889,10 @@ fn build_generated_collect_inner<'a>(
             .sum();
         p.steps = descs
             .iter()
-            .filter_map(|d| d.spec)
-            .filter_map(|sn| sn.get("steps").and_then(Value::as_array))
+            .filter_map(|d| match d.body {
+                NodeBody::Typed(sn) => sn.get("steps").and_then(Value::as_array),
+                NodeBody::Raw(_) => None,
+            })
             .map(Vec::len)
             .sum();
     }
@@ -2932,29 +2921,13 @@ fn input_desc<'a>(
 /// The alias consumers see for a node (typed: `alias` or key; rawNode: body
 /// alias or spec key).
 fn node_alias(d: &NodeDesc) -> String {
-    if let Some(a) = &d.alias {
-        return a.clone();
-    }
-    if let Some(b) = d.raw_body {
-        if let Some(a) = b.get("alias").and_then(Value::as_str) {
-            return a.to_string();
-        }
-    }
-    d.key.clone()
+    d.alias.clone().unwrap_or_else(|| d.key.clone())
 }
 
 /// Whether the node is a lineage source, including rawNode bodies whose
 /// `type` says FileInput/ModelTable/etc.
 fn node_is_source(d: &NodeDesc) -> bool {
-    let ty =
-        d.ty.as_deref()
-            .or_else(|| {
-                d.raw_body
-                    .and_then(|b| b.get("type"))
-                    .and_then(Value::as_str)
-            })
-            .unwrap_or("");
-    is_source(ty)
+    is_source(d.ty.as_deref().unwrap_or(""))
 }
 
 /// Proven root lineage of a predecessor field: the oldest `(node, field)`
@@ -3160,25 +3133,18 @@ fn compute_node_fields(
     key_to_idx: &HashMap<String, usize>,
 ) -> (Option<ComputedNode>, Option<Diag>) {
     let d = &descs[i];
-    // rawNode: fields come from the verbatim body when present (absent =
-    // unknown shape; the default-Output partition check reports that)
-    if d.spec.is_none() {
-        let known = d.raw_body.and_then(|b| b.get("fields")).is_some();
-        let fields = d
-            .raw_body
-            .and_then(|b| b.get("fields"))
-            .and_then(Value::as_array)
-            .cloned()
-            .unwrap_or_default();
-        return (
-            known.then(|| ComputedNode {
-                fields,
+    let sn = match d.body {
+        NodeBody::Typed(sn) => sn,
+        NodeBody::Raw(raw) => {
+            // Absent fields mean unknown shape; the default Output
+            // partition check reports that when fields are required.
+            let computed = raw.get("fields").map(|f| ComputedNode {
+                fields: f.as_array().cloned().unwrap_or_default(),
                 step_hints: Vec::new(),
-            }),
-            None,
-        );
-    }
-    let sn = d.spec.unwrap();
+            });
+            return (computed, None);
+        }
+    };
     let ty = d.ty.as_deref().unwrap_or("");
     // sources: declared fields are the root of lineage — each ordinary
     // field's original* pair is seeded/rewritten to (own alias, own name);
@@ -3221,18 +3187,19 @@ fn compute_node_fields(
         );
     }
     match ty {
-        "Select" => compute_select_fields(d, descs, key_to_idx),
-        "Output" => compute_output_fields(d, descs, key_to_idx),
-        "Distinct" => compute_distinct_fields(d, descs, key_to_idx),
-        "Join" => compute_join_fields(d, descs, key_to_idx),
-        "Union" => compute_union_fields(d, descs, key_to_idx),
-        _ => compute_reshaped_fields(d, descs, key_to_idx),
+        "Select" => compute_select_fields(sn, d, descs, key_to_idx),
+        "Output" => compute_output_fields(sn, d, descs, key_to_idx),
+        "Distinct" => compute_distinct_fields(sn, d, descs, key_to_idx),
+        "Join" => compute_join_fields(sn, d, descs, key_to_idx),
+        "Union" => compute_union_fields(sn, d, descs, key_to_idx),
+        _ => compute_reshaped_fields(sn, d, descs, key_to_idx),
     }
 }
 
 /// Output: explicit fields resolve against the single input; absent fields
 /// derive by cloning predecessor fields with rewritten direct lineage.
 fn compute_output_fields(
+    sn: &Value,
     d: &NodeDesc,
     descs: &[NodeDesc],
     key_to_idx: &HashMap<String, usize>,
@@ -3247,19 +3214,12 @@ fn compute_output_fields(
             )),
         );
     };
-    let sn = d.spec.unwrap();
-    if sn.get("fields").and_then(Value::as_array).is_some() {
+    if let Some(declared) = sn.get("fields").and_then(Value::as_array) {
         let Some(pred_fields) = &pred.out_fields else {
             // raw predecessor without declared fields: the Output's own
             // declarations ARE the shape — emit them unresolved
-            if pred.raw_body.is_some() {
-                let fields: Vec<Value> = sn
-                    .get("fields")
-                    .and_then(Value::as_array)
-                    .unwrap()
-                    .iter()
-                    .map(emit_computed)
-                    .collect();
+            if matches!(pred.body, NodeBody::Raw(_)) {
+                let fields = declared.iter().map(emit_computed).collect();
                 return (
                     Some(ComputedNode {
                         fields,
@@ -3277,7 +3237,7 @@ fn compute_output_fields(
                 )),
             );
         };
-        match resolve_declared_fields(d, &[pred], &[pred_fields], true, false) {
+        match resolve_declared_fields(sn, d, &[pred], &[pred_fields], true, false) {
             Ok(fields) => {
                 return (
                     Some(ComputedNode {
@@ -3333,15 +3293,15 @@ fn clone_passthrough(f: &Value, pred: &NodeDesc) -> Value {
 /// the declaration minus original*. `emit_input_node` controls whether a
 /// resolved input alias is written (Join/Union yes; Output/Distinct no).
 fn resolve_declared_fields(
+    sn: &Value,
     d: &NodeDesc,
     preds: &[&NodeDesc],
     fields_of: &[&Vec<Value>],
     strict: bool,
     emit_input_node: bool,
 ) -> Result<Vec<Value>, Diag> {
-    let declared = d
-        .spec
-        .and_then(|s| s.get("fields"))
+    let declared = sn
+        .get("fields")
         .and_then(Value::as_array)
         .cloned()
         .unwrap_or_default();
@@ -3411,6 +3371,7 @@ fn resolve_declared_fields(
 /// Distinct: explicit fields resolve uniquely across inputs (declared
 /// inputNode narrows); no inputNode is emitted (single semantic stream).
 fn compute_distinct_fields(
+    sn: &Value,
     d: &NodeDesc,
     descs: &[NodeDesc],
     key_to_idx: &HashMap<String, usize>,
@@ -3444,7 +3405,7 @@ fn compute_distinct_fields(
             )),
         );
     }
-    match resolve_declared_fields(d, &preds, &fields_of, true, false) {
+    match resolve_declared_fields(sn, d, &preds, &fields_of, true, false) {
         Ok(fields) => (
             Some(ComputedNode {
                 fields,
@@ -3459,6 +3420,7 @@ fn compute_distinct_fields(
 /// Join: every declared field must resolve to exactly one predecessor
 /// field; `inputNode` (an input alias) disambiguates shared names.
 fn compute_join_fields(
+    sn: &Value,
     d: &NodeDesc,
     descs: &[NodeDesc],
     key_to_idx: &HashMap<String, usize>,
@@ -3482,7 +3444,7 @@ fn compute_join_fields(
         preds.push(pred);
         fields_of.push(pf);
     }
-    match resolve_declared_fields(d, &preds, &fields_of, true, true) {
+    match resolve_declared_fields(sn, d, &preds, &fields_of, true, true) {
         Ok(fields) => (
             Some(ComputedNode {
                 fields,
@@ -3500,6 +3462,7 @@ fn compute_join_fields(
 /// inputNode/inputField are always that canonical pair. Without a map the
 /// legacy per-input name lookup applies (inputField = declared name).
 fn compute_union_fields(
+    sn: &Value,
     d: &NodeDesc,
     descs: &[NodeDesc],
     key_to_idx: &HashMap<String, usize>,
@@ -3534,7 +3497,6 @@ fn compute_union_fields(
         );
     }
     let lookup = ProjectionLookup::new(&preds, &fields_of);
-    let sn = d.spec.unwrap();
     let map = sn
         .get("config")
         .and_then(|c| c.get("unionMapArray"))
@@ -3822,6 +3784,7 @@ fn compute_union_fields(
 /// predecessor match inherits proven passthrough lineage; anything else
 /// keeps the declaration minus the unproven original* pair.
 fn compute_reshaped_fields(
+    sn: &Value,
     d: &NodeDesc,
     descs: &[NodeDesc],
     key_to_idx: &HashMap<String, usize>,
@@ -3838,7 +3801,7 @@ fn compute_reshaped_fields(
     }
     // reshaping nodes never synthesize inputNode: an invented direct ref
     // would alter the runtime inputFieldExp (e.g. on pivot-born columns)
-    match resolve_declared_fields(d, &preds, &fields_of, false, false) {
+    match resolve_declared_fields(sn, d, &preds, &fields_of, false, false) {
         Ok(fields) => (
             Some(ComputedNode {
                 fields,
@@ -4031,12 +3994,12 @@ fn apply_step_mutation(
 /// (name collisions, invalid required payloads) are `Err`; an unmodelable
 /// step stops simulation and is reported via `SimResult::opaque_at`.
 fn simulate_select(
+    sn: &Value,
     d: &NodeDesc,
     pred: &NodeDesc,
     pred_fields: &[Value],
     explicit_fields: bool,
 ) -> Result<SimResult, Diag> {
-    let sn = d.spec.unwrap();
     let mut work: Vec<Value> = pred_fields
         .iter()
         .map(|f| clone_passthrough(f, pred))
@@ -4280,11 +4243,11 @@ fn name_multiset_eq(a: &[String], b: &[String]) -> bool {
 /// unmodelable step falls back to the declarations (minus unproven
 /// original*) with whatever later steps remain provable on those names.
 fn compute_select_fields(
+    sn: &Value,
     d: &NodeDesc,
     descs: &[NodeDesc],
     key_to_idx: &HashMap<String, usize>,
 ) -> (Option<ComputedNode>, Option<Diag>) {
-    let sn = d.spec.unwrap();
     if d.inputs.is_empty() {
         return (
             None,
@@ -4346,7 +4309,7 @@ fn compute_select_fields(
             None,
         );
     };
-    let res = match simulate_select(d, pred, pred_fields, declared.is_some()) {
+    let res = match simulate_select(sn, d, pred, pred_fields, declared.is_some()) {
         Ok(r) => r,
         Err(e) => return (None, Some(e)),
     };
@@ -4497,8 +4460,7 @@ fn fill_fileinput_identity(fields: &mut [Value]) {
     }
 }
 
-fn emit_typed_node(d: &mut NodeDesc) -> Result<Value, Diag> {
-    let sn = d.spec.unwrap();
+fn emit_typed_node(sn: &Value, d: &mut NodeDesc) -> Result<Value, Diag> {
     let ty = d.ty.as_deref().unwrap_or("");
     let mut body = Map::new();
     body.insert("type".into(), Value::String(ty.to_string()));
@@ -4654,7 +4616,7 @@ fn default_output_partition(descs: &[NodeDesc]) -> (Vec<Value>, Vec<Value>, Opti
                     vec![],
                     vec![],
                     Some(Diag::spec(
-                        if d.raw_body.is_some() {
+                        if matches!(d.body, NodeBody::Raw(_)) {
                             format!("/nodes/{}/rawNode/fields", d.idx)
                         } else {
                             format!("/nodes/{}/fields", d.idx)
