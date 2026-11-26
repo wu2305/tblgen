@@ -1,9 +1,8 @@
 //! `generate` — compile a spec-format v1 document into a `.tbl` wire object.
 //!
-//! Pipeline: dispatch on form (generated / archive / rawTable) →
-//! `validate_spec` (all diagnostics, spec RFC 6901 paths) → `build` (field
-//! projection, topo ordering, verbatim merges). `generate` returns the first
-//! diagnostic as `Err`; `validate_spec` is exposed for `check` on spec input.
+//! Generation and validation share form dispatch and diagnostics. The generated
+//! form compiles to check wire invariants. Archive and rawTable validation can
+//! borrow the input without materializing the wire document.
 
 use std::collections::{HashMap, HashSet};
 use std::time::Instant;
@@ -57,7 +56,7 @@ macro_rules! profile_stage {
 /// succeeds) plus ALL diagnostics — warnings included. Single entry for
 /// the `gen`/`new` CLI so validation and emission share one compile pass.
 pub fn generate_with_diagnostics(spec: &Value) -> (Option<Value>, Vec<Diag>) {
-    generate_impl(spec, None)
+    process_spec(spec, true, None)
 }
 
 /// Benchmark-only entry point: same diagnostics and wire output as
@@ -67,77 +66,51 @@ pub fn generate_with_diagnostics_profile(
     spec: &Value,
 ) -> (Option<Value>, Vec<Diag>, GeneratedCompileProfile) {
     let mut profile = GeneratedCompileProfile::default();
-    let (wire, diags) = generate_impl(spec, Some(&mut profile));
+    let (wire, diags) = process_spec(spec, true, Some(&mut profile));
     (wire, diags, profile)
 }
 
-fn generate_impl(
+fn process_spec(
     spec: &Value,
+    emit_wire: bool,
     profile: Option<&mut GeneratedCompileProfile>,
 ) -> (Option<Value>, Vec<Diag>) {
     let mut diags = Vec::new();
-    if !spec.is_object() {
+    let Some(obj) = spec.as_object() else {
         diags.push(Diag::spec(
             "",
             "structure.spec",
             "spec must be a JSON object",
         ));
         return (None, diags);
+    };
+    if obj.get("format").and_then(Value::as_u64) != Some(1) {
+        diags.push(Diag::spec(
+            "/format",
+            "structure.format",
+            "spec.format must be 1",
+        ));
+        return (None, diags);
     }
-    match spec.get("format") {
-        Some(v) if v.as_u64() == Some(1) => {}
-        _ => {
-            diags.push(Diag::spec(
-                "/format",
-                "structure.format",
-                "spec.format must be 1",
-            ));
-            return (None, diags);
-        }
-    }
-    let has_archive = spec.get("archive").is_some();
-    let has_rawtable = spec.get("rawTable").is_some();
-    let has_nodes = spec.get("nodes").is_some();
-    match (has_archive, has_rawtable, has_nodes) {
-        (true, false, false) => {
-            validate_archive(spec, &mut diags);
-            if diags.iter().any(|d| !d.is_warning()) {
-                return (None, diags);
-            }
-            match build_archive(spec) {
-                Ok(tbl) => (Some(tbl), diags),
-                Err(d) => {
-                    diags.push(d);
-                    (None, diags)
-                }
-            }
-        }
-        (false, true, false) => {
-            validate_rawtable(spec, &mut diags);
-            if diags.iter().any(|d| !d.is_warning()) {
-                return (None, diags);
-            }
-            match build_rawtable(spec) {
-                Ok(tbl) => (Some(tbl), diags),
-                Err(d) => {
-                    diags.push(d);
-                    (None, diags)
-                }
-            }
-        }
-        (false, false, true) => {
-            let wire = compile_generated(spec, &mut diags, profile);
-            (wire, diags)
-        }
+    let wire = match (obj.get("archive"), obj.get("rawTable"), obj.get("nodes")) {
+        (Some(archive), None, None) => validate_archive(obj, archive, &mut diags)
+            .filter(|_| emit_wire)
+            .map(build_archive),
+        (None, Some(rawtable), None) => validate_rawtable(obj, rawtable, &mut diags)
+            .filter(|_| emit_wire)
+            .map(|table| Value::Object(table.clone())),
+        // Generated-form validation needs the wire to check emission invariants.
+        (None, None, Some(_)) => compile_generated(spec, &mut diags, profile).filter(|_| emit_wire),
         _ => {
             diags.push(Diag::spec(
                 "",
                 "structure.form",
                 "spec must contain exactly one of: nodes (generated), archive, rawTable",
             ));
-            (None, diags)
+            None
         }
-    }
+    };
+    (wire, diags)
 }
 
 /// Compile a spec document to a `.tbl` wire `Value`.
@@ -154,39 +127,7 @@ pub fn generate(spec: &Value) -> Result<Value, Diag> {
 
 /// Full spec validation (used by `gen` and by `check` on spec input).
 pub fn validate_spec(spec: &Value) -> Vec<Diag> {
-    let mut d = Vec::new();
-    if !spec.is_object() {
-        d.push(Diag::spec(
-            "",
-            "structure.spec",
-            "spec must be a JSON object",
-        ));
-        return d;
-    }
-    match spec.get("format") {
-        Some(v) if v.as_u64() == Some(1) => {}
-        _ => d.push(Diag::spec(
-            "/format",
-            "structure.format",
-            "spec.format must be 1",
-        )),
-    }
-    let has_archive = spec.get("archive").is_some();
-    let has_rawtable = spec.get("rawTable").is_some();
-    let has_nodes = spec.get("nodes").is_some();
-    match (has_archive, has_rawtable, has_nodes) {
-        (true, false, false) => validate_archive(spec, &mut d),
-        (false, true, false) => validate_rawtable(spec, &mut d),
-        (false, false, true) => {
-            compile_generated(spec, &mut d, None);
-        }
-        _ => d.push(Diag::spec(
-            "",
-            "structure.form",
-            "spec must contain exactly one of: nodes (generated), archive, rawTable",
-        )),
-    }
-    d
+    process_spec(spec, false, None).1
 }
 
 /// Single compile path for the generated form: structural/semantic
@@ -2987,9 +2928,20 @@ fn check_spec_col_to_row(sn: &Value, idx: usize, diags: &mut Vec<Diag>) {
 // Archive / rawTable forms
 // ---------------------------------------------------------------------------
 
-fn validate_archive(spec: &Value, diags: &mut Vec<Diag>) {
-    let Some(obj) = spec.as_object() else { return };
-    for k in obj.keys() {
+/// Borrowed archive data whose node IDs and bodies have also been validated.
+struct ValidatedArchive<'a> {
+    top: &'a Map<String, Value>,
+    flow: &'a Map<String, Value>,
+    nodes: &'a [Value],
+}
+
+fn validate_archive<'a>(
+    spec: &Map<String, Value>,
+    archive: &'a Value,
+    diags: &mut Vec<Diag>,
+) -> Option<ValidatedArchive<'a>> {
+    let initial_len = diags.len();
+    for k in spec.keys() {
         if k != "format" && k != "archive" {
             diags.push(Diag::spec(
                 format!("/{}", ptr_escape(k)),
@@ -2998,23 +2950,15 @@ fn validate_archive(spec: &Value, diags: &mut Vec<Diag>) {
             ));
         }
     }
-    let Some(a) = spec.get("archive") else {
-        diags.push(Diag::spec(
-            "/archive",
-            "structure.archive",
-            "archive is required",
-        ));
-        return;
-    };
-    let Some(aobj) = a.as_object() else {
+    let Some(archive) = archive.as_object() else {
         diags.push(Diag::spec(
             "/archive",
             "structure.archive",
             "archive must be an object",
         ));
-        return;
+        return None;
     };
-    for k in aobj.keys() {
+    for k in archive.keys() {
         if !["top", "flow", "nodes"].contains(&k.as_str()) {
             diags.push(Diag::spec(
                 format!("/archive/{}", ptr_escape(k)),
@@ -3023,18 +2967,20 @@ fn validate_archive(spec: &Value, diags: &mut Vec<Diag>) {
             ));
         }
     }
-    for k in ["top", "flow"] {
-        match a.get(k) {
-            Some(v) if v.is_object() => {}
-            _ => diags.push(Diag::spec(
+    let top = archive.get("top").and_then(Value::as_object);
+    let flow = archive.get("flow").and_then(Value::as_object);
+    for (k, object) in [("top", top), ("flow", flow)] {
+        if object.is_none() {
+            diags.push(Diag::spec(
                 format!("/archive/{}", k),
                 "structure.archive",
                 format!("archive.{} must be an object", k),
-            )),
+            ));
         }
     }
-    match a.get("nodes") {
-        Some(Value::Array(arr)) => {
+    let nodes = archive.get("nodes").and_then(Value::as_array);
+    match nodes {
+        Some(arr) => {
             let mut ids = HashSet::new();
             for (i, e) in arr.iter().enumerate() {
                 let path = format!("/archive/nodes/{}", i);
@@ -3055,7 +3001,7 @@ fn validate_archive(spec: &Value, diags: &mut Vec<Diag>) {
                         ));
                     }
                 }
-                match e.get("id").and_then(Value::as_str) {
+                match eobj.get("id").and_then(Value::as_str) {
                     Some(s) if !s.is_empty() => {
                         if !ids.insert(s.to_string()) {
                             diags.push(Diag::spec(
@@ -3071,7 +3017,7 @@ fn validate_archive(spec: &Value, diags: &mut Vec<Diag>) {
                         "archive node.id must be a non-empty string",
                     )),
                 }
-                match e.get("body") {
+                match eobj.get("body") {
                     Some(v) if v.is_object() => {}
                     _ => diags.push(Diag::spec(
                         format!("{}/body", path),
@@ -3081,14 +3027,14 @@ fn validate_archive(spec: &Value, diags: &mut Vec<Diag>) {
                 }
             }
         }
-        _ => diags.push(Diag::spec(
+        None => diags.push(Diag::spec(
             "/archive/nodes",
             "structure.archive.nodes",
             "archive.nodes must be an array",
         )),
     }
     // collisions: top must not contain dataFlow; flow must not contain nodes
-    if let Some(top) = a.get("top").and_then(Value::as_object) {
+    if let Some(top) = top {
         if top.contains_key("dataFlow") {
             diags.push(Diag::spec(
                 "/archive/top/dataFlow",
@@ -3097,7 +3043,7 @@ fn validate_archive(spec: &Value, diags: &mut Vec<Diag>) {
             ));
         }
     }
-    if let Some(flow) = a.get("flow").and_then(Value::as_object) {
+    if let Some(flow) = flow {
         if flow.contains_key("nodes") {
             diags.push(Diag::spec(
                 "/archive/flow/nodes",
@@ -3106,63 +3052,53 @@ fn validate_archive(spec: &Value, diags: &mut Vec<Diag>) {
             ));
         }
     }
+    if diags.len() != initial_len {
+        return None;
+    }
+    Some(ValidatedArchive {
+        top: top?,
+        flow: flow?,
+        nodes: nodes?,
+    })
 }
 
-fn validate_rawtable(spec: &Value, diags: &mut Vec<Diag>) {
-    if let Some(obj) = spec.as_object() {
-        for k in obj.keys() {
-            if k != "format" && k != "rawTable" {
-                diags.push(Diag::spec(
-                    format!("/{}", ptr_escape(k)),
-                    "structure.rawTable.key",
-                    format!("unexpected key {:?} on rawTable form", k),
-                ));
-            }
+fn validate_rawtable<'a>(
+    spec: &Map<String, Value>,
+    rawtable: &'a Value,
+    diags: &mut Vec<Diag>,
+) -> Option<&'a Map<String, Value>> {
+    let initial_len = diags.len();
+    for k in spec.keys() {
+        if k != "format" && k != "rawTable" {
+            diags.push(Diag::spec(
+                format!("/{}", ptr_escape(k)),
+                "structure.rawTable.key",
+                format!("unexpected key {:?} on rawTable form", k),
+            ));
         }
     }
-    match spec.get("rawTable") {
-        Some(v) if v.is_object() => {}
-        _ => diags.push(Diag::spec(
+    let Some(table) = rawtable.as_object() else {
+        diags.push(Diag::spec(
             "/rawTable",
             "structure.rawTable",
             "rawTable must be a .tbl object",
-        )),
-    }
+        ));
+        return None;
+    };
+    (diags.len() == initial_len).then_some(table)
 }
 
-fn build_archive(spec: &Value) -> Result<Value, Diag> {
-    let diags = {
-        let mut d = Vec::new();
-        validate_archive(spec, &mut d);
-        d
-    };
-    if let Some(e) = diags.into_iter().next() {
-        return Err(e);
-    }
-    let a = &spec["archive"];
-    let mut tbl = a["top"].clone();
-    let mut flow = a["flow"].as_object().cloned().unwrap_or_default();
+fn build_archive(archive: ValidatedArchive<'_>) -> Value {
+    let mut tbl = archive.top.clone();
+    let mut flow = archive.flow.clone();
     let mut nodes = Map::new();
-    for e in a["nodes"].as_array().cloned().unwrap_or_default() {
-        let id = e["id"].as_str().unwrap_or_default().to_string();
-        nodes.insert(id, e["body"].clone());
+    for node in archive.nodes {
+        let id = node["id"].as_str().expect("validated archive node ID");
+        nodes.insert(id.to_owned(), node["body"].clone());
     }
     flow.insert("nodes".into(), Value::Object(nodes));
-    if let Value::Object(ref mut t) = tbl {
-        t.insert("dataFlow".into(), Value::Object(flow));
-    }
-    Ok(tbl)
-}
-
-fn build_rawtable(spec: &Value) -> Result<Value, Diag> {
-    match spec.get("rawTable") {
-        Some(v) if v.is_object() => Ok(v.clone()),
-        _ => Err(Diag::spec(
-            "/rawTable",
-            "structure.rawTable",
-            "rawTable must be a .tbl object",
-        )),
-    }
+    tbl.insert("dataFlow".into(), Value::Object(flow));
+    Value::Object(tbl)
 }
 
 // ---------------------------------------------------------------------------
