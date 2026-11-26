@@ -1,0 +1,626 @@
+{
+  "build": {
+    "rustc": "rustc 1.95.0 (59807616e 2026-04-14)\nbinary: rustc\ncommit-hash: 59807616e1fa2540724bfbac14d7976d7e4a3860\ncommit-date: 2026-04-14\nhost: aarch64-apple-darwin\nrelease: 1.95.0\nLLVM version: 22.1.2\n",
+    "sources": {
+      "src/check/lineage.rs": "24498e2653c1d7232a9cee536282efab2f211261d6aeff1cccdcb68ed3ffb2b6",
+      "src/check/output.rs": "815ede57f9e05251d44bc0cac08ad1388a41c173946ff43042463231cf207f3e",
+      "src/check.rs": "1237d4a8c507b2578c48c1e522741920afdc797a60ff938426f26c7219ef4acb",
+      "src/decompile.rs": "b1cc34a3cdea4acaac511cfef000bb11915ecda2ade2485b08b428c330a5c6e7",
+      "src/gen.rs": "b7bf32744145eb2f515d200ffce23465c8f05022e8cc17ec05711860e5bddaf3",
+      "src/lib.rs": "725a657d92d778d7f15789667283677d6d5a1357bbb03c566c834c4780cdbd88",
+      "src/main.rs": "2a1f3178b2e1f8768abac6759e44aad9a493fa1cd8d5c6261d6e0709df0eb3dd",
+      "src/model.rs": "562c6e7ea144471aeeb2dfe14a7cb8e96c146b2bdcf6749e9c60d47e65233ead",
+      "src/new.rs": "d31876b3ca0e2eb5b67df3f823cc31cde589e3804d0ba348838b8e65ff65457c",
+      "src/project.rs": "9cc19ffa6205cb7af1066aec8bdff881d10495e2207a4615cbf1c480b38fd51a",
+      "src/schema.rs": "da1d01f8a434ebbe3c5760f962ea51c65eda7df719684716998dfcd55c2e62a4",
+      "src/script.rs": "b949fb6534fb151de19be9ba5a0ee9a6fcdbc7ec289a8eae78f82186e017fec7",
+      "Cargo.toml": "3cc8d872416406bebb265f565e44597eb13038dd59e7a799b25a32a2a313557a",
+      "Cargo.lock": "596ae35bfbd60bc991318e54a507ab56ba66f1939ad0f4e89de7f79dc984bfc9",
+      "benches/wire_check.rs": "d99ed74c0cb6415147be5f87eb3e273f722bc791d810e1fb2539ade980244af2"
+    }
+  },
+  "corpus_sha256": "4248b8bc657290b877be96b1dc356ff56a0fd6dae5922439ae36e910fa34aa96",
+  "documents": 1062,
+  "experiment_sha256": "3cfdc125ec31da38c8a8112c9d07fa500fbbd1debcce4f9636481d8eaa31d92b",
+  "deltas": {
+    "full": {
+      "lost_errors": 0,
+      "lost_warnings": 0,
+      "files_affected": 0,
+      "error_to_no_error": 0,
+      "lost_rules": {}
+    },
+    "fields": {
+      "lost_errors": 611,
+      "lost_warnings": 0,
+      "files_affected": 20,
+      "error_to_no_error": 5,
+      "lost_rules": {
+        "field.name": 302,
+        "field.dataType": 309
+      }
+    },
+    "graph": {
+      "lost_errors": 0,
+      "lost_warnings": 0,
+      "files_affected": 0,
+      "error_to_no_error": 0,
+      "lost_rules": {}
+    },
+    "node_rules": {
+      "lost_errors": 137,
+      "lost_warnings": 3,
+      "files_affected": 45,
+      "error_to_no_error": 37,
+      "lost_rules": {
+        "join.condition.alias": 6,
+        "join.condition.qualifier": 129,
+        "config.modeltable.path": 2,
+        "warn.editor.sql.predecessor": 2,
+        "warn.warn.node.update.clauses": 1
+      }
+    },
+    "select": {
+      "lost_errors": 45,
+      "lost_warnings": 96,
+      "files_affected": 81,
+      "error_to_no_error": 39,
+      "lost_rules": {
+        "err.dataflow.stepField.notfound": 2,
+        "structure.step.fields": 3,
+        "field.duplicate": 40,
+        "warn.step.payload.key": 96
+      }
+    },
+    "lineage": {
+      "lost_errors": 101,
+      "lost_warnings": 9198,
+      "files_affected": 502,
+      "error_to_no_error": 0,
+      "lost_rules": {
+        "field.inputField.missing": 101,
+        "warn.field.originalNode": 9198
+      }
+    },
+    "partition": {
+      "lost_errors": 33,
+      "lost_warnings": 0,
+      "files_affected": 6,
+      "error_to_no_error": 2,
+      "lost_rules": {
+        "flow.output.partition": 33
+      }
+    },
+    "extract": {
+      "lost_errors": 0,
+      "lost_warnings": 2,
+      "files_affected": 2,
+      "error_to_no_error": 0,
+      "lost_rules": {
+        "warn.extract.dbfield": 2
+      }
+    },
+    "references": {
+      "lost_errors": 20,
+      "lost_warnings": 1,
+      "files_affected": 16,
+      "error_to_no_error": 7,
+      "lost_rules": {
+        "ref.modelTable.missing": 17,
+        "ref.script.missing": 3,
+        "warn.ref.modelTable.unverifiable": 1
+      }
+    },
+    "no_lineage_cache": {
+      "lost_errors": 0,
+      "lost_warnings": 0,
+      "files_affected": 0,
+      "error_to_no_error": 0,
+      "lost_rules": {}
+    },
+    "linear_partition": {
+      "lost_errors": 0,
+      "lost_warnings": 0,
+      "files_affected": 0,
+      "error_to_no_error": 0,
+      "lost_rules": {}
+    },
+    "eager_paths": {
+      "lost_errors": 0,
+      "lost_warnings": 0,
+      "files_affected": 0,
+      "error_to_no_error": 0,
+      "lost_rules": {}
+    }
+  },
+  "control_hits": {
+    "full": {
+      "fields": true,
+      "graph": true,
+      "node_rules": true,
+      "select": true,
+      "lineage": true,
+      "partition": true,
+      "extract": true,
+      "references": true
+    },
+    "fields": {
+      "fields": false,
+      "graph": true,
+      "node_rules": true,
+      "select": true,
+      "lineage": true,
+      "partition": true,
+      "extract": true,
+      "references": true
+    },
+    "graph": {
+      "fields": true,
+      "graph": false,
+      "node_rules": true,
+      "select": true,
+      "lineage": true,
+      "partition": true,
+      "extract": true,
+      "references": true
+    },
+    "node_rules": {
+      "fields": true,
+      "graph": true,
+      "node_rules": false,
+      "select": true,
+      "lineage": true,
+      "partition": true,
+      "extract": true,
+      "references": true
+    },
+    "select": {
+      "fields": true,
+      "graph": true,
+      "node_rules": true,
+      "select": false,
+      "lineage": true,
+      "partition": true,
+      "extract": true,
+      "references": true
+    },
+    "lineage": {
+      "fields": true,
+      "graph": true,
+      "node_rules": true,
+      "select": true,
+      "lineage": false,
+      "partition": true,
+      "extract": true,
+      "references": true
+    },
+    "partition": {
+      "fields": true,
+      "graph": true,
+      "node_rules": true,
+      "select": true,
+      "lineage": true,
+      "partition": false,
+      "extract": true,
+      "references": true
+    },
+    "extract": {
+      "fields": true,
+      "graph": true,
+      "node_rules": true,
+      "select": true,
+      "lineage": true,
+      "partition": true,
+      "extract": false,
+      "references": true
+    },
+    "references": {
+      "fields": true,
+      "graph": true,
+      "node_rules": true,
+      "select": true,
+      "lineage": true,
+      "partition": true,
+      "extract": true,
+      "references": false
+    },
+    "no_lineage_cache": {
+      "fields": true,
+      "graph": true,
+      "node_rules": true,
+      "select": true,
+      "lineage": true,
+      "partition": true,
+      "extract": true,
+      "references": true
+    },
+    "linear_partition": {
+      "fields": true,
+      "graph": true,
+      "node_rules": true,
+      "select": true,
+      "lineage": true,
+      "partition": true,
+      "extract": true,
+      "references": true
+    },
+    "eager_paths": {
+      "fields": true,
+      "graph": true,
+      "node_rules": true,
+      "select": true,
+      "lineage": true,
+      "partition": true,
+      "extract": true,
+      "references": true
+    }
+  },
+  "historical": {
+    "full": {
+      "ads_owner_repair_history.tbl": {},
+      "id_collision.tbl": {},
+      "join_key_alias.tbl": {},
+      "raw_default_output.tbl": {},
+      "removefield_case.tbl": {},
+      "rename_collision.tbl": {}
+    },
+    "fields": {
+      "ads_owner_repair_history.tbl": {},
+      "id_collision.tbl": {},
+      "join_key_alias.tbl": {},
+      "raw_default_output.tbl": {},
+      "removefield_case.tbl": {},
+      "rename_collision.tbl": {}
+    },
+    "graph": {
+      "ads_owner_repair_history.tbl": {},
+      "id_collision.tbl": {},
+      "join_key_alias.tbl": {},
+      "raw_default_output.tbl": {},
+      "removefield_case.tbl": {},
+      "rename_collision.tbl": {}
+    },
+    "node_rules": {
+      "ads_owner_repair_history.tbl": {
+        "union.mapkey": 10
+      },
+      "id_collision.tbl": {},
+      "join_key_alias.tbl": {
+        "join.condition.alias": 2,
+        "join.condition.qualifier": 2
+      },
+      "raw_default_output.tbl": {},
+      "removefield_case.tbl": {},
+      "rename_collision.tbl": {}
+    },
+    "select": {
+      "ads_owner_repair_history.tbl": {
+        "structure.step.fields": 8
+      },
+      "id_collision.tbl": {},
+      "join_key_alias.tbl": {},
+      "raw_default_output.tbl": {},
+      "removefield_case.tbl": {
+        "field.mismatch": 1
+      },
+      "rename_collision.tbl": {
+        "field.duplicate": 1
+      }
+    },
+    "lineage": {
+      "ads_owner_repair_history.tbl": {
+        "warn.field.originalNode": 100
+      },
+      "id_collision.tbl": {
+        "warn.field.originalNode": 2
+      },
+      "join_key_alias.tbl": {
+        "warn.field.originalNode": 1
+      },
+      "raw_default_output.tbl": {},
+      "removefield_case.tbl": {},
+      "rename_collision.tbl": {}
+    },
+    "partition": {
+      "ads_owner_repair_history.tbl": {},
+      "id_collision.tbl": {},
+      "join_key_alias.tbl": {},
+      "raw_default_output.tbl": {
+        "flow.output.partition": 1
+      },
+      "removefield_case.tbl": {},
+      "rename_collision.tbl": {}
+    },
+    "extract": {
+      "ads_owner_repair_history.tbl": {
+        "warn.extract.dbfield": 10
+      },
+      "id_collision.tbl": {},
+      "join_key_alias.tbl": {},
+      "raw_default_output.tbl": {},
+      "removefield_case.tbl": {},
+      "rename_collision.tbl": {}
+    },
+    "references": {
+      "ads_owner_repair_history.tbl": {},
+      "id_collision.tbl": {},
+      "join_key_alias.tbl": {},
+      "raw_default_output.tbl": {},
+      "removefield_case.tbl": {},
+      "rename_collision.tbl": {}
+    },
+    "no_lineage_cache": {
+      "ads_owner_repair_history.tbl": {},
+      "id_collision.tbl": {},
+      "join_key_alias.tbl": {},
+      "raw_default_output.tbl": {},
+      "removefield_case.tbl": {},
+      "rename_collision.tbl": {}
+    },
+    "linear_partition": {
+      "ads_owner_repair_history.tbl": {},
+      "id_collision.tbl": {},
+      "join_key_alias.tbl": {},
+      "raw_default_output.tbl": {},
+      "removefield_case.tbl": {},
+      "rename_collision.tbl": {}
+    },
+    "eager_paths": {
+      "ads_owner_repair_history.tbl": {},
+      "id_collision.tbl": {},
+      "join_key_alias.tbl": {},
+      "raw_default_output.tbl": {},
+      "removefield_case.tbl": {},
+      "rename_collision.tbl": {}
+    }
+  },
+  "baseline": {
+    "errors": 974,
+    "warnings": 9410,
+    "error_files": 131,
+    "cli_signature": [
+      1,
+      "ad15197ad5d2697c8cb4a531adef90c54b63592f0cdcb8a7d74818c314342ebf"
+    ]
+  },
+  "orders": [
+    [
+      "full",
+      "fields",
+      "eager_paths",
+      "graph",
+      "linear_partition",
+      "node_rules",
+      "no_lineage_cache",
+      "select",
+      "references",
+      "lineage",
+      "extract",
+      "partition"
+    ],
+    [
+      "fields",
+      "graph",
+      "full",
+      "node_rules",
+      "eager_paths",
+      "select",
+      "linear_partition",
+      "lineage",
+      "no_lineage_cache",
+      "partition",
+      "references",
+      "extract"
+    ],
+    [
+      "graph",
+      "node_rules",
+      "fields",
+      "select",
+      "full",
+      "lineage",
+      "eager_paths",
+      "partition",
+      "linear_partition",
+      "extract",
+      "no_lineage_cache",
+      "references"
+    ],
+    [
+      "node_rules",
+      "select",
+      "graph",
+      "lineage",
+      "fields",
+      "partition",
+      "full",
+      "extract",
+      "eager_paths",
+      "references",
+      "linear_partition",
+      "no_lineage_cache"
+    ],
+    [
+      "select",
+      "lineage",
+      "node_rules",
+      "partition",
+      "graph",
+      "extract",
+      "fields",
+      "references",
+      "full",
+      "no_lineage_cache",
+      "eager_paths",
+      "linear_partition"
+    ],
+    [
+      "lineage",
+      "partition",
+      "select",
+      "extract",
+      "node_rules",
+      "references",
+      "graph",
+      "no_lineage_cache",
+      "fields",
+      "linear_partition",
+      "full",
+      "eager_paths"
+    ],
+    [
+      "partition",
+      "extract",
+      "lineage",
+      "references",
+      "select",
+      "no_lineage_cache",
+      "node_rules",
+      "linear_partition",
+      "graph",
+      "eager_paths",
+      "fields",
+      "full"
+    ],
+    [
+      "extract",
+      "references",
+      "partition",
+      "no_lineage_cache",
+      "lineage",
+      "linear_partition",
+      "select",
+      "eager_paths",
+      "node_rules",
+      "full",
+      "graph",
+      "fields"
+    ],
+    [
+      "references",
+      "no_lineage_cache",
+      "extract",
+      "linear_partition",
+      "partition",
+      "eager_paths",
+      "lineage",
+      "full",
+      "select",
+      "fields",
+      "node_rules",
+      "graph"
+    ],
+    [
+      "no_lineage_cache",
+      "linear_partition",
+      "references",
+      "eager_paths",
+      "extract",
+      "full",
+      "partition",
+      "fields",
+      "lineage",
+      "graph",
+      "select",
+      "node_rules"
+    ],
+    [
+      "linear_partition",
+      "eager_paths",
+      "no_lineage_cache",
+      "full",
+      "references",
+      "fields",
+      "extract",
+      "graph",
+      "partition",
+      "node_rules",
+      "lineage",
+      "select"
+    ],
+    [
+      "eager_paths",
+      "full",
+      "linear_partition",
+      "fields",
+      "no_lineage_cache",
+      "graph",
+      "references",
+      "node_rules",
+      "extract",
+      "select",
+      "partition",
+      "lineage"
+    ]
+  ],
+  "timings": {
+    "corpus_wire": {
+      "repeats": 1,
+      "batch_ns": {
+        "full": [71949875, 72015238, 71629722, 72608919, 76227185, 71513889, 72000743, 71066559, 92659910, 75187330, 71404042, 71237417],
+        "fields": [66117801, 66562862, 66439670, 66583595, 67806080, 67819859, 65557029, 66839256, 67963549, 67115685, 66402955, 66904413],
+        "graph": [69712790, 70187164, 69187130, 70386091, 68472969, 70532424, 70106250, 69006088, 71214293, 69585792, 69755945, 70017328],
+        "node_rules": [67442251, 66700511, 66565673, 66698699, 67715108, 67390455, 67108745, 67254862, 67907442, 66379735, 67422965, 65990123],
+        "select": [57582456, 57904321, 57670440, 57531421, 58509034, 63599837, 57488025, 57559258, 60182198, 57009513, 57596879, 57363338],
+        "lineage": [40406915, 40849592, 40350488, 40764917, 40138552, 41853011, 40921716, 40513050, 41586966, 40149133, 40090101, 40974829],
+        "partition": [68373931, 68306184, 68316495, 68831422, 68724580, 70703629, 80559882, 68122730, 68850944, 70404612, 68563067, 68635516],
+        "extract": [69523801, 69494102, 69877743, 83564013, 70089834, 70158181, 69245975, 69519574, 69551413, 72715991, 69783388, 69663419],
+        "references": [72000370, 71836154, 96875282, 72511338, 71737941, 72207675, 71078718, 71598110, 72492383, 70957920, 71317108, 71810453],
+        "no_lineage_cache": [328808919, 327586453, 332121467, 325395237, 326944581, 326748561, 324980842, 324470021, 324514384, 331883665, 322564810, 323636033],
+        "linear_partition": [93284018, 94466518, 93928740, 93067073, 93755074, 93471295, 93891675, 93827489, 92546419, 94069053, 94899630, 94837109],
+        "eager_paths": [80402125, 79530420, 80632702, 80432965, 80319110, 80514417, 79769888, 80390972, 80395367, 79399381, 79738465, 80870528]
+      }
+    },
+    "experiment_wire": {
+      "repeats": 150,
+      "batch_ns": {
+        "full": [71540708, 69896917, 75286625, 71544875, 71348666, 71212750, 71285500, 69645041, 70111625, 70981291, 72083625, 71175583],
+        "fields": [103400000, 72472458, 70206541, 69641709, 70999708, 70673208, 70818291, 70602500, 70075291, 70596750, 70519584, 70471583],
+        "graph": [70365791, 69869625, 69603875, 69660917, 73821833, 68816458, 69596583, 69703541, 69892792, 68392584, 68120500, 69183083],
+        "node_rules": [69923500, 68439416, 68408500, 72453875, 68527792, 69914459, 69456958, 69314166, 69517875, 69090375, 67694417, 69437958],
+        "select": [19601542, 18733042, 18860750, 19026750, 18894167, 18893125, 19039500, 18854500, 18908833, 18934500, 18899417, 18709000],
+        "lineage": [96332500, 61986917, 62880167, 63246125, 66714542, 63991708, 63926208, 63132041, 63307917, 63408125, 63513208, 62934375],
+        "partition": [69031625, 69730042, 69381917, 69176750, 70586250, 69314083, 69463084, 69101958, 74908417, 69944083, 68715375, 68947958],
+        "extract": [70407208, 69285459, 69375084, 68957875, 67468000, 67970583, 69553042, 67578125, 70378833, 68380041, 72181583, 69315667],
+        "references": [73821208, 71910875, 71150000, 71775708, 71277666, 72015666, 71375292, 72778459, 70058000, 71328500, 70127958, 71247917],
+        "no_lineage_cache": [90594459, 89391875, 89664084, 87869291, 87098209, 93592166, 93608792, 88165916, 93215666, 89125417, 89415250, 87789375],
+        "linear_partition": [70629708, 72490083, 71919333, 71525250, 71964083, 70099500, 70134292, 71788875, 74724292, 71683000, 71417333, 71696208],
+        "eager_paths": [73411333, 72932334, 73049000, 70717500, 72680792, 74173208, 73112500, 73036667, 74944167, 72749292, 73538583, 73159792]
+      }
+    },
+    "width256_wire": {
+      "repeats": 100,
+      "batch_ns": {
+        "full": [12666291, 12527625, 12456458, 12551125, 12580666, 12730083, 12827125, 12503667, 12565333, 12388542, 12591334, 12848084],
+        "fields": [11088125, 10966250, 10987292, 10780917, 10895042, 11350333, 11607875, 11720875, 10901791, 11058042, 10884542, 11244000],
+        "graph": [12902875, 12564250, 12926583, 13243625, 12412791, 13026750, 12753333, 12915458, 12409250, 12493542, 13072125, 12251250],
+        "node_rules": [12463208, 12380041, 12310667, 12722709, 12615833, 12423250, 12321833, 12241458, 12787166, 12406209, 12365000, 12435542],
+        "select": [12551833, 12396958, 12732209, 13000292, 12293458, 12764250, 12443583, 12855917, 12304584, 12500292, 12149500, 12194250],
+        "lineage": [5806708, 5664333, 5490167, 5580667, 5796458, 5994458, 5923500, 5930625, 5669791, 5775083, 5892125, 5648917],
+        "partition": [10315542, 10330250, 10464917, 10608541, 10176333, 10610792, 10717250, 10583291, 10391042, 10206083, 10203625, 10907625],
+        "extract": [12495209, 12860709, 12527792, 12625250, 12408666, 12555375, 12793209, 12567917, 12252000, 12798792, 12648250, 12686792],
+        "references": [12786834, 12947333, 12825500, 12543250, 12414167, 12600500, 13016708, 12511417, 12854834, 12263833, 12603375, 12224833],
+        "no_lineage_cache": [719294541, 719798708, 729052334, 727286292, 715229792, 770746000, 736130875, 791869792, 718501375, 727525500, 726624417, 716206167],
+        "linear_partition": [95482125, 100367083, 96731542, 108799583, 92634584, 94749750, 94235084, 92460583, 93740750, 92802750, 94035375, 108586166],
+        "eager_paths": [16852084, 17015708, 16879709, 17043167, 16629166, 17181625, 17778250, 16606042, 17243458, 16848625, 16924292, 17041000]
+      }
+    },
+    "corpus_cli": {
+      "repeats": 1,
+      "batch_ns": {
+        "full": [391386333, 368205042, 362029583, 400145625, 363581750, 364999875, 376153417, 392863917, 374149834, 365574583, 372494500, 365546042],
+        "fields": [372182041, 361339917, 358075584, 358714000, 360967958, 379786625, 442164750, 398614625, 360503125, 353757208, 373491500, 358330083],
+        "graph": [359476333, 371398167, 382693334, 360349625, 360749833, 372733375, 357874125, 379978000, 361895833, 401554334, 394992500, 358908833],
+        "node_rules": [356314875, 348285500, 373895666, 353158167, 356913500, 426121667, 361117167, 353590916, 363013084, 394494042, 363235209, 350775458],
+        "select": [349810667, 347583708, 340560375, 393112666, 361369792, 361177833, 350446625, 416382334, 353619292, 453694250, 348163958, 365443333],
+        "lineage": [333119208, 315847708, 313825500, 315833667, 320355292, 320784000, 322342542, 334387750, 326079917, 320107084, 326700458, 317475167],
+        "partition": [375102375, 360086917, 392822334, 358775791, 363339542, 357652583, 393963333, 433774584, 355649083, 363508000, 388808458, 363830541],
+        "extract": [369593500, 437238125, 384297292, 366726709, 363057042, 387774959, 368098500, 406430666, 370222833, 368593917, 449061500, 363588000],
+        "references": [366639041, 344840458, 338358042, 336656000, 342216209, 342632250, 334749208, 391580750, 371714250, 336169500, 346345000, 341547375],
+        "no_lineage_cache": [621839541, 615621708, 620500833, 620505334, 624770750, 657109875, 616952125, 692314625, 624691542, 631072958, 640109500, 619100917],
+        "linear_partition": [383440000, 383182875, 481744083, 386572834, 392170125, 421864833, 385872500, 394662708, 382431916, 384666209, 477818666, 382921166],
+        "eager_paths": [390964292, 366851917, 387297375, 377147666, 379138084, 376212292, 451846708, 368472333, 369860084, 380517375, 437445750, 373924334]
+      }
+    }
+  }
+}

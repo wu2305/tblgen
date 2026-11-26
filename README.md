@@ -46,3 +46,9 @@ tblgen check projects/P
 ## 按标签发布
 
 维护者先更新 Cargo.toml/Cargo.lock 的版本并合入 main，再从该提交推送同版本的 vX.Y.Z 标签。CNB 的 tag_push 事件运行测试，交叉构建三个目标，在 Linux 上运行生成与校验冒烟，将三个二进制及 SHA256SUMS 上传到对应 Release。普通分支推送不会发布；不要移动已发布的标签。
+
+## 工程进度
+
+- **DataFlow 修复与回归**：typed `gen` 在返回前校验生成的 wire；原实验中的 8 个 AddField 操作数错误和 10 个 Union 映射错误均已有回归覆盖。参见 [测试样本来源](tests/fixtures/PROVENANCE.md)。
+- **性能与校验覆盖**：[基准记录](benches/README.md)与[功能消融](benches/check-ablation.md)区分了算法提速和跳过检查的代价，附原始配对计时和复跑方法。
+- **后续工作**：[优化交接清单](benches/optimization-handoff.md)列出 28 项候选。建议优先测 Select 步骤推演、CLI 各阶段和 typed 生成基线，并单独核查血缘警告的有效性；这些是待验证方向，不是已交付功能。
