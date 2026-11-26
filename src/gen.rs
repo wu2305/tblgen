@@ -3189,8 +3189,8 @@ struct ComputedNode {
     step_hints: Vec<Option<Value>>,
 }
 
-/// Compute output fields in topo order; returns the field-annotated
-/// descriptors for wire-diag mapping.
+/// Compute output fields in topo order; returns descriptors with computed
+/// `out_fields` for emission and wire-diag mapping.
 fn compute_generated_fields<'a>(
     descs: Vec<NodeDesc<'a>>,
     diags: &mut Vec<Diag>,
@@ -3215,8 +3215,9 @@ fn compute_generated_fields<'a>(
     descs
 }
 
-/// Emit the wire document from field-annotated descriptors; returns the wire
-/// value alongside the descriptors for wire-diag mapping.
+/// Emit the wire document from descriptors with computed fields; typed
+/// emission consumes `out_fields`. Returns the wire value alongside the
+/// descriptors for wire-diag mapping.
 fn emit_generated_wire<'a>(
     spec: &Value,
     mut descs: Vec<NodeDesc<'a>>,
@@ -3316,7 +3317,8 @@ fn emit_generated_wire<'a>(
 }
 
 /// Build the wire document from already-prepared descriptors; returns the
-/// (possibly field-annotated) descriptors alongside for wire-diag mapping.
+/// wire value alongside descriptors for wire-diag mapping. Typed emission may
+/// consume `out_fields`, so returned descriptors are not guaranteed to retain them.
 fn build_generated_collect_inner<'a>(
     spec: &Value,
     descs: Vec<NodeDesc<'a>>,
