@@ -214,58 +214,141 @@ fn cmd_decompile(args: &[String]) -> ExitCode {
     }
 }
 
-/// Directories expand to every `.tbl` and `.action.ts` below them, sorted;
-/// hidden directories and node_modules are skipped.
-fn expand_dirs(args: &[String], exclude: &[PathBuf]) -> Vec<String> {
-    fn walk(dir: &Path, out: &mut Vec<String>) {
-        let Ok(rd) = fs::read_dir(dir) else { return };
-        let mut entries: Vec<_> = rd.flatten().map(|e| e.path()).collect();
-        entries.sort();
-        for p in entries {
-            let name = p.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-            if p.is_dir() {
-                if !name.starts_with('.') && name != "node_modules" {
-                    walk(&p, out);
+enum CheckTarget {
+    File(String),
+    DiscoveryError { path: PathBuf, error: io::Error },
+}
+
+fn is_excluded(path: &Path, exclude: &[PathBuf]) -> bool {
+    if exclude.is_empty() {
+        return false;
+    }
+    let abs = fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+    exclude.iter().any(|x| abs.starts_with(x))
+}
+
+fn directory_entries(
+    dir: &Path,
+    entries: impl Iterator<Item = io::Result<fs::DirEntry>>,
+    out: &mut Vec<CheckTarget>,
+) -> Vec<(PathBuf, io::Result<fs::FileType>)> {
+    let mut named = Vec::new();
+    let mut errors = Vec::new();
+    for entry in entries {
+        match entry {
+            Ok(entry) => named.push((entry.path(), entry.file_type())),
+            Err(error) => errors.push(error),
+        }
+    }
+    // An iterator error carries no entry name. Report it against this
+    // directory, before its named entries, in a stable order.
+    errors.sort_by_cached_key(|error| error.to_string());
+    out.extend(errors.into_iter().map(|error| CheckTarget::DiscoveryError {
+        path: dir.to_path_buf(),
+        error,
+    }));
+    named.sort_unstable_by(|a, b| a.0.cmp(&b.0));
+    named
+}
+
+fn entry_is_dir(path: &Path, file_type: fs::FileType) -> io::Result<bool> {
+    if !file_type.is_symlink() {
+        return Ok(file_type.is_dir());
+    }
+    match fs::metadata(path) {
+        Ok(metadata) => Ok(metadata.is_dir()),
+        // Keep dangling links eligible for the same suffix check as files.
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(false),
+        Err(error) => Err(error),
+    }
+}
+
+/// Expand directories in sorted depth-first order, retaining discovery errors.
+/// Hidden directories and node_modules are skipped when found during traversal.
+fn expand_dirs(args: &[String], exclude: &[PathBuf]) -> Vec<CheckTarget> {
+    fn walk(dir: &Path, exclude: &[PathBuf], out: &mut Vec<CheckTarget>) {
+        let entries = match fs::read_dir(dir) {
+            Ok(entries) => entries,
+            Err(error) => {
+                out.push(CheckTarget::DiscoveryError {
+                    path: dir.to_path_buf(),
+                    error,
+                });
+                return;
+            }
+        };
+        for (path, file_type) in directory_entries(dir, entries, out) {
+            let name = path.file_name().unwrap_or_default().to_string_lossy();
+            match file_type.and_then(|ty| entry_is_dir(&path, ty)) {
+                Ok(true) => {
+                    if !name.starts_with('.')
+                        && name != "node_modules"
+                        && !is_excluded(&path, exclude)
+                    {
+                        walk(&path, exclude, out);
+                    }
                 }
-            } else if name.ends_with(".tbl") || name.ends_with(".action.ts") {
-                out.push(p.display().to_string());
+                Ok(false) => {
+                    if (name.ends_with(".tbl") || name.ends_with(".action.ts"))
+                        && !is_excluded(&path, exclude)
+                    {
+                        out.push(CheckTarget::File(path.display().to_string()));
+                    }
+                }
+                Err(error) => {
+                    if !is_excluded(&path, exclude) {
+                        out.push(CheckTarget::DiscoveryError { path, error });
+                    }
+                }
             }
         }
     }
     let mut out = Vec::new();
     for a in args {
         let p = Path::new(a);
+        if is_excluded(p, exclude) {
+            continue;
+        }
         if p.is_dir() {
-            walk(p, &mut out);
+            walk(p, exclude, &mut out);
         } else {
-            out.push(a.clone());
+            out.push(CheckTarget::File(a.clone()));
         }
     }
-    out.retain(|f| {
-        let abs = fs::canonicalize(f).unwrap_or_else(|_| PathBuf::from(f));
-        !exclude.iter().any(|x| abs.starts_with(x))
-    });
     out
 }
 
-/// One file's check outcome plus whether the failure was an I/O error
+/// A check or discovery outcome plus whether the failure was an I/O error
 /// (exit-code 2), kept in input order for replay.
 enum FileOutcome {
     Ok(CheckReport),
     Err { report: CheckReport, io_error: bool },
 }
 
-/// Validate every expanded file. Files are independent (read-only checks), so
-/// `jobs > 1` runs them on a bounded pool; results are collected by input
-/// index and replayed in input order, keeping stdout/stderr/exit semantics
-/// identical to the serial loop.
-fn run_checks(files: &[String], jobs: usize) -> Vec<FileOutcome> {
-    let n = files.len();
+impl FileOutcome {
+    fn check_error(file: String, message: String, io_error: bool) -> Self {
+        Self::Err {
+            report: CheckReport {
+                file,
+                scope: "unknown".into(),
+                errors: vec![Diag::spec("", "io", message)],
+                warnings: vec![],
+            },
+            io_error,
+        }
+    }
+}
+
+/// Validate every expanded file and retain discovery errors. Checks are
+/// independent, so `jobs > 1` uses a bounded pool. Outcomes are replayed in
+/// input order, keeping stdout, stderr and exit codes identical to serial.
+fn run_checks(targets: &[CheckTarget], jobs: usize) -> Vec<FileOutcome> {
+    let n = targets.len();
     let workers = jobs.max(1).min(n.max(1));
     let mut outcomes: Vec<Option<FileOutcome>> = (0..n).map(|_| None).collect();
     if workers <= 1 {
-        for (i, f) in files.iter().enumerate() {
-            outcomes[i] = Some(check_one(f));
+        for (i, target) in targets.iter().enumerate() {
+            outcomes[i] = Some(check_one(target));
         }
     } else {
         let next = AtomicUsize::new(0);
@@ -281,7 +364,7 @@ fn run_checks(files: &[String], jobs: usize) -> Vec<FileOutcome> {
                     }
                     // a send failure means the receiver is gone (panic path);
                     // dropping the outcome is fine, the scope re-panics
-                    let _ = tx.send((i, check_one(&files[i])));
+                    let _ = tx.send((i, check_one(&targets[i])));
                 });
             }
             drop(tx);
@@ -293,20 +376,58 @@ fn run_checks(files: &[String], jobs: usize) -> Vec<FileOutcome> {
     outcomes.into_iter().map(|o| o.unwrap()).collect()
 }
 
-fn check_one(f: &str) -> FileOutcome {
-    match check_file(Path::new(f)) {
-        Ok(r) => FileOutcome::Ok(r),
-        Err((msg, code)) => {
-            let report = CheckReport {
-                file: f.to_string(),
-                scope: "unknown".into(),
-                errors: vec![Diag::spec("", "io", msg)],
-                warnings: vec![],
-            };
-            FileOutcome::Err {
+fn check_one(target: &CheckTarget) -> FileOutcome {
+    match target {
+        CheckTarget::File(file) => match check_file(Path::new(file)) {
+            Ok(report) => FileOutcome::Ok(report),
+            Err((message, code)) => FileOutcome::check_error(file.clone(), message, code == 2),
+        },
+        CheckTarget::DiscoveryError { path, error } => {
+            let file = path.display().to_string();
+            let message = format!("{}: {}", file, error);
+            FileOutcome::check_error(file, message, true)
+        }
+    }
+}
+
+#[cfg(test)]
+mod check_discovery_tests {
+    use super::*;
+
+    #[test]
+    fn directory_iteration_keeps_named_entries_and_reports_unnamed_errors() {
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("examples");
+        let entry = fs::read_dir(&dir).unwrap().next().unwrap().unwrap();
+        let entry_path = entry.path();
+        let entries = [
+            Err(io::Error::other("entries unavailable")),
+            Ok(entry),
+            Err(io::Error::other("directory entry unavailable")),
+        ];
+        let mut targets = Vec::new();
+        let named = directory_entries(&dir, entries.into_iter(), &mut targets);
+
+        assert_eq!(named.len(), 1);
+        assert_eq!(named[0].0, entry_path);
+        assert!(named[0].1.is_ok());
+        assert_eq!(targets.len(), 2);
+        for (target, message) in targets
+            .iter()
+            .zip(["directory entry unavailable", "entries unavailable"])
+        {
+            let FileOutcome::Err {
                 report,
-                io_error: code == 2,
-            }
+                io_error: true,
+            } = check_one(target)
+            else {
+                panic!("expected a directory I/O outcome");
+            };
+            assert_eq!(report.file, dir.display().to_string());
+            assert_eq!(report.errors[0].rule, "io");
+            assert_eq!(
+                report.errors[0].message,
+                format!("{}: {}", dir.display(), message)
+            );
         }
     }
 }
@@ -322,7 +443,7 @@ fn parse_jobs_value(v: &str) -> Result<usize, String> {
 }
 
 /// `--jobs N`: returns the remaining args and worker count (default:
-/// available parallelism capped at 4; the caller caps it by file count).
+/// available parallelism capped at 4; the caller caps it by target count).
 /// An explicit N is honored as given, including values above 4.
 fn parse_jobs(args: &[String]) -> Result<(Vec<String>, usize), String> {
     let mut jobs: Option<usize> = None;
@@ -402,8 +523,7 @@ fn cmd_check(args: &[String]) -> ExitCode {
     }
     let mut reports: Vec<CheckReport> = Vec::new();
     let mut had_io_error = false;
-    // replay each file's stderr line in input order (the serial loop printed
-    // them interleaved with processing; per-stream order is preserved)
+    // Replay file and discovery diagnostics in input order.
     for outcome in run_checks(&expand_dirs(&files, &exclude), jobs) {
         match outcome {
             FileOutcome::Ok(r) => reports.push(r),
