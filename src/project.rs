@@ -213,6 +213,29 @@ pub fn script_candidates(projects_root: &Path, project: &str, script_name: &str)
     ]
 }
 
+pub(crate) enum ScriptSource {
+    Found(String),
+    Missing,
+    Unreadable(Vec<(PathBuf, io::Error)>),
+}
+
+pub(crate) fn read_script(projects_root: &Path, project: &str, script_name: &str) -> ScriptSource {
+    let mut errors = Vec::new();
+    // Prefer readable TypeScript source, falling back to the compiled script.
+    for path in script_candidates(projects_root, project, script_name).into_iter().rev() {
+        match std::fs::read_to_string(&path) {
+            Ok(text) => return ScriptSource::Found(text),
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+            Err(error) => errors.push((path, error)),
+        }
+    }
+    if errors.is_empty() {
+        ScriptSource::Missing
+    } else {
+        ScriptSource::Unreadable(errors)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
