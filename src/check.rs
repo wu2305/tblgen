@@ -16,8 +16,6 @@ use crate::model::*;
 mod lineage;
 mod output;
 
-const ERR_ARITY: &str = "err.dataflow.node.input";
-
 /// Per-file check result for the `check` CLI report.
 pub struct CheckReport {
     pub file: String,
@@ -475,52 +473,17 @@ fn check_arity_and_type_rules(
             ),
         };
 
+        if let Some(message) = node_input_arity_error(ty, n) {
+            diags.push(err(
+                format!("{}/inputNodes", base),
+                NODE_INPUT_ARITY_RULE,
+                &arity_src,
+                message,
+            ));
+        }
         match ty {
-            "Select" | "Output" | "DbOutput" => {
-                if n != 1 {
-                    diags.push(err(
-                        format!("{}/inputNodes", base),
-                        ERR_ARITY,
-                        &arity_src,
-                        format!("{} requires exactly 1 input, found {}", ty, n),
-                    ));
-                }
-            }
-            "Join" => {
-                if n < 2 {
-                    diags.push(err(
-                        format!("{}/inputNodes", base),
-                        ERR_ARITY,
-                        &arity_src,
-                        format!("Join requires at least 2 inputs (MustMore), found {}", n),
-                    ));
-                }
-                check_join_conditions(diags, node, &base, infos, n);
-            }
-            "Union" => {
-                // 0 inputs cannot fetch the first non-empty query branch.
-                if n == 0 {
-                    diags.push(err(
-                        format!("{}/inputNodes", base),
-                        ERR_ARITY,
-                        &arity_src,
-                        "Union requires at least 1 input branch",
-                    ));
-                }
-                check_union(diags, node, &base, infos, n);
-            }
-            "Agg" | "Distinct" => {
-                // contributors read the FIRST input only — extra inputs
-                // would be silently ignored
-                if n != 1 {
-                    diags.push(err(
-                        format!("{}/inputNodes", base),
-                        ERR_ARITY,
-                        &arity_src,
-                        format!("{} requires exactly 1 input, found {}", ty, n),
-                    ));
-                }
-            }
+            "Join" => check_join_conditions(diags, node, &base, infos, n),
+            "Union" => check_union(diags, node, &base, infos, n),
             "RowToCol" | "ColToRow" | "Snapshot" | "Update" => {
                 if n == 0 {
                     diags.push(warn(
@@ -574,16 +537,6 @@ fn check_arity_and_type_rules(
                             ));
                         }
                     }
-                }
-            }
-            "FileInput" | "ModelTable" => {
-                if n > 0 {
-                    diags.push(err(
-                        format!("{}/inputNodes", base),
-                        ERR_ARITY,
-                        &arity_src,
-                        format!("{} takes no graph inputs, found {}", ty, n),
-                    ));
                 }
             }
             "SubProcess" => {
@@ -805,10 +758,33 @@ fn check_join_conditions(
                 }
             }
         }
-        // clause expressions qualify fields as [alias].[field]; the
+        // Condition and clause expressions qualify fields as [alias].[field]; the
         // qualifier must be one of THIS join's input aliases — a node id or
         // spec key is not resolvable at run time.
         if !aliases.is_empty() {
+            let mut check_qualifiers = |value: Option<&Value>, clause: Option<usize>, key: &str| {
+                let Some(expression) = value.and_then(Value::as_str) else {
+                    return;
+                };
+                for qualifier in exp_table_qualifiers(expression) {
+                    if !aliases.iter().any(|alias| field_eq(alias, &qualifier)) {
+                        let path = match clause {
+                            Some(index) => format!("{ipath}/clauses/{index}/{key}"),
+                            None => format!("{ipath}/{key}"),
+                        };
+                        diags.push(err(
+                            path,
+                            "join.condition.qualifier",
+                            &src(cite::JOIN_REL, "320", "JoinRelationImpl#loadJsonMap"),
+                            format!(
+                                "expression qualifier {:?} is not an input alias {:?}",
+                                qualifier, aliases
+                            ),
+                        ));
+                    }
+                }
+            };
+            check_qualifiers(c.get("exp"), None, "exp");
             for (ci, clause) in c
                 .get("clauses")
                 .and_then(Value::as_array)
@@ -816,27 +792,8 @@ fn check_join_conditions(
                 .flatten()
                 .enumerate()
             {
-                for (ek, expv) in [
-                    ("leftExp", clause.get("leftExp")),
-                    ("rightExp", clause.get("rightExp")),
-                    ("exp", clause.get("exp")),
-                ] {
-                    let Some(e) = expv.and_then(Value::as_str) else {
-                        continue;
-                    };
-                    for q in exp_table_qualifiers(e) {
-                        if !aliases.iter().any(|a| field_eq(a, &q)) {
-                            diags.push(err(
-                                format!("{}/clauses/{}/{}", ipath, ci, ek),
-                                "join.condition.qualifier",
-                                &src(cite::JOIN_REL, "320", "JoinRelationImpl#loadJsonMap"),
-                                format!(
-                                    "expression qualifier {:?} is not an input alias {:?}",
-                                    q, aliases
-                                ),
-                            ));
-                        }
-                    }
+                for key in ["leftExp", "rightExp", "exp"] {
+                    check_qualifiers(clause.get(key), Some(ci), key);
                 }
             }
         }
@@ -852,8 +809,7 @@ fn check_union(
 ) {
     if let Some(ut) = node.get("unionType") {
         match ut {
-            Value::String(s)
-                if ["UnionAll", "Union", "Minus", "Intersect"].contains(&s.as_str()) => {}
+            Value::String(s) if UNION_TYPES.contains(&s.as_str()) => {}
             Value::String(s) => diags.push(err(
                 format!("{}/unionType", base),
                 "enum.unionType",
@@ -923,7 +879,7 @@ fn check_union(
             continue;
         };
         // ignored rows are skipped before any value validation
-        if row.get("visible").and_then(Value::as_bool) == Some(false) {
+        if !union_row_is_visible(item) {
             continue;
         }
         let values = match row.get("values").and_then(Value::as_array) {
@@ -942,21 +898,16 @@ fn check_union(
                 continue;
             }
         };
-        if values.len() != n_inputs {
+        if let Some(message) = union_row_width_error(i, values.len(), n_inputs) {
             diags.push(err(
                 format!("{}/values", ipath),
-                "union.mapkey",
+                UNION_MAP_KEY_RULE,
                 &src(
                     cite::UNION_NODE,
                     "56",
                     "DwDataFlowNodeContributor_union#loadUnionMap",
                 ),
-                format!(
-                    "unionMapArray[{}].values width {} != input count {}",
-                    i,
-                    values.len(),
-                    n_inputs
-                ),
+                message,
             ));
         }
         let mut anchor: Option<(usize, String)> = None;
@@ -1180,12 +1131,12 @@ fn check_col_to_row(
         for (c, cell) in rarr.iter().enumerate() {
             if let Some(co) = cell.as_object() {
                 if let Some(nm) = co.get("name").and_then(Value::as_str) {
-                    if nm.is_empty() {
+                    if let Some((rule, message)) = col_to_row_empty_name(nm) {
                         diags.push(err(
                             format!("{}/{}/{}", rpath, c, "name"),
-                            "field.name",
+                            rule,
                             &src(cite::NODE_IMPL, "692", "DataFlowNodeImpl#loadField"),
-                            "valuesArray field objects require a non-empty name",
+                            message,
                         ));
                     } else if let Some(names) = pred_names {
                         // pivot source refs must exist in the predecessor's
@@ -1727,43 +1678,12 @@ fn check_select_steps(
                         .collect()
                 })
                 .unwrap_or_default();
-            // Java checkStep exempts Text2Id only when it carries srcField
-            let operated = matches!(
-                ty,
-                "RemoveField"
-                    | "SplitField"
-                    | "Refactor"
-                    | "SubString"
-                    | "Replace"
-                    | "ToUppercase"
-                    | "ToLowercase"
-                    | "ToNumber"
-                    | "ToDate"
-                    | "ToSynonym"
-                    | "Trim"
-                    | "DeleteNumbers"
-                    | "DeleteLetters"
-                    | "DeleteSpechars"
-                    | "DeletePunctuations"
-                    | "ExcludeEmpty"
-                    | "ExtractNumber"
-                    | "TransformToCalculatedField"
-                    | "Distinct"
-                    | "GroupNumber"
-                    | "ReGroup"
-            ) || (ty == "Text2Id"
-                && step_obj
-                    .get("text2id")
-                    .and_then(|t| t.get("srcField"))
-                    .and_then(Value::as_str)
-                    .map(|x| x.is_empty())
-                    .unwrap_or(true));
-            if operated {
+            if step_requires_existing_fields(ty, step) {
                 for (fi, name) in step_fields.iter().enumerate() {
-                    if ty != "RemoveField" && !cur.contains(name) {
+                    if !cur.contains(name) {
                         diags.push(err(
                             format!("{}/fields/{}", spath, fi),
-                            "err.dataflow.stepField.notfound",
+                            STEP_FIELD_NOT_FOUND,
                             &src(
                                 cite::SELECT_NODE,
                                 "284",
