@@ -169,9 +169,10 @@ python3 "$RUN" decompile existing.tbl -o existing.spec.json
 
 ## 启动器问题排查
 
-- 首次运行会从 CNB Release 下载当前平台的二进制并校验 SHA-256，之后使用缓存。支持 macOS-arm64、Linux-amd64、Windows-amd64。
-- 访问不了 cnb.cool 时，二选一（哈希仍按 `release.json` 校验，不一致就拒绝执行）：
-  - 有镜像：设置 `TBLGEN_MIRROR=<基础 URL>`，启动器改从 `<基础 URL>/<版本>/<产物名>` 下载。
-  - 完全离线：设置 `TBLGEN_BIN=<本地二进制>`，必须是同版本的发布产物。
+- 启动器默认跟踪远程 latest：普通命令最多每小时查询一次 Release 索引；若 latest 与当前技能包不同，就下载对应技能包 zip、按 Release 元数据中的 SHA-256 校验后装入缓存，并转交新版本启动器执行。`python3 "$RUN" update` 可强制立即检查；`TBLGEN_AUTO_UPDATE=0` 关闭自动跟踪，`TBLGEN_UPDATE_TTL_SECS` 调整检查间隔（默认 3600，0 表示每次都查）。
+- 每个技能包内的 `release.json` 仍固定对应版本的二进制 SHA-256；首次执行该版本时下载当前平台二进制并校验，之后使用缓存。支持 macOS-arm64、Linux-amd64、Windows-amd64。
+- 访问不了 cnb.cool 时，二选一（二进制哈希仍按 `release.json` 校验，不一致就拒绝执行）：
+  - 有镜像：设置 `TBLGEN_MIRROR=<基础 URL>`。镜像必须保留 CNB Release 布局：Release JSON 索引位于去掉末尾 `/download` 后的路径，产物位于 `<基础 URL>/<版本>/<产物名>`。
+  - 完全离线：设置 `TBLGEN_AUTO_UPDATE=0` 和 `TBLGEN_BIN=<本地二进制>`；二进制必须是当前技能包版本的发布产物。只设置 `TBLGEN_BIN` 也会停止更新跟踪，因为它表示明确的本地覆盖。
 - `TBLGEN_CACHE_DIR` 可以改缓存目录。HTTP(S) 代理按标准的 `HTTPS_PROXY` 环境变量生效。
-- `tblgen launcher: ...` 开头、退出码为 2 的错误来自启动器（网络、哈希不符、缺少 `release.json`），不是规格问题，不要去改规格。
+- `tblgen launcher: ...` 开头、退出码为 2 的错误来自启动器（网络、哈希不符、缺少 `release.json` 或更新元数据异常），不是规格问题，不要去改规格。自动更新检查失败会回退到当前已安装版本并在 stderr 提示；显式 `update` 失败则退出 2。
