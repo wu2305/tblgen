@@ -6,7 +6,7 @@ description: 离线生成、校验和反解 SuccBI 平台 DataFlow 加工模型�
 # tblgen：制作与检查 .tbl 加工模型
 
 工作方式：用 `new` 或写**规格**（spec，JSON）→ `check` → `gen` 出 `.tbl` → 再 `check` 产物。tblgen 只做离线的结构与引用校验，通过不代表平台上能执行；资源路径、数据源和 SQL 是否可用仍需用户在设计器里确认。
-声明式 DataFlow 的 `.tbl` 通过 `check` 后，可先用 `succsync preview <工作区路径.tbl> --check` 在 BI 引擎检查本地模型，再打开设计器，无需先上传。
+声明式 DataFlow 的 `.tbl` 通过 `check` 后，可先用 `succsync preview <工作区路径.tbl> --check` 在 BI 引擎检查本地模型，再打开设计器，无需先上传。preview 只接受 `Output`、`ModelTable`、`DbTable`、`Select`、`Join`、`Union`、`Agg`、`ColToRow` 节点；含 `Script`、`Sql`、`FileInput` 等其他节点、`enableScript` 不为 `false` 或带 `sql`/`script*` 键的模型会被拒绝（`ok:false`），这类模型只能在设计器里预览。
 
 ## 调用
 
@@ -19,7 +19,7 @@ python3 "$RUN" <命令> [参数]
 | 命令 | 作用 |
 | --- | --- |
 | `schema` | 在 stdout 输出 `{"schema": ..., "examples": ...}`。不带任何参数。 |
-| `check <文件或目录>...` | 校验规格、`.tbl` 和 `.action.ts`；目录会递归展开。stdout 输出一份 `{"files":[{file, scope, errors, warnings}]}` 报告。 |
+| `check <文件或目录>... [--exclude <路径>]... [--jobs N]` | 校验规格、`.tbl` 和 `.action.ts`；目录会递归展开。stdout 输出一份 `{"files":[{file, scope, errors, warnings}]}` 报告。 |
 | `new script\|dsl ...` | 直接生成常见模型（见「用 new 起步」），写 `.tbl`，脚本型还写脚本骨架。 |
 | `gen <spec.json> [-o <out.tbl>]` | 校验并生成 `.tbl`。不加 `-o` 时写 stdout。 |
 | `decompile <in.tbl> [-o <out.json>]` | 把 `.tbl` 反解为规格，自动选择形态。 |
@@ -71,6 +71,7 @@ python3 "$RUN" new dsl --table dwd_demo --schema dwd --extract true \
 - `--input` 按模型里的写法给（相对路径或 `$DATA:/...`），按平台规则解析后读取上游字段；单输入可省略 `--fields`，取上游全部字段。
 - 脚本骨架默认是占位版（预览返回字段结构，正式运行报错）；有上游输入的转换加 `--template transform`。不想写脚本用 `--no-script`。`--cn`、`--note` 只写进脚本头注释；模型的中文名不在 `.tbl` 里，按仓库约定维护（通常是目录 `.meta` 的 `desc`）。只属于另一种模型的参数会直接报错。
 - 加 `--spec-out <路径>` 可同时保存规格，以后在它上面继续加步骤再 `gen`。
+- 可选参数（两种模型通用）：`--schema`（库 schema）、`--datasource`（缺省 `defdw`）、`--version`（缺省为平台保存版本）。仅脚本型：`--script-name`（缺省 `md5(--table)`）、`--script-out <路径>`（改写脚本位置，与 `--no-script` 互斥）、`--template placeholder|transform`、`--cn`、`--note`。仅声明式：`--input`（可重复）、`--join-on <字段>`、`--join-type`（缺省 `LeftJoin`，取值同下文 Join）。
 - 命令只填平台通用的默认值（数据源 `defdw`、设计器新建模型的表属性）。分层、表名前缀、数据源等仓库约定按仓库文档传参。
 
 ### 选其他起点
@@ -138,6 +139,7 @@ python3 "$RUN" check model.tbl
 - Script 节点的字段名与脚本 `fieldsInfo` 按 `dbfield` 对应后一致（`ref.script.fieldName`）。运行时以脚本声明的名字为准，所以改字段名要同时改脚本、Script 节点和下游的 `inputField`，`dbfield` 不变；
 - `.action.ts` 的脚本规则：不读 `context.params`，常量不写死日期，加工脚本（定义了 `onProcessData` 的数据流脚本节点）有预览减量，批处理循环检查 `isCanceled()`，`BELONGTOID` 归并链有口径联动注释。`onQueryData`/`onUpdateData` 这类模型拓展点脚本不按加工脚本要求。
 - 不归你维护的代码（例如平台自带脚本）用 `--exclude <路径>` 跳过，可重复给出；路径不存在会报用法错误。
+- `--jobs N` 指定并行线程数（缺省为可用并行度，最多 4；`1` 为串行）。输出顺序、诊断和退出码不受影响。
 
 任一步退出码不为 0 就停下来修复。修复时按每条诊断的 `path`（JSON Pointer，如 `/nodes/0/inputs/0`）和 `rule`（如 `graph.danglingInput`）回到规格里改。读报告时看 `scope`：`spec`、`dataflow`、`script` 表示确实校验过；`skipped` 表示文件不是 DataFlow 模型（如 App 录入表），**没有校验**，不能算通过。
 
