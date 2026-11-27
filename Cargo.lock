@@ -87,7 +87,7 @@ dependencies = [
 
 [[package]]
 name = "tblgen"
-version = "0.1.8"
+version = "0.1.9"
 dependencies = [
  "serde_json",
 ]
