@@ -881,6 +881,143 @@ fn validate_field_scalars(f: &Value, path: &str, diags: &mut Vec<Diag>) {
     }
 }
 
+
+fn compact_expr(s: &str) -> String {
+    s.chars().filter(|c| !c.is_whitespace()).collect()
+}
+
+/// Validate the editor's two Join clause representations without treating
+/// `exp` as a third truth. `clauseType: 0` is a structured comparison;
+/// `clauseType: 5` is a free expression. Legacy dual-written clauses are
+/// accepted only when both sides encode the same simple comparison.
+fn validate_join_clause_shape(
+    co: &serde_json::Map<String, Value>,
+    cp: &str,
+    diags: &mut Vec<Diag>,
+) {
+    let exp = co
+        .get("exp")
+        .and_then(Value::as_str)
+        .filter(|s| !s.trim().is_empty());
+    let left = co
+        .get("leftExp")
+        .and_then(Value::as_str)
+        .filter(|s| !s.trim().is_empty());
+    let right = co
+        .get("rightExp")
+        .and_then(Value::as_str)
+        .filter(|s| !s.trim().is_empty());
+    let structured = left.is_some() && right.is_some();
+    let any_structured_key = ["leftExp", "rightExp", "operator"]
+        .iter()
+        .any(|k| co.contains_key(*k));
+    let ctype = co.get("clauseType").and_then(Value::as_i64);
+    if let Some(ct) = ctype {
+        if ct != 0 && ct != 5 {
+            diags.push(Diag::spec(
+                format!("{}/clauseType", cp),
+                "join.clause.type",
+                "clauseType must be 0 (comparison) or 5 (expression)",
+            ));
+        }
+    }
+    match ctype.unwrap_or(if structured { 0 } else { 5 }) {
+        0 => {
+            for (k, present) in [("leftExp", left.is_some()), ("rightExp", right.is_some())] {
+                if !present {
+                    diags.push(Diag::spec(
+                        format!("{}/{}", cp, k),
+                        "field.required",
+                        format!("clause.{} must be a non-empty string", k),
+                    ));
+                }
+            }
+            if let (Some(e), Some(l), Some(r)) = (exp, left, right) {
+                let op = co.get("operator").and_then(Value::as_str).unwrap_or("=");
+                let simple = format!("{}{}{}", l, op, r);
+                if compact_expr(e) != compact_expr(&simple) {
+                    diags.push(Diag::spec(
+                        format!("{}/exp", cp),
+                        "join.clause.conflict",
+                        "exp conflicts with leftExp/operator/rightExp",
+                    ));
+                }
+            }
+        }
+        _ => {
+            if exp.is_none() {
+                diags.push(Diag::spec(
+                    format!("{}/exp", cp),
+                    "field.required",
+                    "expression clauses must carry a non-empty exp",
+                ));
+            }
+            if any_structured_key {
+                diags.push(Diag::spec(
+                    cp.to_string(),
+                    "join.clause.conflict",
+                    "expression clauses must not also carry comparison keys",
+                ));
+            }
+        }
+    }
+}
+
+/// Canonicalize typed Join clauses to the shape the designer saves:
+/// comparisons are `{leftExp, operator, rightExp, clauseType: 0}` and free
+/// expressions are `{exp, clauseType: 5}`. A consistent legacy dual-written
+/// comparison is collapsed to the structured form so `exp` cannot go stale.
+fn canonicalize_join_conditions(v: &Value) -> Value {
+    let Some(arr) = v.as_array() else {
+        return v.clone();
+    };
+    let out: Vec<Value> = arr
+        .iter()
+        .map(|cond| {
+            let Some(cm) = cond.as_object() else {
+                return cond.clone();
+            };
+            let mut cond_out = cm.clone();
+            if let Some(clauses) = cm.get("clauses").and_then(Value::as_array) {
+                let cs: Vec<Value> = clauses
+                    .iter()
+                    .map(|clause| {
+                        let Some(m) = clause.as_object() else {
+                            return clause.clone();
+                        };
+                        let mut x = m.clone();
+                        let has_struct = x
+                            .get("leftExp")
+                            .and_then(Value::as_str)
+                            .is_some_and(|s| !s.trim().is_empty())
+                            && x
+                                .get("rightExp")
+                                .and_then(Value::as_str)
+                                .is_some_and(|s| !s.trim().is_empty());
+                        if has_struct {
+                            x.remove("exp");
+                            x.insert("clauseType".into(), Value::from(0));
+                        } else if x
+                            .get("exp")
+                            .and_then(Value::as_str)
+                            .is_some_and(|s| !s.trim().is_empty())
+                        {
+                            x.remove("leftExp");
+                            x.remove("rightExp");
+                            x.remove("operator");
+                            x.insert("clauseType".into(), Value::from(5));
+                        }
+                        Value::Object(x)
+                    })
+                    .collect();
+                cond_out.insert("clauses".into(), Value::Array(cs));
+            }
+            Value::Object(cond_out)
+        })
+        .collect();
+    Value::Array(out)
+}
+
 fn validate_config(v: &Value, ty: &str, path: &str, diags: &mut Vec<Diag>) {
     let Some(obj) = v.as_object() else {
         diags.push(Diag::spec(
@@ -1105,12 +1242,22 @@ fn validate_closed_config(v: &Value, kind: ClosedKind, path: &str, diags: &mut V
                             continue;
                         };
                         for k in co.keys() {
-                            if !["leftExp", "rightExp", "operator", "exp"].contains(&k.as_str()) {
+                            if !["leftExp", "rightExp", "operator", "exp", "clauseType"]
+                                .contains(&k.as_str())
+                            {
                                 diags.push(Diag::spec(
                                     format!("{}/{}", cp, ptr_escape(k)),
                                     "structure.config.key",
                                     "unexpected clause key",
                                 ));
+                            } else if k == "clauseType" {
+                                if !(co[k].is_i64() || co[k].is_u64()) {
+                                    diags.push(Diag::spec(
+                                        format!("{}/{}", cp, k),
+                                        "structure.config.type",
+                                        "clause.clauseType must be an integer",
+                                    ));
+                                }
                             } else if !co[k].is_string() {
                                 diags.push(Diag::spec(
                                     format!("{}/{}", cp, k),
@@ -1119,27 +1266,7 @@ fn validate_closed_config(v: &Value, kind: ClosedKind, path: &str, diags: &mut V
                                 ));
                             }
                         }
-                        if co
-                            .get("exp")
-                            .and_then(Value::as_str)
-                            .is_some_and(|s| !s.trim().is_empty())
-                        {
-                            continue;
-                        }
-                        for k in ["leftExp", "rightExp"] {
-                            if co
-                                .get(k)
-                                .and_then(Value::as_str)
-                                .map(|s| s.is_empty())
-                                .unwrap_or(true)
-                            {
-                                diags.push(Diag::spec(
-                                    format!("{}/{}", cp, k),
-                                    "field.required",
-                                    format!("clause.{} must be a non-empty string", k),
-                                ));
-                            }
-                        }
+                        validate_join_clause_shape(co, &cp, diags);
                     }
                 }
             }
@@ -4567,7 +4694,11 @@ fn emit_typed_node(sn: &Value, d: &mut NodeDesc) -> Result<Value, Diag> {
             if ty == "Select" && k == "stepCount" {
                 continue;
             }
-            body.insert(k.clone(), v.clone());
+            if ty == "Join" && k == "joinConditions" {
+                body.insert(k.clone(), canonicalize_join_conditions(v));
+            } else {
+                body.insert(k.clone(), v.clone());
+            }
         }
     }
     // raw merge (collisions validated)

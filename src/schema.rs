@@ -240,13 +240,15 @@ fn step_payload_defs() -> Value {
 fn config_payload_defs() -> Value {
     let mut d = Map::new();
 
-    // joinConditions[]: {leftTable,rightTable,joinType?,exp?,clauses?[...]}
+    // joinConditions[]: {leftTable,rightTable,joinType?,exp?,clauses?[...]};
+    // comparisons use clauseType 0; free expressions use clauseType 5.
     let mut clause = obj(
         props(&[
             ("leftExp", str_s()),
             ("rightExp", str_s()),
             ("operator", str_s()),
             ("exp", str_s()),
+            ("clauseType", json!({"type": "integer", "enum": [0, 5]})),
         ]),
         &[],
     );
@@ -747,7 +749,7 @@ fn node_examples() -> Vec<Value> {
                     "joinType": "InnerJoin",
                     "clauses": [{
                         "leftExp": "[left].[k]", "rightExp": "[right].[k]",
-                        "operator": "=", "exp": "[left].[k] = [right].[k]",
+                        "operator": "=",
                     }],
                 }]},
                 "fields": [

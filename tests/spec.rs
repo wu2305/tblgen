@@ -1792,6 +1792,25 @@ fn new_models_pass_project_check() {
                   "--input", "$DATA:/dim/dim_d.tbl", "--join-on", "k", "--fields", "k,v",
                   "-o", &t("dwd/dwd_j.tbl")]);
     assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
+    let dwd_j: Value = serde_json::from_slice(&std::fs::read(tables.join("dwd/dwd_j.tbl")).unwrap()).unwrap();
+    let join = dwd_j["dataFlow"]["nodes"]
+        .as_object()
+        .unwrap()
+        .values()
+        .find(|n| n["type"] == "Join")
+        .unwrap();
+    assert_eq!(
+        join["joinConditions"][0]["clauses"][0],
+        json!({
+            "leftExp": "[ods_s].[k]",
+            "operator": "=",
+            "rightExp": "[dim_d].[k]",
+            "clauseType": 0,
+        })
+    );
+    assert_eq!(join["fields"][0]["inputNode"], json!("ods_s"));
+    assert_eq!(join["fields"][0]["originalNode"], json!("ods_s"));
+    assert!(join["fields"][0]["dbfield"].is_string());
 
     // never overwrite; unknown fields and typed dsl fields are rejected
     assert_eq!(cli(&["new", "dsl", "--table", "dim_d", "--extract", "false", "--input",
@@ -1942,6 +1961,63 @@ fn script_reference_distinguishes_missing_and_unreadable_and_keeps_precedence() 
     let o = cli(&["check", model]);
     assert!(o.status.success(), "{:?}", report(&o));
     let _ = fs::remove_dir_all(&root);
+}
+
+fn join_clause_spec(clause: Value) -> Value {
+    json!({
+        "format": 1,
+        "properties": {"extractDataEnabled": false},
+        "nodes": [
+            {"key":"l","type":"FileInput","alias":"left","config":{"fileName":"l.xlsx#S"},"fields":[{"name":"k","dataType":"C","length":10,"isDimension":true}]},
+            {"key":"r","type":"FileInput","alias":"right","config":{"fileName":"r.xlsx#S"},"fields":[{"name":"k","dataType":"C","length":10,"isDimension":true},{"name":"v","dataType":"N","length":18,"decimal":2,"isDimension":false}]},
+            {"key":"j","type":"Join","alias":"j","inputs":["l","r"],
+             "config":{"joinConditions":[{"leftTable":"left","rightTable":"right","joinType":"InnerJoin","clauses":[clause]}]},
+             "fields":[{"name":"k","inputNode":"left"},{"name":"v"}]},
+            {"key":"out","type":"Output","alias":"out","inputs":["j"]}
+        ]
+    })
+}
+
+#[test]
+fn join_clause_representations_are_canonical_and_conflicts_rejected() {
+    let legacy = join_clause_spec(json!({
+        "leftExp":"[left].[k]", "operator":"=", "rightExp":"[right].[k]",
+        "exp":"[left].[k] = [right].[k]"
+    }));
+    let (wire, diags) = generate_with_diagnostics(&legacy);
+    assert!(diags.iter().all(Diag::is_warning), "{:?}", diags);
+    let wire = wire.unwrap();
+    let join = wire["dataFlow"]["nodes"]
+        .as_object()
+        .unwrap()
+        .values()
+        .find(|n| n["type"] == "Join")
+        .unwrap();
+    assert_eq!(
+        join["joinConditions"][0]["clauses"][0],
+        json!({"leftExp":"[left].[k]","operator":"=","rightExp":"[right].[k]","clauseType":0})
+    );
+
+    let expression = join_clause_spec(json!({"exp":"[left].[k] = [right].[k]"}));
+    let (wire, diags) = generate_with_diagnostics(&expression);
+    assert!(diags.iter().all(Diag::is_warning), "{:?}", diags);
+    let join = wire.unwrap()["dataFlow"]["nodes"]
+        .as_object()
+        .unwrap()
+        .values()
+        .find(|n| n["type"] == "Join")
+        .unwrap()
+        .clone();
+    assert_eq!(
+        join["joinConditions"][0]["clauses"][0],
+        json!({"exp":"[left].[k] = [right].[k]","clauseType":5})
+    );
+
+    let conflict = join_clause_spec(json!({
+        "leftExp":"[left].[k]", "operator":"=", "rightExp":"[right].[k]",
+        "exp":"[left].[k] != [right].[k]"
+    }));
+    assert!(rules(&validate_spec(&conflict)).contains(&"join.clause.conflict".into()));
 }
 
 #[test]
