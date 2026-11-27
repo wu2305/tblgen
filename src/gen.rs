@@ -3058,10 +3058,10 @@ fn node_is_source(d: &NodeDesc) -> bool {
 }
 
 /// Proven root lineage of a predecessor field: the oldest `(node, field)`
-/// pair we can stand behind. Computed fields (nonblank `exp`) and
-/// pivot-born/unmatched columns carry NO origin — never fabricated. A
-/// source's own fields root at the source itself, so stale explicit
-/// `original*` on them is rewritten rather than trusted.
+/// pair we can stand behind. A field computed by the predecessor (nonblank
+/// `exp`) roots at that node, as does a source's own field; the designer
+/// writes this pair downstream but not on the defining node itself.
+/// Pivot-born/unmatched columns carry NO origin — never fabricated.
 fn field_origin(f: &Value, pred: &NodeDesc, alias: Option<&str>) -> Option<(String, String)> {
     let nonblank = |k: &str| {
         f.get(k)
@@ -3069,10 +3069,7 @@ fn field_origin(f: &Value, pred: &NodeDesc, alias: Option<&str>) -> Option<(Stri
             .map(|s| !s.trim().is_empty())
             .unwrap_or(false)
     };
-    if nonblank("exp") {
-        return None;
-    }
-    if node_is_source(pred) {
+    if nonblank("exp") || node_is_source(pred) {
         let name = f.get("name").and_then(Value::as_str).unwrap_or("");
         if !name.is_empty() {
             let alias = alias
@@ -3273,37 +3270,22 @@ fn compute_node_fields(
         }
     };
     let ty = d.ty.as_deref().unwrap_or("");
-    // sources: declared fields are the root of lineage — each ordinary
-    // field's original* pair is seeded/rewritten to (own alias, own name);
-    // computed (exp) fields shed it. FileInput additionally gets the
-    // identity inputField fill; ModelTable keeps no inputField.
+    // sources: declared fields are the root of lineage. Consumers derive
+    // the (own alias, own name) origin themselves (`field_origin`), so the
+    // source writes no original* pair, as the designer does. ModelTable and
+    // FileInput additionally get the identity inputField fill.
     if is_source(ty) || ty == "SubProcess" {
         let Some(f) = sn.get("fields") else {
             return (None, None);
         };
         let mut fields = f.as_array().cloned().unwrap_or_default();
         if is_source(ty) {
-            let alias = node_alias(d);
-            for f in fields.iter_mut() {
-                let computed = has_exp(f);
-                let Some(m) = f.as_object_mut() else {
-                    continue;
-                };
-                let name = m
-                    .get("name")
-                    .and_then(Value::as_str)
-                    .unwrap_or("")
-                    .to_string();
-                if computed || name.is_empty() {
-                    clear_field_origin(m);
-                } else {
-                    m.insert("originalNode".into(), Value::String(alias.clone()));
-                    m.insert("originalField".into(), Value::String(name));
-                }
+            for f in fields.iter_mut().filter_map(Value::as_object_mut) {
+                clear_field_origin(f);
             }
         }
-        if ty == "FileInput" {
-            fill_fileinput_identity(&mut fields);
+        if ty == "FileInput" || ty == "ModelTable" {
+            fill_identity_input_field(&mut fields);
         }
         return (
             Some(ComputedNode {
@@ -4111,6 +4093,7 @@ fn apply_step_mutation(
             // the added field is born by computation: no direct lineage
             let mut m = af.as_object().cloned().unwrap_or_default();
             clear_field_lineage(&mut m);
+            m.entry("extractable").or_insert(Value::Bool(true));
             fields.push(Value::Object(m));
         }
         "TransformToCalculatedField" => {
@@ -4614,7 +4597,7 @@ fn compute_select_fields(
 /// `inputField` and has no `exp` refers to the physical column of the same
 /// name, so we fill the identity mapping. Explicit inputField aliases and
 /// exp-bearing fields are preserved.
-fn fill_fileinput_identity(fields: &mut [Value]) {
+fn fill_identity_input_field(fields: &mut [Value]) {
     for f in fields.iter_mut() {
         let Some(m) = f.as_object_mut() else {
             continue;
@@ -4649,7 +4632,8 @@ fn emit_typed_node(sn: &Value, d: &mut NodeDesc) -> Result<Value, Diag> {
     // empty dimensions/measures lists are omitted entirely. The computed
     // fields are moved into the wire body; partitions still need owned copies.
     let mut fileinput_original_fields = None;
-    if let Some(fields) = d.out_fields.take() {
+    if let Some(mut fields) = d.out_fields.take() {
+        drop_false_roles(&mut fields);
         let (dims, meas) = partition_fields(&fields);
         if sn.get("originalFields").is_none() && ty == "FileInput" {
             fileinput_original_fields = Some(fields.clone());
@@ -4699,6 +4683,15 @@ fn emit_typed_node(sn: &Value, d: &mut NodeDesc) -> Result<Value, Diag> {
                                         );
                                     }
                                 }
+                            }
+                        }
+                        if s.get("type").and_then(Value::as_str) == Some("AddField") {
+                            // the designer marks added columns extractable
+                            // unless the author turned it off
+                            if let Some(af) =
+                                step.get_mut("addField").and_then(Value::as_object_mut)
+                            {
+                                af.entry("extractable").or_insert(Value::Bool(true));
                             }
                         }
                         if s.get("rawStep").is_none() {
@@ -4751,6 +4744,17 @@ fn emit_typed_node(sn: &Value, d: &mut NodeDesc) -> Result<Value, Diag> {
     Ok(Value::Object(body))
 }
 
+/// The designer's saver drops `isDimension: false` from field lists; an
+/// absent role already reads as a measure. Only the false role is
+/// stripped — other false flags and step payloads such as `addField` keep it.
+fn drop_false_roles(fields: &mut [Value]) {
+    for f in fields.iter_mut().filter_map(Value::as_object_mut) {
+        if f.get("isDimension") == Some(&Value::Bool(false)) {
+            f.remove("isDimension");
+        }
+    }
+}
+
 pub(crate) fn partition_fields(fields: &[Value]) -> (Vec<Value>, Vec<Value>) {
     let mut dims = Vec::new();
     let mut meas = Vec::new();
@@ -4781,7 +4785,10 @@ fn default_output_partition(descs: &[NodeDesc]) -> (Vec<Value>, Vec<Value>, Opti
         if is_default_output(d) {
             return match &d.out_fields {
                 Some(fields) => {
-                    let (dims, meas) = partition_fields(fields);
+                    let (dims, mut meas) = partition_fields(fields);
+                    if matches!(d.body, NodeBody::Typed(_)) {
+                        drop_false_roles(&mut meas);
+                    }
                     (dims, meas, None)
                 }
                 None => (

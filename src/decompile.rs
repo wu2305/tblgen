@@ -415,7 +415,8 @@ fn fields_fit_schema(f: &Value) -> bool {
                         .and_then(Value::as_str)
                         .map(|s| !s.is_empty())
                         .unwrap_or(false)
-                    && o.get("isDimension").map(Value::is_boolean).unwrap_or(false)
+                    // the saver omits a false role; absent reads as a measure
+                    && o.get("isDimension").map(Value::is_boolean).unwrap_or(true)
             })
             .unwrap_or(false)
     })

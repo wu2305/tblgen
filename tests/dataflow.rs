@@ -1400,8 +1400,11 @@ fn experiment_spec_end_to_end() {
     let jf_fan = field(&tbl, "join_final", "粉丝ID");
     assert_eq!(jf_fan["originalNode"], json!("src_person"));
 
-    // 养修归类 is AddField-computed in every route Select: no origin may
-    // survive any number of identity hops.
+    // 养修归类 is AddField-computed in every route Select: the defining node
+    // carries no origin, and every downstream hop roots at that Select, as
+    // the designer saves computed columns.
+    let rf = field(&tbl, "route1_sel", "养修归类");
+    assert!(rf.get("originalNode").is_none(), "{:?}", rf);
     for n in [
         "route1_dist",
         "union_routes",
@@ -1416,17 +1419,22 @@ fn experiment_spec_end_to_end() {
             .iter()
             .find(|f| f["name"] == "养修归类")
             .unwrap_or_else(|| panic!("{} lacks 养修归类", n));
-        assert!(
-            f.get("originalNode").is_none() && f.get("originalField").is_none(),
-            "{} 养修归类 must not carry an origin: {:?}",
+        assert_eq!(
+            (&f["originalNode"], &f["originalField"]),
+            (&json!("route1_sel"), &json!("养修归类")),
+            "{} 养修归类 must root at its defining Select: {:?}",
             n,
             f
         );
     }
-    // UUID 编号 likewise: computed, no origin
+    // UUID 编号 likewise: no origin where defined, rooted at final_sel after
     let fh = field(&tbl, "final_sel", "编号");
     assert_eq!(fh["exp"], json!("UUID()"));
+    assert_eq!(fh["extractable"], json!(true));
     assert!(fh.get("originalNode").is_none());
+    let oh = field(&tbl, "default", "编号");
+    assert_eq!(oh["originalNode"], json!("final_sel"));
+    assert_eq!(oh["originalField"], json!("编号"));
 
     // final_sel explicit order + computed exps exactly as declared
     let fs = node(&tbl, "final_sel")["fields"].as_array().unwrap();
@@ -1882,7 +1890,8 @@ fn agg_and_distinct_require_exactly_one_input() {
 fn lineage_source_exp_and_stale_origins() {
     // a source field carrying exp sheds original*; a stale explicit
     // original* on a passthrough is rewritten to the real source pair;
-    // computed Select output never keeps inputNode even if declared.
+    // a consumer of the computed field roots it at the defining node and
+    // never keeps inputNode even if declared.
     let spec = json!({
         "format": 1,
         "properties": {"extractDataEnabled": false},
@@ -1917,12 +1926,83 @@ fn lineage_source_exp_and_stale_origins() {
     );
     assert_eq!(ff["originalField"], json!("f"));
     let cf = field(&tbl, "sel", "calc");
-    assert!(cf.get("originalNode").is_none(), "computed -> no origin");
+    assert_eq!(
+        (&cf["originalNode"], &cf["originalField"]),
+        (&json!("realias"), &json!("calc")),
+        "computed field roots at its defining node"
+    );
     assert!(
         cf.get("inputNode").is_none(),
         "Select field drops inputNode"
     );
     assert!(wire_errors(&tbl).is_empty(), "{:?}", wire_errors(&tbl));
+}
+
+#[test]
+fn designer_save_shape_for_sources_roles_and_added_fields() {
+    // Matches the platform saver: ModelTable fields carry the identity
+    // inputField and no original*; false roles are omitted from field lists
+    // (absent reads as a measure) but kept in the addField payload; added
+    // columns default to extractable unless the author turned it off.
+    let spec = json!({
+        "format": 1,
+        "properties": {"extractDataEnabled": false},
+        "nodes": [
+            {"key":"m","type":"ModelTable","alias":"m","config":{"moduleTablePath":"./m.tbl"},
+             "fields":[{"name":"k","dataType":"C","isDimension":true,
+                        "originalNode":"stale","originalField":"stale"},
+                       {"name":"amt","dataType":"N","isDimension":false}]},
+            {"key":"sel","type":"Select","alias":"sel","inputs":["m"],
+             "steps":[{"type":"AddField","addField":{"name":"x","dataType":"N",
+                        "isDimension":false,"exp":"[amt] * 2"}},
+                      {"type":"AddField","addField":{"name":"y","dataType":"C",
+                        "isDimension":true,"exp":"'y'","extractable":false}}]},
+            {"key":"default","type":"Output","alias":"out","inputs":["sel"]}
+        ]
+    });
+    assert!(spec_errors(&spec).is_empty(), "{:?}", spec_errors(&spec));
+    let tbl = generate(&spec).expect("generate");
+
+    for name in ["k", "amt"] {
+        let f = field(&tbl, "m", name);
+        assert_eq!(f["inputField"], json!(name), "{:?}", f);
+        assert!(
+            f.get("originalNode").is_none() && f.get("originalField").is_none(),
+            "{:?}",
+            f
+        );
+    }
+    // consumers still root ordinary columns at the source
+    assert_eq!(field(&tbl, "sel", "k")["originalNode"], json!("m"));
+
+    let falses = |v: &Value| {
+        v.as_array()
+            .unwrap()
+            .iter()
+            .filter(|f| f.get("isDimension") == Some(&json!(false)))
+            .count()
+    };
+    for n in ["m", "sel", "default"] {
+        for part in ["fields", "measures"] {
+            assert_eq!(falses(&node(&tbl, n)[part]), 0, "{} {}", n, part);
+        }
+    }
+    assert_eq!(falses(&tbl["measures"]), 0);
+    assert_eq!(top_names(&tbl, "measures"), vec!["amt", "x"]);
+
+    let steps = node(&tbl, "sel")["steps"].as_array().unwrap();
+    assert_eq!(steps[0]["addField"]["isDimension"], json!(false));
+    assert_eq!(steps[0]["addField"]["extractable"], json!(true));
+    assert_eq!(steps[1]["addField"]["extractable"], json!(false));
+    assert_eq!(field(&tbl, "sel", "x")["extractable"], json!(true));
+    assert_eq!(field(&tbl, "sel", "y")["extractable"], json!(false));
+    // the computed columns root at the Select that defines them
+    assert_eq!(field(&tbl, "default", "x")["originalNode"], json!("sel"));
+
+    assert!(wire_errors(&tbl).is_empty(), "{:?}", wire_errors(&tbl));
+    let back = decompile(&tbl).expect("decompile");
+    assert!(back.get("archive").is_none(), "must stay typed: {}", back);
+    assert_eq!(generate(&back).unwrap(), tbl);
 }
 
 // ---------------------------------------------------------------------------
