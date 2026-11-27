@@ -321,7 +321,7 @@ def check_latest(force=False):
     mirror = mirror_base()
     current, _ = load_release()
     try:
-        release, _fresh = cached_or_remote_latest(base, mirror, force)
+        release, fresh = cached_or_remote_latest(base, mirror, force)
     except (OSError, ValueError, json.JSONDecodeError, http.client.HTTPException) as e:
         if force:
             raise
@@ -329,6 +329,11 @@ def check_latest(force=False):
         return None
     tag = release['tag_name']
     if tag == current:
+        return None
+    if semver_key(tag) < semver_key(current) and not fresh:
+        # A fresh bootstrap may already be newer than the launcher's release-index
+        # cache. Do not downgrade because of that stale entry; the next fresh
+        # index check can still move to a newer release.
         return None
     try:
         name, digest = find_skill_asset(release)

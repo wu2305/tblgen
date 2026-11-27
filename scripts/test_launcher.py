@@ -11,6 +11,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 import unittest
 import zipfile
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -80,17 +81,17 @@ class LauncherTest(unittest.TestCase):
             z.writestr(f'{TOOL}/release.json', release)
         return path.read_bytes()
 
-    def server(self, zipdata, digest=None):
+    def server(self, zipdata, digest=None, tag='v9.9.9'):
         class Handler(BaseHTTPRequestHandler):
             def do_GET(self):
                 if self.path == '/releases':
                     chosen_digest = digest or sha256(zipdata)
                     data = json.dumps([{
-                        'tag_name': 'v9.9.9',
+                        'tag_name': tag,
                         'draft': False,
                         'prerelease': False,
                         'assets': [{
-                            'name': f'{TOOL}-skill-v9.9.9.zip',
+                            'name': f'{TOOL}-skill-{tag}.zip',
                             'hash_algo': 'sha256',
                             'hash_value': chosen_digest,
                         }],
@@ -100,7 +101,7 @@ class LauncherTest(unittest.TestCase):
                     self.send_header('Content-Length', str(len(data)))
                     self.end_headers()
                     self.wfile.write(data)
-                elif self.path == f'/releases/download/v9.9.9/{TOOL}-skill-v9.9.9.zip':
+                elif self.path == f'/releases/download/{tag}/{TOOL}-skill-{tag}.zip':
                     self.send_response(200)
                     self.send_header('Content-Length', str(len(zipdata)))
                     self.end_headers()
@@ -152,6 +153,46 @@ class LauncherTest(unittest.TestCase):
             },
         ]
         self.assertEqual(module.latest_release(releases)['tag_name'], 'v9.9.8')
+
+    @unittest.skipUnless(sys.platform.startswith('linux'), 'uses a shell-script cached binary')
+    def test_stale_older_latest_cache_does_not_downgrade(self):
+        binary = b'#!/bin/sh\necho current-binary\n'
+        digest = sha256(binary)
+        self.write_release('v9.9.9', digest)
+        folder = self.cache / 'v9.9.9'
+        folder.mkdir(parents=True)
+        cached = folder / f'{TOOL}-v9.9.9-linux-amd64'
+        cached.write_bytes(binary)
+        cached.chmod(cached.stat().st_mode | stat.S_IXUSR)
+
+        zipdata = self.make_zip('v9.9.8', 'print("old-run")\n')
+        server = self.server(zipdata, tag='v9.9.8')
+        mirror = f'http://127.0.0.1:{server.server_port}/releases/download'
+        state_dir = self.cache / 'skill'
+        state_dir.mkdir(parents=True)
+        release = {
+            'tag_name': 'v9.9.8',
+            'draft': False,
+            'prerelease': False,
+            'assets': [{
+                'name': f'{TOOL}-skill-v9.9.8.zip',
+                'hash_algo': 'sha256',
+                'hash_value': sha256(zipdata),
+            }],
+        }
+        (state_dir / 'latest-release-state.json').write_text(json.dumps({
+            'checked_at': int(time.time()),
+            'mirror': mirror,
+            'release': release,
+        }), encoding='utf-8')
+        env = self.env(mirror)
+        env[f'{ENV}_UPDATE_TTL_SECS'] = '3600'
+
+        result = self.run_launcher(env, 'schema')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.strip(), 'current-binary')
+        self.assertNotEqual(result.stdout.strip(), 'old-run')
+        self.assertFalse((self.cache / 'skill' / 'v9.9.8').exists())
 
     @unittest.skipUnless(sys.platform.startswith('linux'), 'uses a shell-script cached binary')
     def test_release_index_failure_falls_back_to_cached_current_binary(self):
