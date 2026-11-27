@@ -1,6 +1,6 @@
 [package]
 name = "tblgen"
-version = "0.1.5"
+version = "0.1.6"
 edition = "2021"
 description = "Offline .tbl model metadata spec generator/CLI"
 license = "Proprietary"
