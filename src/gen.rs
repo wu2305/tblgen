@@ -3544,6 +3544,44 @@ fn compute_distinct_fields(
     }
 }
 
+
+/// Join outputs project columns from independent inputs; identical source
+/// dbfields collide as SQL output aliases even when the display names differ.
+/// The editor disambiguates by appending 1/2/... while preserving the first
+/// occurrence. Comparison is case-insensitive because unquoted SQL identifiers
+/// fold case.
+fn dedupe_join_dbfields(fields: &mut [Value]) {
+    let mut seen: HashMap<String, usize> = HashMap::new();
+    for f in fields {
+        let Some(m) = f.as_object_mut() else {
+            continue;
+        };
+        let Some(db) = m
+            .get("dbfield")
+            .and_then(Value::as_str)
+            .filter(|s| !s.trim().is_empty())
+            .map(str::to_string)
+        else {
+            continue;
+        };
+        let key = db.to_uppercase();
+        let nth = seen.get(&key).copied().unwrap_or(0);
+        if nth == 0 {
+            seen.insert(key, 1);
+            continue;
+        }
+        let mut suffix = nth;
+        let mut candidate = format!("{}{}", db, suffix);
+        while seen.contains_key(&candidate.to_uppercase()) {
+            suffix += 1;
+            candidate = format!("{}{}", db, suffix);
+        }
+        seen.insert(candidate.to_uppercase(), 1);
+        seen.insert(key, suffix + 1);
+        m.insert("dbfield".into(), Value::String(candidate));
+    }
+}
+
 /// Join: every declared field must resolve to exactly one predecessor
 /// field; `inputNode` (an input alias) disambiguates shared names.
 fn compute_join_fields(
@@ -3572,13 +3610,16 @@ fn compute_join_fields(
         fields_of.push(pf);
     }
     match resolve_declared_fields(sn, d, &preds, &fields_of, true, true) {
-        Ok(fields) => (
-            Some(ComputedNode {
-                fields,
-                step_hints: Vec::new(),
-            }),
-            None,
-        ),
+        Ok(mut fields) => {
+            dedupe_join_dbfields(&mut fields);
+            (
+                Some(ComputedNode {
+                    fields,
+                    step_hints: Vec::new(),
+                }),
+                None,
+            )
+        }
         Err(e) => (None, Some(e)),
     }
 }

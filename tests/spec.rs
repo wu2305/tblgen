@@ -2021,6 +2021,27 @@ fn join_clause_representations_are_canonical_and_conflicts_rejected() {
 }
 
 #[test]
+fn join_dbfield_collisions_are_disambiguated() {
+    let mut spec = join_clause_spec(json!({
+        "leftExp":"[left].[k]", "operator":"=", "rightExp":"[right].[k]"
+    }));
+    spec["nodes"][0]["fields"][0]["dbfield"] = json!("HOTEL_ID");
+    spec["nodes"][1]["fields"][1]["dbfield"] = json!("HOTEL_ID");
+    let (wire, diags) = generate_with_diagnostics(&spec);
+    assert!(diags.iter().all(Diag::is_warning), "{:?}", diags);
+    let wire = wire.unwrap();
+    let join = wire["dataFlow"]["nodes"]
+        .as_object()
+        .unwrap()
+        .values()
+        .find(|n| n["type"] == "Join")
+        .unwrap();
+    assert_eq!(join["fields"][0]["dbfield"], json!("HOTEL_ID"));
+    assert_eq!(join["fields"][1]["dbfield"], json!("HOTEL_ID1"));
+}
+
+
+#[test]
 fn schema_config_refs_and_join_field_variant() {
     let doc = schema_document();
     let defs = &doc["schema"]["$defs"];
