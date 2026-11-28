@@ -12,8 +12,9 @@ use crate::model::{cite, field_eq, ptr_escape, Diag};
 /// predecessor is unverifiable and skipped rather than guessed. Node types
 /// whose fields are pivot/remap-born or self-declared are exempt from the
 /// inputField check. `originalNode` is checked on EVERY kind as a warning:
-/// it must name a root source node (ModelTable/DbTable/FileInput/Sql/
-/// Script), since computed values and remapped fields carry no origin.
+/// it must name the node where the field was born (a source or the node
+/// whose AddField/Transform created it); pivot-born or remapped fields may
+/// carry no origin.
 pub(super) fn check_lineage(diags: &mut Vec<Diag>, nodes: &serde_json::Map<String, Value>) {
     // node types whose output fields are not name-inheriting graph reads
     const NOT_NAME_INHERITING: [&str; 10] = [

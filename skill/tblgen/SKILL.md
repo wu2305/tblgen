@@ -19,7 +19,7 @@ python3 "$RUN" <命令> [参数]
 | 命令 | 作用 |
 | --- | --- |
 | `schema` | 在 stdout 输出 `{"schema": ..., "examples": ...}`。不带任何参数。 |
-| `check <文件或目录>... [--jobs N]` | 校验规格、`.tbl` 和 `.action.ts`；目录会递归展开。stdout 输出一份 `{"files":[{file, scope, errors, warnings}]}` 报告。 |
+| `check <文件或目录>... [--exclude <路径>]... [--jobs N]` | 校验规格、`.tbl` 和 `.action.ts`；目录会递归展开。stdout 输出一份 `{"files":[{file, scope, errors, warnings}]}` 报告。 |
 | `new script\|dsl ...` | 直接生成常见模型（见「用 new 起步」），写 `.tbl`，脚本型还写脚本骨架。 |
 | `gen <spec.json> [-o <out.tbl>]` | 校验并生成 `.tbl`。不加 `-o` 时写 stdout。 |
 | `decompile <in.tbl> [-o <out.json>]` | 把 `.tbl` 反解为规格，自动选择形态。 |

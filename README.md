@@ -37,11 +37,11 @@ tblgen check projects/P
 
 | 发行平台 | Rust target | 产物名 |
 | --- | --- | --- |
-| macOS-arm64 | `aarch64-apple-darwin` | `tblgen-v0.1.1-macos-arm64` |
-| Linux-amd64 | `x86_64-unknown-linux-musl` | `tblgen-v0.1.1-linux-amd64` |
-| Windows-amd64 | `x86_64-pc-windows-gnu` | `tblgen-v0.1.1-windows-amd64.exe` |
+| macOS-arm64 | `aarch64-apple-darwin` | `tblgen-<tag>-macos-arm64` |
+| Linux-amd64 | `x86_64-unknown-linux-musl` | `tblgen-<tag>-linux-amd64` |
+| Windows-amd64 | `x86_64-pc-windows-gnu` | `tblgen-<tag>-windows-amd64.exe` |
 
-产物名前缀 `tblgen-` 后接发布标签（`vX.Y.Z`），下表以当前版本 v0.1.1 为例。
+产物名前缀 `tblgen-` 后接发布标签（`vX.Y.Z`）；表中 `<tag>` 是该次发布的标签。
 
 维护者可运行 `cargo test --locked` 和 `cargo build --release --locked --target <TARGET>`。交叉编译需要相应目标标准库和链接器；发布前在目标系统运行 `schema` 及 `gen → check` 冒烟测试。
 
