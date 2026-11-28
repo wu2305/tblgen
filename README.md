@@ -31,7 +31,7 @@ tblgen check projects/P
 
 ### Agent 技能包
 
-`tblgen-skill-<tag>.zip` 内含 `tblgen/SKILL.md`、`tblgen/run.py`、`tblgen/release.json` 和 `tblgen/examples/` 下的业务示例。解压后按 `SKILL.md` 的说明调用 `run.py`（macOS/Linux 用 `python3`，Windows 用 `py -3`，用 SKILL.md 所在目录的绝对路径，不依赖当前目录）。`run.py` 按包内 `release.json` 清单从 Release 下载对应平台二进制并校验 SHA-256 后执行；已缓存或设置 `TBLGEN_BIN`/`TBLGEN_CACHE_DIR` 时可完全离线，设置 `TBLGEN_MIRROR` 可改从镜像下载（仍校验 SHA-256），详见 SKILL.md「启动器问题排查」。源码树中的 `skill/tblgen/` 是模板，`release.json` 由打包流程生成，源码树内不能直接运行。
+`tblgen-skill-<tag>.zip` 内含 `tblgen/SKILL.md`、`tblgen/run.py`、`tblgen/release.json` 和 `tblgen/examples/` 下的业务示例。解压后按 `SKILL.md` 的说明调用 `run.py`（macOS/Linux 用 `python3`，Windows 用 `py -3`，用 SKILL.md 所在目录的绝对路径，不依赖当前目录）。`run.py` 默认跟踪远程 latest Release：它按 Release 元数据校验并安装最新技能包，再按该包内 `release.json` 清单下载对应平台二进制、校验 SHA-256 后执行；`python3 run.py update` 强制检查，`TBLGEN_AUTO_UPDATE=0` 可关闭。设置 `TBLGEN_MIRROR` 可改从镜像下载，镜像需保留 Release 索引与产物布局；设置 `TBLGEN_BIN` 表示本地覆盖并停止更新跟踪，详见 SKILL.md「启动器问题排查」。源码树中的 `skill/tblgen/` 是模板，`release.json` 由打包流程生成，源码树内不能直接运行。
 
 ## 构建
 
